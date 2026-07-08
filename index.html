@@ -4171,21 +4171,55 @@ function enviarOCAlEscaneo(ocId) {
   var oc = ordenes.find(function(o){ return o.id === ocId; });
   if (!oc) return;
 
-  if (oc.estadoManual === 'controlando') {
-    // La O.C. está bloqueada — puede ser porque el operario no terminó, o
-    // porque el sistema quedó atascado. Preguntar qué hacer.
-    if (confirm('Esta O.C. figura como "En proceso" — puede estar siendo escaneada por un operario, o haber quedado bloqueada por error.\n\n¿Querés liberar el bloqueo y volver a enviarla?')) {
+  if (oc.estadoManual !== 'controlando') {
+    mostrarConfirmEnvioEscaneo(oc);
+    return;
+  }
+
+  // La O.C. figura como "controlando" — verificar en ALERTAS si algún
+  // operario la tiene activa ahora mismo, para distinguir si es un bloqueo
+  // real o uno atascado por error.
+  sheetsRead('ALERTAS!A1:A10').then(function(rows) {
+    var operarioActivo = null;
+    if (rows) {
+      rows.forEach(function(row, idx) {
+        if (!row || !row[0]) return;
+        var val = String(row[0]).trim();
+        // Si la celda tiene el ID de esta O.C. (EN_ESCANEO o el ID directo)
+        if (val.indexOf(ocId) > -1 || val.startsWith('EN_ESCANEO')) {
+          // Buscar qué operario tiene esa fila asignada
+          var usuarios = loadUsers();
+          var op = usuarios.find(function(u){ return u.filaAlerta === (idx + 1); });
+          operarioActivo = op ? op.name : 'un operario';
+        }
+      });
+    }
+
+    if (operarioActivo) {
+      // Hay un operario activo — bloquear sin opción de liberar
+      showToast('⚠ ' + operarioActivo + ' está escaneando esta O.C. ahora — esperá que la finalice');
+    } else {
+      // Nadie la tiene activa — bloqueo por error, ofrecer liberar
+      if (confirm('Esta O.C. figura como "En proceso" pero ningún operario la tiene activa ahora.\n\n¿Querés liberar el bloqueo y volver a enviarla?')) {
+        var ordenesAct = loadOrdenes();
+        var idx = ordenesAct.findIndex(function(o){ return o.id === ocId; });
+        if (idx >= 0) { ordenesAct[idx].estadoManual = 'pendiente'; saveOrdenes(ordenesAct); }
+        localStorage.removeItem('oc_en_escaneo');
+        showToast('Bloqueo liberado — volvé a tocar "Enviar al escaneo"');
+        renderOrdenes();
+      }
+    }
+  }).catch(function() {
+    // Sin conexión — mostrar el confirm genérico como fallback
+    if (confirm('Esta O.C. figura como "En proceso".\n\n¿Querés liberar el bloqueo y volver a enviarla?')) {
       var ordenesAct = loadOrdenes();
       var idx = ordenesAct.findIndex(function(o){ return o.id === ocId; });
       if (idx >= 0) { ordenesAct[idx].estadoManual = 'pendiente'; saveOrdenes(ordenesAct); }
       localStorage.removeItem('oc_en_escaneo');
-      showToast('Bloqueo liberado — volvé a tocar "Enviar al escaneo"');
+      showToast('Bloqueo liberado');
       renderOrdenes();
     }
-    return;
-  }
-
-  mostrarConfirmEnvioEscaneo(oc);
+  });
 }
 
 // Verifica si el operario de la fila indicada está libre antes de confirmar
