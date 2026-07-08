@@ -1841,6 +1841,16 @@ setInterval(function(){
   _actualizarIndicadorConexion(navigator.onLine);
 }, 5000);
 
+// Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
+// syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
+// podía saltear ciclos y el operario no recibía la notificación a tiempo.
+// Ahora corre cada 8s sin importar si syncOrdenes terminó o no.
+setInterval(function(){
+  if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
+  if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
+  if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
+}, 8000);
+
 // ──────────────────────────────────────────────
 // REMITO
 // ──────────────────────────────────────────────
@@ -3650,14 +3660,38 @@ async function syncOrdenes() {
 
     // Merge: combinar Sheets + local, sin perder OC de ninguno
     // Excluir OC eliminadas intencionalmente
+    var PRIORIDAD_ESTADO = { 'pendiente': 0, 'controlando': 1, 'finalizado_escaneo': 2, 'finalizado': 3 };
     var merged = {};
     sheetsData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) < 0) merged[oc.id] = oc;
     });
     localData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) >= 0) return; // eliminada, no restaurar
-      if (!merged[oc.id] || (oc.savedAt || '') > (merged[oc.id].savedAt || '')) {
+      if (!merged[oc.id]) {
         merged[oc.id] = oc;
+        return;
+      }
+      var existente = merged[oc.id];
+      // Para estadoManual: siempre tomar el más avanzado — nunca retrocecer
+      // de "finalizado" a "controlando" solo porque otra PC tiene un savedAt
+      // más reciente de cuando lo estaba escaneando.
+      var prioExistente = PRIORIDAD_ESTADO[existente.estadoManual] || 0;
+      var prioNuevo     = PRIORIDAD_ESTADO[oc.estadoManual] || 0;
+      if (prioNuevo > prioExistente) {
+        // El nuevo tiene estado más avanzado — ganó, pero conservamos el
+        // savedAt más reciente para el resto de los campos
+        merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
+      } else if (prioExistente > prioNuevo) {
+        // El existente tiene estado más avanzado — conservar estadoManual
+        // del existente pero actualizar otros campos si el nuevo es más reciente
+        if ((oc.savedAt || '') > (existente.savedAt || '')) {
+          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual });
+        }
+      } else {
+        // Mismo estado — tomar el más reciente como antes
+        if ((oc.savedAt || '') > (existente.savedAt || '')) {
+          merged[oc.id] = oc;
+        }
       }
     });
     _ordenesCache = Object.values(merged).sort(function(a,b){
@@ -3689,9 +3723,6 @@ async function syncOrdenes() {
   }
   renderOrdenes();
   updateBadgeOrdenes();
-  if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
-  if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
-  if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
 }
 
 
@@ -4140,10 +4171,17 @@ function enviarOCAlEscaneo(ocId) {
   var oc = ordenes.find(function(o){ return o.id === ocId; });
   if (!oc) return;
 
-  // Bloquear si la O.C. ya está siendo escaneada por algún operario —
-  // evita que la misma O.C. se mande a dos operarios al mismo tiempo.
   if (oc.estadoManual === 'controlando') {
-    showToast('⚠ Esta O.C. ya está siendo escaneada por un operario — esperá que la finalice antes de reasignarla');
+    // La O.C. está bloqueada — puede ser porque el operario no terminó, o
+    // porque el sistema quedó atascado. Preguntar qué hacer.
+    if (confirm('Esta O.C. figura como "En proceso" — puede estar siendo escaneada por un operario, o haber quedado bloqueada por error.\n\n¿Querés liberar el bloqueo y volver a enviarla?')) {
+      var ordenesAct = loadOrdenes();
+      var idx = ordenesAct.findIndex(function(o){ return o.id === ocId; });
+      if (idx >= 0) { ordenesAct[idx].estadoManual = 'pendiente'; saveOrdenes(ordenesAct); }
+      localStorage.removeItem('oc_en_escaneo');
+      showToast('Bloqueo liberado — volvé a tocar "Enviar al escaneo"');
+      renderOrdenes();
+    }
     return;
   }
 
