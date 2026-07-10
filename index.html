@@ -5074,7 +5074,7 @@ function importarLineasOC() {
 // ──────────────────────────────────────────────
 async function syncUsuarios() {
   try {
-    var rows = await sheetsRead('USUARIOS!A2:D99');
+    var rows = await sheetsRead('USUARIOS!A2:E99');
     if (rows && rows.length > 0) {
       var users = rows
         .filter(function(r){ return r[0] && String(r[0]).trim(); })
@@ -5083,16 +5083,79 @@ async function syncUsuarios() {
           var rolRaw = String(r[1] || '').trim().toLowerCase();
           var rol = /admin/.test(rolRaw) ? 'administrativo' : 'operario';
           var pin = String(r[2] || '').trim();
-          // Col D: fila de ALERTAS asignada a este operario (1, 2, 3...)
-          // Si no tiene (admin o no definido), queda null.
           var filaAlerta = r[3] ? parseInt(r[3], 10) : null;
-          return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta };
+          // Col E: sesión activa — formato "deviceId|timestamp"
+          var sesionActiva = r[4] ? String(r[4]).trim() : '';
+          return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta, sesionActiva: sesionActiva };
         });
       try { localStorage.setItem('stockcontrol_users', JSON.stringify(users)); } catch(e) {}
       return users;
     }
   } catch(e) {}
   return null;
+}
+
+// ── Control de sesión activa ────────────────────────────────────────────────
+// Cuando un usuario se loguea, anota en USUARIOS col E su deviceId y timestamp.
+// Cada 30s actualiza el timestamp (heartbeat). Si el timestamp tiene más de
+// 90s sin actualizarse, se considera sesión caída y se libera automáticamente.
+// Al cerrar el HTML (beforeunload) se limpia la columna E.
+
+var _sesionHeartbeatInterval = null;
+
+async function _registrarSesionActiva(nombreUsuario) {
+  var deviceId = _getDeviceId();
+  var ts = Date.now();
+  var valor = deviceId + '|' + ts;
+  var users = loadUsers();
+  var idx = users.findIndex(function(u){ return u.name === nombreUsuario; });
+  if (idx < 0) return;
+  var fila = idx + 2; // fila en el Sheet (encabezado en fila 1, datos desde fila 2)
+  await sheetsWrite('USUARIOS!E' + fila, [[valor]]);
+}
+
+async function _liberarSesionActiva(nombreUsuario) {
+  var users = loadUsers();
+  var idx = users.findIndex(function(u){ return u.name === nombreUsuario; });
+  if (idx < 0) return;
+  var fila = idx + 2;
+  await sheetsWrite('USUARIOS!E' + fila, [['']]); 
+}
+
+async function _verificarUsuarioDisponible(nombreUsuario) {
+  // Leer col E del Sheet en tiempo real para ver si el usuario está en uso
+  var users = await syncUsuarios();
+  if (!users) return true; // sin conexión, dejar pasar
+  var user = users.find(function(u){ return u.name === nombreUsuario; });
+  if (!user || !user.sesionActiva) return true; // libre
+  var partes = user.sesionActiva.split('|');
+  var deviceId = partes[0];
+  var ts = parseInt(partes[1], 10);
+  // Si el deviceId es este mismo dispositivo, dejar pasar (reconexión)
+  if (deviceId === _getDeviceId()) return true;
+  // Si el heartbeat tiene más de 90s, considerar sesión caída
+  if (Date.now() - ts > 90000) return true;
+  return false; // ocupado
+}
+
+function _arrancarHeartbeat(nombreUsuario) {
+  _detenerHeartbeat();
+  _sesionHeartbeatInterval = setInterval(function() {
+    _registrarSesionActiva(nombreUsuario);
+  }, 30000);
+}
+
+function _detenerHeartbeat() {
+  if (_sesionHeartbeatInterval) {
+    clearInterval(_sesionHeartbeatInterval);
+    _sesionHeartbeatInterval = null;
+  }
+}
+
+function _getFilaUsuario(nombreUsuario) {
+  var users = loadUsers();
+  var idx = users.findIndex(function(u){ return u.name === nombreUsuario; });
+  return idx >= 0 ? idx + 2 : null;
 }
 
 var USERS_KEY    = 'stockcontrol_users';
@@ -5213,13 +5276,42 @@ function loginIngresar() {
     }
     pinErr.style.display = 'none';
   }
+
+  // Verificar que el usuario no esté activo en otro dispositivo
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  _verificarUsuarioDisponible(selected.name).then(function(disponible) {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+    if (!disponible) {
+      showToast('⚠ ' + selected.name + ' ya está en uso en otro dispositivo');
+      return;
+    }
+    _completarLogin(selected);
+  }).catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+    _completarLogin(selected); // sin conexión, dejar pasar
+  });
+}
+
+function _completarLogin(selected) {
   CURRENT_USER = {
     name: selected.name,
     rol: selected.rol || 'operario',
     color: userColor(selected.name),
     initials: userInitials(selected.name),
-    filaAlerta: selected.filaAlerta || 1  // fila de ALERTAS asignada a este operario
+    filaAlerta: selected.filaAlerta || 1
   };
+
+  // Limpiar estado de la sesión anterior al cambiar de usuario
+  sessionStorage.removeItem('_alv');
+  sessionStorage.removeItem('_alv_fin');
+  localStorage.removeItem('oc_en_escaneo');
+
+  // Registrar sesión activa en el Sheet y arrancar heartbeat
+  _registrarSesionActiva(selected.name);
+  _arrancarHeartbeat(selected.name);
   // Actualizar topbar
   document.getElementById('topbar-user-avatar').textContent = CURRENT_USER.initials;
   document.getElementById('topbar-user-avatar').style.background = CURRENT_USER.color;
@@ -5966,6 +6058,16 @@ function confirmarEscaneadoPor() {
       navigator.serviceWorker.register('sw.js').catch(function(){});
     });
   }
+
+  // Liberar sesión activa del Sheet cuando se cierra el HTML
+  window.addEventListener('beforeunload', function() {
+    if (CURRENT_USER) {
+      _detenerHeartbeat();
+      // Usar sendBeacon para asegurarse de que el request salga aunque la página se esté cerrando
+      var payload = JSON.stringify({ accion: 'escribirRango', rango: 'USUARIOS!E' + (_getFilaUsuario(CURRENT_USER.name)), values: [['']] });
+      navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'application/json' }));
+    }
+  });
 </script>
 
 </body>
