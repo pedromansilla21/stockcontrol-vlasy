@@ -5133,8 +5133,8 @@ async function _verificarUsuarioDisponible(nombreUsuario) {
   var ts = parseInt(partes[1], 10);
   // Si el deviceId es este mismo dispositivo, dejar pasar (reconexión)
   if (deviceId === _getDeviceId()) return true;
-  // Si el heartbeat tiene más de 90s, considerar sesión caída
-  if (Date.now() - ts > 90000) return true;
+  // Si el heartbeat tiene más de 30s, considerar sesión caída
+  if (Date.now() - ts > 30000) return true;
   return false; // ocupado
 }
 
@@ -5142,7 +5142,7 @@ function _arrancarHeartbeat(nombreUsuario) {
   _detenerHeartbeat();
   _sesionHeartbeatInterval = setInterval(function() {
     _registrarSesionActiva(nombreUsuario);
-  }, 30000);
+  }, 15000);
 }
 
 function _detenerHeartbeat() {
