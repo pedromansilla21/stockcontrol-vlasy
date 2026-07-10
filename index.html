@@ -1778,14 +1778,14 @@ async function loadDBFromSheets() {
     var rows = await sheetsRead('ARTICULOS!A2:I9999');
     _dbCache = rows.map(function(r) {
       return {
-        cod:      r[0] || '',
-        desc:     r[1] || '',
-        marca:    r[2] || '',
-        categoria:r[3] || '',
-        familia:  r[4] || '',
-        cbSuelto: r[5] || '',
-        unidSuelto: r[6] || '1',
-        cbCaja:   r[7] || '',
+        cod:      String(r[0] || '').trim(),
+        desc:     String(r[1] || '').trim(),
+        marca:    String(r[2] || '').trim(),
+        categoria:String(r[3] || '').trim(),
+        familia:  String(r[4] || '').trim(),
+        cbSuelto: String(r[5] || '').trim(),
+        unidSuelto: String(r[6] || '1').trim(),
+        cbCaja:   String(r[7] || '').trim(),
         cantCaja: parseInt(r[8]) || 1
       };
     }).filter(function(a){ return a.cod !== ''; });
@@ -2419,7 +2419,7 @@ function buscarEnCompletarControl() {
   var codEncontrado = null;
 
   // 1) ¿Es un código de barras conocido? (caja o suelto)
-  var art = db.find(function(a){ return a.cbCaja === raw || a.cbSuelto === raw; });
+  var art = db.find(function(a){ return a.cbCaja === String(raw).trim() || a.cbSuelto === String(raw).trim(); });
   if (art) {
     var enRemito = remito.some(function(r){ return String(r.cod).trim() === String(art.cod).trim(); });
     var enFuera  = (itemsFueraOC||[]).some(function(x){ return String(x.cod).trim() === String(art.cod).trim(); });
@@ -2879,7 +2879,7 @@ function processScan() {
   var al = document.getElementById('alert-scan');
   var flash = document.getElementById('scan-flash');
 
-  var art = db.find(function(a){ return a.cbCaja === raw || a.cbSuelto === raw || a.cod === raw; });
+  var art = db.find(function(a){ return a.cbCaja === String(raw).trim() || a.cbSuelto === String(raw).trim() || a.cod === String(raw).trim(); });
 
   if (!art) {
     var lineaSinCB = remito.find(function(r){ return r.cod === raw; });
