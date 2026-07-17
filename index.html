@@ -1980,16 +1980,19 @@ function scRefresh() {
 function scActualizarContadores(datos) {
   var total = datos.length;
   var ok = 0, porVencer = 0, vencidos = 0, cantidad = 0;
+  var codigosUnicos = {};
   datos.forEach(function(d) {
     var est = d.estado.toLowerCase();
     if (est === 'vencido') vencidos++;
     else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') porVencer++;
     else if (est === 'ok' || est === 'en término' || est === 'vigente') ok++;
     cantidad += parseInt(d.cant) || 0;
+    codigosUnicos[scFormatearCodigo(d.cod)] = true;
   });
-  document.getElementById('sc-total').textContent    = total    || '0';
-  document.getElementById('sc-cantidad').textContent = cantidad || '0';
-  document.getElementById('sc-ok').textContent       = ok       || '0';
+  var totalUnicos = Object.keys(codigosUnicos).length;
+  document.getElementById('sc-total').textContent    = totalUnicos || '0';
+  document.getElementById('sc-cantidad').textContent = cantidad   || '0';
+  document.getElementById('sc-ok').textContent       = ok         || '0';
   document.getElementById('sc-por-vencer').textContent = porVencer || '0';
   document.getElementById('sc-vencidos').textContent   = vencidos  || '0';
 }
