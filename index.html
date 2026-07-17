@@ -5272,7 +5272,7 @@ async function syncUsuarios() {
         .map(function(r){
           var nombre = String(r[0]).trim();
           var rolRaw = String(r[1] || '').trim().toLowerCase();
-          var rol = /admin/.test(rolRaw) ? 'administrativo' : 'operario';
+          var rol = /admin/.test(rolRaw) ? 'administrativo' : /buscador/.test(rolRaw) ? 'buscador' : 'operario';
           var pin = String(r[2] || '').trim();
           var filaAlerta = r[3] ? parseInt(r[3], 10) : null;
           // Col E: sesión activa — formato "deviceId|timestamp"
