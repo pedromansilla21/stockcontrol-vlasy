@@ -5540,7 +5540,9 @@ function aplicarRol(rol) {
   var esBuscador  = rol === 'buscador';
   var esAdmin     = rol === 'administrativo';
 
-  // Ocultar todo primero
+  // Resetear todo primero
+  var navScanner = document.getElementById('nav-scanner');
+  if (navScanner) navScanner.style.display = '';
   ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -5551,18 +5553,19 @@ function aplicarRol(rol) {
     switchPanel('scanner');
     _revisarSesionGuardada();
   } else if (esBuscador) {
-    // Buscador solo ve Stock Consulta — ocultar Escaneo
-    var elScanner = document.getElementById('nav-scanner');
-    if (elScanner) elScanner.style.display = 'none';
+    // Buscador solo ve Stock Consulta — sin Escaneo
+    if (navScanner) navScanner.style.display = 'none';
     var elSC = document.getElementById('nav-stock-consulta');
     if (elSC) elSC.style.display = '';
     switchPanel('stock-consulta');
   } else {
-    // Administrativo ve todo menos stock-consulta (eso es para buscadores)
+    // Administrativo ve todo menos stock-consulta
+    if (navScanner) navScanner.style.display = '';
     ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = '';
     });
+    switchPanel('remito');
   }
 }
 
