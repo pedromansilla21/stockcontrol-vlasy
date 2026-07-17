@@ -1988,6 +1988,26 @@ function scActualizarContadores(datos) {
   document.getElementById('sc-vencidos').textContent   = vencidos  || '0';
 }
 
+function scFormatearFecha(val) {
+  if (!val) return '';
+  // Si tiene formato ISO (2026-12-28T03:00:00.000Z)
+  if (val.indexOf('T') > -1) {
+    var partes = val.split('T')[0].split('-');
+    if (partes.length === 3) return partes[2] + '/' + partes[1] + '/' + partes[0];
+  }
+  return val;
+}
+
+function scFormatearCodigo(val) {
+  if (!val) return '';
+  // Si el código fue interpretado como fecha ISO, extraer solo la parte numérica original
+  if (val.indexOf('T') > -1) {
+    // Ej: "4001-07-01T03:00:00.000Z" → "4001-07-01"
+    return val.split('T')[0];
+  }
+  return val;
+}
+
 function scRenderizar(datos) {
   var tbody = document.getElementById('tbody-sc');
   if (!datos || datos.length === 0) {
@@ -2010,11 +2030,11 @@ function scRenderizar(datos) {
       badge = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">OK</span>';
     }
     return '<tr>' +
-      '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(d.cod)  + '</td>' +
+      '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(scFormatearCodigo(d.cod))  + '</td>' +
       '<td>' + escHtml(d.desc)  + '</td>' +
       '<td>' + escHtml(d.cat)   + '</td>' +
       '<td>' + escHtml(d.cont)  + '</td>' +
-      '<td>' + escHtml(d.fecha) + '</td>' +
+      '<td>' + escHtml(scFormatearFecha(d.fecha)) + '</td>' +
       '<td style="text-align:center;font-weight:600;">' + escHtml(d.cant) + '</td>' +
       '<td>' + escHtml(d.ubi)   + '</td>' +
       '<td style="text-align:center;">' + badge + '</td>' +
