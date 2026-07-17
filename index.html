@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
- <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-   <meta http-equiv="Pragma" content="no-cache" />
-   <meta http-equiv="Expires" content="0" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>StockControl Vlasy v22F — Recepción de Pedidos</title>
@@ -1979,7 +1979,7 @@ function scActualizarContadores(datos) {
   datos.forEach(function(d) {
     var est = d.estado.toLowerCase();
     if (est === 'vencido') vencidos++;
-    else if (est === 'por vencer' || est === 'próximo a vencer') porVencer++;
+    else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') porVencer++;
     else if (est === 'ok' || est === 'en término' || est === 'vigente') ok++;
   });
   document.getElementById('sc-total').textContent      = total  || '0';
@@ -5516,20 +5516,31 @@ function _completarLogin(selected) {
 }
 
 function aplicarRol(rol) {
-  var esOperario = rol === 'operario';
+  var esOperario  = rol === 'operario';
+  var esBuscador  = rol === 'buscador';
+  var esAdmin     = rol === 'administrativo';
+
+  // Ocultar todo primero
   ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
-    // Lógica específica por rol
-    if (id === 'nav-stock-consulta' && (!CURRENT_USER || CURRENT_USER.rol !== 'buscador')) {
-      document.getElementById(id).style.display = 'none';
-    }
     var el = document.getElementById(id);
-    if (el) el.style.display = esOperario ? 'none' : '';
+    if (el) el.style.display = 'none';
   });
+
   if (esOperario) {
+    // Operario solo ve Escaneo
     switchPanel('scanner');
-    // El aviso de "sesión sin terminar" es solo para el operario — al
-    // administrador no le interesa salvo que esté escaneando él mismo.
     _revisarSesionGuardada();
+  } else if (esBuscador) {
+    // Buscador solo ve Stock Consulta
+    var elSC = document.getElementById('nav-stock-consulta');
+    if (elSC) elSC.style.display = '';
+    switchPanel('stock-consulta');
+  } else {
+    // Administrativo ve todo menos stock-consulta (eso es para buscadores)
+    ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
   }
 }
 
