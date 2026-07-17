@@ -1945,7 +1945,7 @@ function scRefresh() {
   _scDatos = [];
   scActualizarContadores([]);
 
-  sheetsRead(SS_ID, "'STOCK CONSULTA'!A2:I").then(function(rows) {
+  sheetsRead("'STOCK CONSULTA'!A2:I").then(function(rows) {
     document.getElementById('sc-loading').style.display = 'none';
     if (!rows || rows.length === 0) {
       document.getElementById('sc-empty').style.display = 'block';
@@ -5531,7 +5531,9 @@ function aplicarRol(rol) {
     switchPanel('scanner');
     _revisarSesionGuardada();
   } else if (esBuscador) {
-    // Buscador solo ve Stock Consulta
+    // Buscador solo ve Stock Consulta — ocultar Escaneo
+    var elScanner = document.getElementById('nav-scanner');
+    if (elScanner) elScanner.style.display = 'none';
     var elSC = document.getElementById('nav-stock-consulta');
     if (elSC) elSC.style.display = '';
     switchPanel('stock-consulta');
