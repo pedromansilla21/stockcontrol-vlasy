@@ -1396,6 +1396,12 @@
         </div>
       </div>
 
+      <!-- Filtro de marcas -->
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <span style="font-size:12px; color:var(--c-text3);">Filtrar por marca:</span>
+        <div id="sc-filtros-marca" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      </div>
+
       <!-- Tabla resultados -->
       <div class="card" style="padding:0; overflow:hidden;">
         <div class="table-wrap">
@@ -1404,7 +1410,9 @@
               <tr>
                 <th>Cod. Producto</th>
                 <th>Descripción</th>
+                <th>Marca</th>
                 <th>Categoría</th>
+                <th>Palet</th>
                 <th>N° Contenedor</th>
                 <th>Fecha</th>
                 <th style="text-align:center;">Cantidad</th>
@@ -1941,6 +1949,25 @@ setInterval(function(){
 // STOCK CONSULTA
 // ──────────────────────────────────────────────
 var _scDatos = [];
+var _scMarcaActiva = '';
+
+function scRenderizarFiltrosMarca() {
+  var marcas = {};
+  _scDatos.forEach(function(d) { if (d.marca) marcas[d.marca] = true; });
+  var container = document.getElementById('sc-filtros-marca');
+  if (!container) return;
+  var html = '<button class="btn btn-sm' + (!_scMarcaActiva ? ' btn-primary' : '') + '" onclick="scFiltrarMarca(\'\')">Todas</button>';
+  Object.keys(marcas).sort().forEach(function(m) {
+    html += '<button class="btn btn-sm' + (_scMarcaActiva === m ? ' btn-primary' : '') + '" onclick="scFiltrarMarca(\'' + escHtml(m) + '\')">' + escHtml(m) + '</button>';
+  });
+  container.innerHTML = html;
+}
+
+function scFiltrarMarca(marca) {
+  _scMarcaActiva = marca;
+  scRenderizarFiltrosMarca();
+  scFiltrar();
+}
 
 function scRefresh() {
   document.getElementById('sc-loading').style.display = 'block';
@@ -1949,7 +1976,7 @@ function scRefresh() {
   _scDatos = [];
   scActualizarContadores([]);
 
-  sheetsRead("'STOCK CONSULTA'!A2:I").then(function(rows) {
+  sheetsRead("'STOCK CONSULTA'!A2:L").then(function(rows) {
     document.getElementById('sc-loading').style.display = 'none';
     if (!rows || rows.length === 0) {
       document.getElementById('sc-empty').style.display = 'block';
@@ -1966,10 +1993,13 @@ function scRefresh() {
         ubi:     String(r[6]||'').trim(),
         estado:  String(r[7]||'').trim(),
         obs:     String(r[8]||'').trim(),
+        palet:   String(r[10]||'').trim(),
+        marca:   String(r[11]||'').trim(),
       };
     });
     scActualizarContadores(_scDatos);
     scRenderizar(_scDatos);
+    scRenderizarFiltrosMarca();
   }).catch(function(err) {
     document.getElementById('sc-loading').style.display = 'none';
     document.getElementById('sc-empty').style.display = 'block';
@@ -2027,42 +2057,40 @@ function scRenderizar(datos) {
   document.getElementById('sc-empty').style.display = 'none';
   tbody.innerHTML = datos.map(function(d) {
     var est = d.estado.toLowerCase();
-    var color = '';
-    var badge = '';
+    var cant = parseInt(d.cant) || 0;
+    var estadoCell = '';
     if (est === 'vencido') {
-      color = 'color:var(--c-red);';
-      badge = '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Vencido</span>';
-    } else if (est === 'por vencer' || est === 'próximo a vencer') {
-      color = 'color:var(--c-amber);';
-      badge = '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Por vencer</span>';
+      estadoCell = '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' Vencido</span>';
+    } else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') {
+      estadoCell = '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' Por vencer</span>';
     } else if (d.estado) {
-      badge = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">OK</span>';
+      estadoCell = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' OK</span>';
     }
     return '<tr>' +
-      '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(scFormatearCodigo(d.cod))  + '</td>' +
+      '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(scFormatearCodigo(d.cod)) + '</td>' +
       '<td>' + escHtml(d.desc)  + '</td>' +
+      '<td>' + escHtml(d.marca) + '</td>' +
       '<td>' + escHtml(d.cat)   + '</td>' +
+      '<td>' + escHtml(d.palet) + '</td>' +
       '<td>' + escHtml(d.cont)  + '</td>' +
       '<td>' + escHtml(scFormatearFecha(d.fecha)) + '</td>' +
       '<td style="text-align:center;font-weight:600;">' + escHtml(d.cant) + '</td>' +
       '<td>' + escHtml(d.ubi)   + '</td>' +
-      '<td style="text-align:center;">' + badge + '</td>' +
+      '<td style="text-align:center;">' + estadoCell + '</td>' +
       '<td style="color:var(--c-text3);font-size:12px;">' + escHtml(d.obs) + '</td>' +
     '</tr>';
+  }).join('');
   }).join('');
 }
 
 function scFiltrar() {
   var q = (document.getElementById('sc-search').value || '').toLowerCase().trim();
-  if (!q) {
-    scRenderizar(_scDatos);
-    scActualizarContadores(_scDatos);
-    return;
-  }
   var filtrados = _scDatos.filter(function(d) {
-    return d.cod.toLowerCase().indexOf(q) !== -1 ||
+    var coincideTexto = !q || d.cod.toLowerCase().indexOf(q) !== -1 ||
            d.desc.toLowerCase().indexOf(q) !== -1 ||
            d.cat.toLowerCase().indexOf(q)  !== -1;
+    var coincideMarca = !_scMarcaActiva || d.marca === _scMarcaActiva;
+    return coincideTexto && coincideMarca;
   });
   scRenderizar(filtrados);
   scActualizarContadores(filtrados);
