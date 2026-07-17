@@ -998,6 +998,9 @@
       <i class="ti ti-barcode"></i><span>Escaneo</span>
       <span class="nav-badge" id="badge-scanner">0</span>
     </button>
+    <button class="nav-item" id="nav-stock-consulta" onclick="switchPanel('stock-consulta')">
+      <i class="ti ti-search"></i><span>Stock Consulta</span>
+    </button>
     <div class="sidebar-label">Sistema</div>
     <button class="nav-item" id="nav-usuarios" onclick="abrirModalUsuarios()">
       <i class="ti ti-users"></i><span>Usuarios</span>
@@ -1344,6 +1347,78 @@
       </div>
     </div>
 
+    <!-- PANEL STOCK CONSULTA -->
+    <div id="panel-stock-consulta" class="panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Stock Consulta</div>
+          <div class="page-sub">Búsqueda de artículos en depósito</div>
+        </div>
+      </div>
+
+      <!-- Contadores -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;">
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Total productos</div>
+          <div id="sc-total" style="font-size:28px; font-weight:700; color:var(--c-text1);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">En término</div>
+          <div id="sc-ok" style="font-size:28px; font-weight:700; color:var(--c-green);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Por vencer</div>
+          <div id="sc-por-vencer" style="font-size:28px; font-weight:700; color:var(--c-amber);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Vencidos</div>
+          <div id="sc-vencidos" style="font-size:28px; font-weight:700; color:var(--c-red);">—</div>
+        </div>
+      </div>
+
+      <!-- Buscador -->
+      <div class="card" style="padding:14px 16px; margin-bottom:14px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <i class="ti ti-search" style="color:var(--c-text3); font-size:18px;"></i>
+          <input id="sc-search" type="text" placeholder="Buscar por código o descripción…"
+            style="flex:1; background:transparent; border:none; outline:none; font-size:14px; color:var(--c-text1);"
+            oninput="scFiltrar()" />
+          <button class="btn btn-sm" onclick="scRefresh()" title="Recargar datos">
+            <i class="ti ti-refresh"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla resultados -->
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cod. Producto</th>
+                <th>Descripción</th>
+                <th>Categoría</th>
+                <th>N° Contenedor</th>
+                <th>Fecha</th>
+                <th style="text-align:center;">Cantidad</th>
+                <th>Ubicación</th>
+                <th style="text-align:center;">Estado</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-sc"></tbody>
+          </table>
+        </div>
+        <div id="sc-empty" style="display:none; text-align:center; padding:32px; color:var(--c-text3); font-size:13px;">
+          <i class="ti ti-database-off" style="font-size:32px; display:block; margin-bottom:8px;"></i>
+          Sin resultados
+        </div>
+        <div id="sc-loading" style="display:none; text-align:center; padding:24px; color:var(--c-text3); font-size:13px;">
+          <i class="ti ti-loader-2" style="font-size:24px;"></i> Cargando…
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1395,7 +1470,7 @@
       </div>
       <div class="field">
         <label>Responsable de carga</label>
-        <input type="text" id="clas-responsable" placeholder="Nombre y apellido" />
+        <input type="text" id="clas-responsable" placeholder="Nombre y apellido" readonly style="opacity:0.7; cursor:not-allowed;" title="Se completa automáticamente con el usuario logueado" />
       </div>
       <div class="field">
         <label>N° Palet</label>
@@ -1823,6 +1898,9 @@ function switchPanel(name) {
   if (name === 'scanner') {
     setTimeout(function(){ document.getElementById('scan-input').focus(); }, 80);
   }
+  if (name === 'stock-consulta') {
+    scRefresh();
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -1852,6 +1930,112 @@ setInterval(function(){
 }, 8000);
 
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// STOCK CONSULTA
+// ──────────────────────────────────────────────
+var _scDatos = [];
+
+function scRefresh() {
+  document.getElementById('sc-loading').style.display = 'block';
+  document.getElementById('sc-empty').style.display = 'none';
+  document.getElementById('tbody-sc').innerHTML = '';
+  _scDatos = [];
+  scActualizarContadores([]);
+
+  sheetsRead(SS_ID, "'STOCK CONSULTA'!A2:I").then(function(rows) {
+    document.getElementById('sc-loading').style.display = 'none';
+    if (!rows || rows.length === 0) {
+      document.getElementById('sc-empty').style.display = 'block';
+      return;
+    }
+    _scDatos = rows.map(function(r) {
+      return {
+        cod:     String(r[0]||'').trim(),
+        desc:    String(r[1]||'').trim(),
+        cat:     String(r[2]||'').trim(),
+        cont:    String(r[3]||'').trim(),
+        fecha:   String(r[4]||'').trim(),
+        cant:    String(r[5]||'').trim(),
+        ubi:     String(r[6]||'').trim(),
+        estado:  String(r[7]||'').trim(),
+        obs:     String(r[8]||'').trim(),
+      };
+    });
+    scActualizarContadores(_scDatos);
+    scRenderizar(_scDatos);
+  }).catch(function(err) {
+    document.getElementById('sc-loading').style.display = 'none';
+    document.getElementById('sc-empty').style.display = 'block';
+    console.error('Stock Consulta error:', err);
+  });
+}
+
+function scActualizarContadores(datos) {
+  var total = datos.length;
+  var ok = 0, porVencer = 0, vencidos = 0;
+  datos.forEach(function(d) {
+    var est = d.estado.toLowerCase();
+    if (est === 'vencido') vencidos++;
+    else if (est === 'por vencer' || est === 'próximo a vencer') porVencer++;
+    else if (est === 'ok' || est === 'en término' || est === 'vigente') ok++;
+  });
+  document.getElementById('sc-total').textContent      = total  || '0';
+  document.getElementById('sc-ok').textContent         = ok     || '0';
+  document.getElementById('sc-por-vencer').textContent = porVencer || '0';
+  document.getElementById('sc-vencidos').textContent   = vencidos  || '0';
+}
+
+function scRenderizar(datos) {
+  var tbody = document.getElementById('tbody-sc');
+  if (!datos || datos.length === 0) {
+    document.getElementById('sc-empty').style.display = 'block';
+    tbody.innerHTML = '';
+    return;
+  }
+  document.getElementById('sc-empty').style.display = 'none';
+  tbody.innerHTML = datos.map(function(d) {
+    var est = d.estado.toLowerCase();
+    var color = '';
+    var badge = '';
+    if (est === 'vencido') {
+      color = 'color:var(--c-red);';
+      badge = '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Vencido</span>';
+    } else if (est === 'por vencer' || est === 'próximo a vencer') {
+      color = 'color:var(--c-amber);';
+      badge = '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Por vencer</span>';
+    } else if (d.estado) {
+      badge = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">OK</span>';
+    }
+    return '<tr>' +
+      '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(d.cod)  + '</td>' +
+      '<td>' + escHtml(d.desc)  + '</td>' +
+      '<td>' + escHtml(d.cat)   + '</td>' +
+      '<td>' + escHtml(d.cont)  + '</td>' +
+      '<td>' + escHtml(d.fecha) + '</td>' +
+      '<td style="text-align:center;font-weight:600;">' + escHtml(d.cant) + '</td>' +
+      '<td>' + escHtml(d.ubi)   + '</td>' +
+      '<td style="text-align:center;">' + badge + '</td>' +
+      '<td style="color:var(--c-text3);font-size:12px;">' + escHtml(d.obs) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function scFiltrar() {
+  var q = (document.getElementById('sc-search').value || '').toLowerCase().trim();
+  if (!q) {
+    scRenderizar(_scDatos);
+    scActualizarContadores(_scDatos);
+    return;
+  }
+  var filtrados = _scDatos.filter(function(d) {
+    return d.cod.toLowerCase().indexOf(q) !== -1 ||
+           d.desc.toLowerCase().indexOf(q) !== -1 ||
+           d.cat.toLowerCase().indexOf(q)  !== -1;
+  });
+  scRenderizar(filtrados);
+  // contadores NO se filtran, siempre muestran el total real
+}
+
 // REMITO
 // ──────────────────────────────────────────────
 function renderSelectArticulos() {
@@ -4495,7 +4679,11 @@ function abrirModalClasificar(ocId) {
     });
     document.getElementById('clas-fecha').valueAsDate = new Date();
     // Prellenar proveedor y responsable del usuario activo
-    if (CURRENT_USER) document.getElementById('clas-responsable').value = CURRENT_USER.name;
+    if (CURRENT_USER) {
+      document.getElementById('clas-responsable').value = CURRENT_USER.name;
+      // El responsable no se puede modificar — siempre es el usuario logueado
+      document.getElementById('clas-responsable').readOnly = true;
+    }
     selEstado('pendiente');
   }
   document.getElementById('alert-clasificar').classList.remove('show');
@@ -5326,7 +5514,7 @@ function _completarLogin(selected) {
 
 function aplicarRol(rol) {
   var esOperario = rol === 'operario';
-  ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
+  ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = esOperario ? 'none' : '';
   });
