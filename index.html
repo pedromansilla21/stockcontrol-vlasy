@@ -5405,7 +5405,7 @@ function renderLoginGrid() {
     card.innerHTML =
       '<div class="user-card-avatar" style="background:' + userColor(u.name) + ';">' + userInitials(u.name) + '</div>' +
       '<div class="user-card-name">' + escHtml(u.name) + '</div>' +
-      '<div class="user-card-role">' + (u.rol === 'administrativo' ? 'Administrador' : 'Operario') + '</div>';
+      '<div class="user-card-role">' + (u.rol === 'administrativo' ? 'Administrador' : u.rol === 'buscador' ? 'Buscador' : 'Operario') + '</div>';
     card.addEventListener('click', function() {
       grid.querySelectorAll('.user-card').forEach(function(c){ c.classList.remove('selected'); });
       card.classList.add('selected');
@@ -5518,6 +5518,10 @@ function _completarLogin(selected) {
 function aplicarRol(rol) {
   var esOperario = rol === 'operario';
   ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
+    // Lógica específica por rol
+    if (id === 'nav-stock-consulta' && (!CURRENT_USER || CURRENT_USER.rol !== 'buscador')) {
+      document.getElementById(id).style.display = 'none';
+    }
     var el = document.getElementById(id);
     if (el) el.style.display = esOperario ? 'none' : '';
   });
