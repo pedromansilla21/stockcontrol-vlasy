@@ -6203,7 +6203,9 @@ function _checkFinalizadoOC() {
 }
 
 function _limpiarAlertaHuerfana() {
-  sheetsRead('ALERTAS!A1').then(function(rows) {
+  if (!CURRENT_USER) return;
+  var fila = CURRENT_USER.filaAlerta || 1;
+  sheetsRead('ALERTAS!A' + fila).then(function(rows) {
     var val = (rows && rows[0] && rows[0][0]) ? String(rows[0][0]).trim() : 'VACIO';
     if (!val || val === 'VACIO') {
       localStorage.removeItem('oc_en_escaneo');
@@ -6212,21 +6214,21 @@ function _limpiarAlertaHuerfana() {
     var ocId = val.split('|')[0];
     if (ocId === 'FINALIZADO') {
       localStorage.removeItem('oc_en_escaneo');
+      // Limpiar la celda del operario
+      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
       return;
     }
     if (ocId === 'EN_ESCANEO') {
-      // El operario está escaneando activamente — mantener el bloqueo
       localStorage.setItem('oc_en_escaneo', '1');
       return;
     }
-    // OC real: mantener el flag local
+    // OC real: verificar si existe
     localStorage.setItem('oc_en_escaneo', '1');
-    // Solo limpiar si la OC no existe en el sistema
     var ordenes = loadOrdenes();
     var oc = ordenes.find(function(o){ return o.id === ocId; });
     if (!oc) {
       localStorage.removeItem('oc_en_escaneo');
-      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO' }) });
+      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
     }
   }).catch(function(){});
 }
@@ -6337,9 +6339,13 @@ function confirmarEscaneadoPor() {
   window.addEventListener('beforeunload', function() {
     if (CURRENT_USER) {
       _detenerHeartbeat();
-      // Usar sendBeacon para asegurarse de que el request salga aunque la página se esté cerrando
       var payload = JSON.stringify({ accion: 'escribirRango', rango: 'USUARIOS!E' + (_getFilaUsuario(CURRENT_USER.name)), values: [['']] });
       navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'application/json' }));
+      // Si es operario, limpiar su celda de ALERTAS
+      if (CURRENT_USER.rol === 'operario' && CURRENT_USER.filaAlerta) {
+        var payloadAlerta = JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta });
+        navigator.sendBeacon(GAS_URL, new Blob([payloadAlerta], { type: 'application/json' }));
+      }
     }
   });
 </script>
