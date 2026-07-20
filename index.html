@@ -5534,7 +5534,8 @@ function loginIngresar() {
   // Verificar que el usuario no esté activo en otro dispositivo
   btn.disabled = true;
   btn.textContent = 'Verificando...';
-  _verificarUsuarioDisponible(selected.name).then(function(disponible) {
+  var timeout = new Promise(function(resolve) { setTimeout(function(){ resolve(true); }, 5000); });
+  Promise.race([_verificarUsuarioDisponible(selected.name), timeout]).then(function(disponible) {
     btn.disabled = false;
     btn.textContent = 'Ingresar';
     if (!disponible) {
