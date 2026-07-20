@@ -5328,7 +5328,8 @@ function importarLineasOC() {
 // ──────────────────────────────────────────────
 async function syncUsuarios() {
   try {
-    var rows = await sheetsRead('USUARIOS!A2:E99');
+    var timeoutPromise = new Promise(function(_, reject){ setTimeout(function(){ reject('timeout'); }, 8000); });
+    var rows = await Promise.race([sheetsRead('USUARIOS!A2:E99'), timeoutPromise]);
     if (rows && rows.length > 0) {
       var users = rows
         .filter(function(r){ return r[0] && String(r[0]).trim(); })
@@ -5338,7 +5339,6 @@ async function syncUsuarios() {
           var rol = /admin/.test(rolRaw) ? 'administrativo' : /buscador/.test(rolRaw) ? 'buscador' : 'operario';
           var pin = String(r[2] || '').trim();
           var filaAlerta = r[3] ? parseInt(r[3], 10) : null;
-          // Col E: sesión activa — formato "deviceId|timestamp"
           var sesionActiva = r[4] ? String(r[4]).trim() : '';
           return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta, sesionActiva: sesionActiva };
         });
@@ -5534,8 +5534,7 @@ function loginIngresar() {
   // Verificar que el usuario no esté activo en otro dispositivo
   btn.disabled = true;
   btn.textContent = 'Verificando...';
-  var timeout = new Promise(function(resolve) { setTimeout(function(){ resolve(true); }, 5000); });
-  Promise.race([_verificarUsuarioDisponible(selected.name), timeout]).then(function(disponible) {
+  _verificarUsuarioDisponible(selected.name).then(function(disponible) {
     btn.disabled = false;
     btn.textContent = 'Ingresar';
     if (!disponible) {
@@ -5546,7 +5545,7 @@ function loginIngresar() {
   }).catch(function() {
     btn.disabled = false;
     btn.textContent = 'Ingresar';
-    _completarLogin(selected); // sin conexión, dejar pasar
+    _completarLogin(selected);
   });
 }
 
