@@ -2013,10 +2013,11 @@ function scActualizarContadores(datos) {
   var codigosUnicos = {};
   datos.forEach(function(d) {
     var est = d.estado.toLowerCase();
-    if (est === 'vencido') vencidos++;
-    else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') porVencer++;
-    else if (est === 'ok' || est === 'en término' || est === 'vigente') ok++;
-    cantidad += parseInt(d.cant) || 0;
+    var cant = parseInt(d.cant) || 0;
+    if (est === 'vencido') vencidos += cant;
+    else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') porVencer += cant;
+    else if (est === 'ok' || est === 'en término' || est === 'vigente') ok += cant;
+    cantidad += cant;
     codigosUnicos[scFormatearCodigo(d.cod)] = true;
   });
   var totalUnicos = Object.keys(codigosUnicos).length;
@@ -2060,11 +2061,11 @@ function scRenderizar(datos) {
     var cant = parseInt(d.cant) || 0;
     var estadoCell = '';
     if (est === 'vencido') {
-      estadoCell = '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' Vencido</span>';
+      estadoCell = '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Vencido</span>';
     } else if (est === 'por vencer' || est === 'próximo a vencer' || est === 'proximo a vencer') {
-      estadoCell = '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' Por vencer</span>';
+      estadoCell = '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Por vencer</span>';
     } else if (d.estado) {
-      estadoCell = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">' + cant + ' OK</span>';
+      estadoCell = '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">OK</span>';
     }
     return '<tr>' +
       '<td style="font-family:var(--f-mono);font-size:12px;">' + escHtml(scFormatearCodigo(d.cod)) + '</td>' +
