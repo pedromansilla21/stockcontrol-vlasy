@@ -5562,6 +5562,12 @@ function _completarLogin(selected) {
   sessionStorage.removeItem('_alv');
   sessionStorage.removeItem('_alv_fin');
   localStorage.removeItem('oc_en_escaneo');
+  // Resetear estado de escaneo al cambiar de usuario
+  remitoDatos = {};
+  lineas = [];
+  cajas = {};
+  itemsFueraOC = [];
+  _renderLineas();
 
   // Registrar sesión activa en el Sheet y arrancar heartbeat
   _registrarSesionActiva(selected.name);
