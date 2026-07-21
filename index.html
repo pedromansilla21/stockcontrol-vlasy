@@ -1088,13 +1088,13 @@
         <div class="form-grid-4">
           <div class="field"><label>N° Orden de Compra</label><input id="rem-nro" oninput="triggerAutosave()" class="mono" placeholder="OC-00123" /></div>
           <div class="field"><label>Proveedor</label><input id="rem-proveedor" placeholder="Nombre del proveedor" /></div>
-          <div class="field"><label>Fecha de recepción</label><input id="rem-fecha" onchange="triggerAutosave()" type="date" /></div>
-          <div class="field"><label>Lote (general)</label><input id="rem-lote" oninput="triggerAutosave()" class="mono" placeholder="L-2024" /></div>
+          <div class="field"><label id="label-fecha">Fecha de recepción</label><input id="rem-fecha" onchange="triggerAutosave()" type="date" /></div>
+          <div class="field" id="field-lote"><label>Lote (general)</label><input id="rem-lote" oninput="triggerAutosave()" class="mono" placeholder="L-2024" /></div>
         </div>
         <div class="form-grid-4">
-          <div class="field"><label>N° Palet</label><input id="rem-palet" class="mono" placeholder="45" /></div>
-          <div class="field"><label>N° Contenedor</label><input id="rem-contenedor" class="mono" placeholder="E01" /></div>
-          <div class="field"><label>Responsable de carga *</label><input id="rem-operario" placeholder="Nombre y apellido" /></div>
+          <div class="field" id="field-palet"><label>N° Palet</label><input id="rem-palet" class="mono" placeholder="45" /></div>
+          <div class="field" id="field-contenedor"><label>N° Contenedor</label><input id="rem-contenedor" class="mono" placeholder="E01" /></div>
+          <div class="field"><label id="label-responsable">Responsable de carga *</label><input id="rem-operario" placeholder="Nombre y apellido" /></div>
           <div class="field"><label>Observaciones</label><input id="rem-obs" placeholder="Opcional" /></div>
         </div>
       </div>
@@ -2242,6 +2242,8 @@ function limpiarRemito() {
   renderTablaControl();
   updateMetrics();
   clearSession();
+  // Re-aplicar adaptaciones del rol (auto-genera NroOC, re-rellena responsable, etc.)
+  if (CURRENT_USER) adaptarFormularioRol(CURRENT_USER.rol || '');
 }
 
 function iniciarControl() {
@@ -5722,13 +5724,13 @@ function _completarLogin(selected) {
 }
 
 function aplicarRol(rol) {
-  var esOperario  = rol === 'operario';
-  var esBuscador  = rol === 'buscador';
-  var esAdmin     = rol === 'administrativo';
+  var esOperario     = rol === 'operario';
+  var esBuscador     = rol === 'buscador';
+  var esAdminCompras = rol === 'admin_compras';
 
-  // Resetear todo primero
+  // Resetear todo primero — ocultar todo
   var navScanner = document.getElementById('nav-scanner');
-  if (navScanner) navScanner.style.display = '';
+  if (navScanner) navScanner.style.display = 'none';
   ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -5736,23 +5738,93 @@ function aplicarRol(rol) {
 
   if (esOperario) {
     // Operario solo ve Escaneo
+    if (navScanner) navScanner.style.display = '';
     switchPanel('scanner');
     _revisarSesionGuardada();
   } else if (esBuscador) {
-    // Buscador solo ve Stock Consulta — sin Escaneo
-    if (navScanner) navScanner.style.display = 'none';
+    // Buscador solo ve Stock Consulta
     var elSC = document.getElementById('nav-stock-consulta');
     if (elSC) elSC.style.display = '';
     switchPanel('stock-consulta');
+  } else if (esAdminCompras) {
+    // Admin Compras: Nueva OC + Reporte OC (sin Escaneo, sin Usuarios)
+    ['nav-remito','nav-ordenes'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
+    adaptarFormularioRol('admin_compras');
+    switchPanel('remito');
   } else {
-    // Administrativo ve todo menos stock-consulta
+    // Administrativo — ve todo menos stock-consulta
     if (navScanner) navScanner.style.display = '';
     ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = '';
     });
+    adaptarFormularioRol('administrativo');
     switchPanel('remito');
   }
+}
+
+// ── ADAPTAR FORMULARIO NUEVA OC SEGÚN ROL ──────────────────
+function adaptarFormularioRol(rol) {
+  var esAdminCompras = rol === 'admin_compras';
+
+  // Campos a ocultar para admin_compras
+  ['field-lote','field-palet','field-contenedor'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = esAdminCompras ? 'none' : '';
+  });
+
+  // Label fecha
+  var labelFecha = document.getElementById('label-fecha');
+  if (labelFecha) labelFecha.textContent = esAdminCompras ? 'Fecha de entrega' : 'Fecha de recepción';
+
+  // Label responsable
+  var labelResp = document.getElementById('label-responsable');
+  if (labelResp) labelResp.textContent = esAdminCompras ? 'Responsable' : 'Responsable de carga *';
+
+  // Responsable: auto-rellenar y bloquear para admin_compras
+  var inputOp = document.getElementById('rem-operario');
+  if (inputOp) {
+    if (esAdminCompras && CURRENT_USER) {
+      inputOp.value    = CURRENT_USER.name;
+      inputOp.readOnly = true;
+      inputOp.style.opacity = '0.7';
+      inputOp.style.cursor  = 'not-allowed';
+    } else {
+      inputOp.readOnly = false;
+      inputOp.style.opacity = '';
+      inputOp.style.cursor  = '';
+    }
+  }
+
+  // N° OC: auto-generar si está vacío y es admin_compras
+  if (esAdminCompras) {
+    var inputNro = document.getElementById('rem-nro');
+    if (inputNro && !inputNro.value.trim()) {
+      inputNro.value = _generarNroOC();
+    }
+  }
+}
+
+function _generarNroOC() {
+  // Toma el máximo número de OC existente y suma 1
+  var ocs = [];
+  try {
+    var raw = localStorage.getItem('stockcontrol_ordenes');
+    ocs = raw ? JSON.parse(raw) : [];
+  } catch(e) { ocs = []; }
+
+  var maxNum = 0;
+  ocs.forEach(function(oc) {
+    var nro = (oc.nro || '').toString().replace(/[^0-9]/g, '');
+    var n = parseInt(nro, 10);
+    if (!isNaN(n) && n > maxNum) maxNum = n;
+  });
+
+  var siguiente = maxNum + 1;
+  return 'OC-' + String(siguiente).padStart(5, '0');
 }
 
 
