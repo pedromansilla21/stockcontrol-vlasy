@@ -181,6 +181,48 @@
   }
   .user-card-name { font-size: 12px; font-weight: 600; }
   .user-card-role { font-size: 10px; color: var(--c-text3); }
+
+  /* ── LOGIN — SELECCIÓN DE ROL ── */
+  .roles-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .role-card {
+    border: 2px solid var(--c-border);
+    border-radius: var(--radius);
+    padding: 18px 12px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.15s;
+    background: var(--c-surface);
+  }
+  .role-card:hover { border-color: var(--c-accent); background: var(--c-surface2); transform: translateY(-1px); }
+  .role-card-icon {
+    width: 42px; height: 42px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: #fff; flex-shrink: 0;
+  }
+  .role-card-name { font-size: 13px; font-weight: 600; text-align: center; }
+  .role-card-count { font-size: 11px; color: var(--c-text3); }
+  .login-back-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: none; border: none; color: var(--c-text3);
+    font-size: 12px; cursor: pointer; padding: 0 0 12px 0;
+    transition: color 0.15s;
+  }
+  .login-back-btn:hover { color: var(--c-accent); }
+  .login-rol-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--c-surface2); border: 1px solid var(--c-border2);
+    border-radius: 20px; padding: 4px 12px 4px 8px;
+    font-size: 12px; font-weight: 600; margin-bottom: 14px;
+    color: var(--c-text);
+  }
   .login-divider { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: var(--c-text3); font-size: 12px; }
   .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:var(--c-border); }
   .login-new-user { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -1540,21 +1582,31 @@
   <div class="modal-login">
     <div class="login-logo"><i class="ti ti-package"></i></div>
     <div class="login-title">StockControl Vlasy</div>
-    <div class="login-sub" id="login-sub">Seleccioná tu usuario para continuar</div>
 
-    <div class="user-grid" id="login-user-grid"></div>
-
-
-    <div id="login-pin-wrap" style="display:none; margin-bottom:12px;">
-      <input type="password" id="login-pin-input" placeholder="PIN" maxlength="8"
-        style="width:100%; text-align:center; font-size:22px; letter-spacing:8px; padding:10px;"
-        oninput="this.value=this.value.replace(/[^0-9]/,'')"
-        onkeydown="if(event.key==='Enter') loginIngresar()" />
-      <div id="login-pin-error" style="display:none; color:var(--c-red); font-size:12px; text-align:center; margin-top:6px;">PIN incorrecto</div>
+    <!-- PASO 1: Selección de rol -->
+    <div id="login-step-rol">
+      <div class="login-sub">Seleccioná tu rol para continuar</div>
+      <div class="roles-grid" id="login-roles-grid"></div>
     </div>
-    <button class="btn btn-primary" style="width:100%;" id="login-btn-ingresar" onclick="loginIngresar()" disabled>
-      <i class="ti ti-login"></i> Ingresar
-    </button>
+
+    <!-- PASO 2: Selección de usuario -->
+    <div id="login-step-usuario" style="display:none;">
+      <button class="login-back-btn" onclick="volverARoles()">
+        <i class="ti ti-arrow-left"></i> Volver a roles
+      </button>
+      <div id="login-rol-badge-wrap" style="text-align:center;"></div>
+      <div class="user-grid" id="login-user-grid"></div>
+      <div id="login-pin-wrap" style="display:none; margin-bottom:12px;">
+        <input type="password" id="login-pin-input" placeholder="PIN" maxlength="8"
+          style="width:100%; text-align:center; font-size:22px; letter-spacing:8px; padding:10px;"
+          oninput="this.value=this.value.replace(/[^0-9]/,'')"
+          onkeydown="if(event.key==='Enter') loginIngresar()" />
+        <div id="login-pin-error" style="display:none; color:var(--c-red); font-size:12px; text-align:center; margin-top:6px;">PIN incorrecto</div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="login-btn-ingresar" onclick="loginIngresar()" disabled>
+        <i class="ti ti-login"></i> Ingresar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -5441,43 +5493,131 @@ function userColor(name) {
   return USER_COLORS[idx % USER_COLORS.length];
 }
 
+// ── CONFIG DE ROLES PARA EL LOGIN ──────────────────────────
+var LOGIN_ROLES_CONFIG = {
+  'administrativo':  { label: 'Administrativo',  icon: 'ti-shield-check', color: '#5BBFD6' },
+  'operario':        { label: 'Operario',         icon: 'ti-barcode',      color: '#4CAF7D' },
+  'buscador':        { label: 'Buscador',         icon: 'ti-search',       color: '#F0A44A' },
+  'admin_compras':   { label: 'Admin Compras',    icon: 'ti-shopping-cart',color: '#a855f7' }
+};
+
+var _loginRolSeleccionado = null;
+
 function abrirModalLogin(esCambio) {
-  var loginSub = document.getElementById('login-sub');
-  loginSub.textContent = esCambio
-    ? 'Seleccioná otro usuario o ingresá uno nuevo'
-    : 'Seleccioná tu usuario para continuar';
-  renderLoginGrid();
+  _loginRolSeleccionado = null;
+  // Resetear step
+  document.getElementById('login-step-rol').style.display    = 'block';
+  document.getElementById('login-step-usuario').style.display = 'none';
+  // Limpiar PIN
+  var pinWrap = document.getElementById('login-pin-wrap');
+  var pinInput = document.getElementById('login-pin-input');
+  var pinErr   = document.getElementById('login-pin-error');
+  if (pinWrap)  pinWrap.style.display  = 'none';
+  if (pinInput) pinInput.value         = '';
+  if (pinErr)   pinErr.style.display   = 'none';
+  // Renderizar roles
+  renderRolesGrid();
   document.getElementById('modal-login').classList.add('open');
+}
+
+function renderRolesGrid() {
+  var users  = loadUsers();
+  var grid   = document.getElementById('login-roles-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  // Obtener roles únicos presentes en los usuarios
+  var rolesPresentes = [];
+  users.forEach(function(u) {
+    var rol = u.rol || 'operario';
+    if (rolesPresentes.indexOf(rol) < 0) rolesPresentes.push(rol);
+  });
+
+  // Si solo hay 1 rol, saltar directo a usuarios
+  if (rolesPresentes.length === 1) {
+    seleccionarRol(rolesPresentes[0]);
+    return;
+  }
+
+  rolesPresentes.forEach(function(rol) {
+    var cfg   = LOGIN_ROLES_CONFIG[rol] || { label: rol, icon: 'ti-user', color: '#5BBFD6' };
+    var count = users.filter(function(u){ return (u.rol || 'operario') === rol; }).length;
+    var card  = document.createElement('div');
+    card.className = 'role-card';
+    card.innerHTML =
+      '<div class="role-card-icon" style="background:' + cfg.color + ';"><i class="ti ' + cfg.icon + '"></i></div>' +
+      '<div class="role-card-name">' + escHtml(cfg.label) + '</div>' +
+      '<div class="role-card-count">' + count + ' usuario' + (count !== 1 ? 's' : '') + '</div>';
+    card.addEventListener('click', function(){ seleccionarRol(rol); });
+    grid.appendChild(card);
+  });
+}
+
+function seleccionarRol(rol) {
+  _loginRolSeleccionado = rol;
+  // Cambiar de pantalla
+  document.getElementById('login-step-rol').style.display     = 'none';
+  document.getElementById('login-step-usuario').style.display = 'block';
+  // Mostrar badge del rol elegido
+  var cfg  = LOGIN_ROLES_CONFIG[rol] || { label: rol, icon: 'ti-user', color: '#5BBFD6' };
+  var wrap = document.getElementById('login-rol-badge-wrap');
+  if (wrap) wrap.innerHTML =
+    '<div class="login-rol-badge">' +
+    '<i class="ti ' + cfg.icon + '" style="color:' + cfg.color + ';"></i>' +
+    escHtml(cfg.label) +
+    '</div>';
+  // Resetear PIN
+  var pinWrap = document.getElementById('login-pin-wrap');
+  var pinInput = document.getElementById('login-pin-input');
+  var pinErr   = document.getElementById('login-pin-error');
+  if (pinWrap)  pinWrap.style.display  = 'none';
+  if (pinInput) pinInput.value         = '';
+  if (pinErr)   pinErr.style.display   = 'none';
+  var btnIngresar = document.getElementById('login-btn-ingresar');
+  if (btnIngresar) btnIngresar.disabled = true;
+  renderLoginGrid();
+}
+
+function volverARoles() {
+  _loginRolSeleccionado = null;
+  document.getElementById('login-step-usuario').style.display = 'none';
+  document.getElementById('login-step-rol').style.display     = 'block';
+  renderRolesGrid();
 }
 
 function renderLoginGrid() {
   var users = loadUsers();
+  // Filtrar por rol seleccionado
+  var filtrados = _loginRolSeleccionado
+    ? users.filter(function(u){ return (u.rol || 'operario') === _loginRolSeleccionado; })
+    : users;
+
   var grid = document.getElementById('login-user-grid');
   var btnIngresar = document.getElementById('login-btn-ingresar');
   btnIngresar.disabled = true;
 
-  if (users.length === 0) {
-    grid.innerHTML = '<div style="grid-column:span 2; text-align:center; color:var(--c-text3); font-size:13px; padding:12px 0;">Todavía no hay usuarios — agregá uno abajo</div>';
+  if (filtrados.length === 0) {
+    grid.innerHTML = '<div style="grid-column:span 3; text-align:center; color:var(--c-text3); font-size:13px; padding:12px 0;">No hay usuarios con este rol</div>';
     return;
   }
 
   grid.innerHTML = '';
-  users.forEach(function(u) {
+  filtrados.forEach(function(u) {
     var card = document.createElement('div');
     card.className = 'user-card' + (CURRENT_USER && CURRENT_USER.name === u.name ? ' selected' : '');
     card.innerHTML =
       '<div class="user-card-avatar" style="background:' + userColor(u.name) + ';">' + userInitials(u.name) + '</div>' +
       '<div class="user-card-name">' + escHtml(u.name) + '</div>' +
-      '<div class="user-card-role">' + (u.rol === 'administrativo' ? 'Administrador' : u.rol === 'buscador' ? 'Buscador' : 'Operario') + '</div>';
+      '<div class="user-card-role">' + (LOGIN_ROLES_CONFIG[u.rol] ? LOGIN_ROLES_CONFIG[u.rol].label : (u.rol || 'Operario')) + '</div>';
     card.addEventListener('click', function() {
       grid.querySelectorAll('.user-card').forEach(function(c){ c.classList.remove('selected'); });
       card.classList.add('selected');
       card._selectedUser = u;
       btnIngresar.disabled = false;
       btnIngresar._selectedUser = u;
-      var pinWrap = document.getElementById('login-pin-wrap');
+      var pinWrap  = document.getElementById('login-pin-wrap');
       var pinInput = document.getElementById('login-pin-input');
-      var pinErr = document.getElementById('login-pin-error');
+      var pinErr   = document.getElementById('login-pin-error');
       if (u.pin) {
         pinWrap.style.display = 'block';
         pinInput.value = '';
