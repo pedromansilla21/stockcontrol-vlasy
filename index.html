@@ -1045,6 +1045,10 @@
       <i class="ti ti-archive"></i><span>Reporte O.C.</span>
       <span class="nav-badge" id="badge-ordenes">0</span>
     </button>
+    <button class="nav-item" id="nav-reporte-compras" onclick="switchPanel('reporte-compras')" style="display:none;">
+      <i class="ti ti-clipboard-list"></i><span>Reporte de Compra</span>
+      <span class="nav-badge" id="badge-reporte-compras">0</span>
+    </button>
     <button class="nav-item" id="nav-scanner" onclick="switchPanel('scanner')">
       <i class="ti ti-barcode"></i><span>Escaneo</span>
       <span class="nav-badge" id="badge-scanner">0</span>
@@ -1204,6 +1208,31 @@
       </div>
 
       <div id="ordenes-list"></div>
+    </div>
+
+    <!-- ═══ PANEL REPORTE COMPRAS (solo admin_compras) ═══ -->
+    <div id="panel-reporte-compras" class="panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Reporte de Compra</div>
+          <div class="page-sub">O.C. creadas — cargá el remito cuando llegue la mercadería</div>
+        </div>
+      </div>
+
+      <div class="oc-filter-bar">
+        <span style="font-size:11px; color:var(--c-text3); font-weight:700; text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap;">Filtrar:</span>
+        <button class="oc-filter-btn rc-filter-btn active" onclick="filtrarOCCompras('todas', this)">Todas</button>
+        <span class="oc-filter-sep"></span>
+        <span style="font-size:10px; color:var(--c-text3); font-weight:600; text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap;">Estado</span>
+        <button class="oc-filter-btn rc-filter-btn" onclick="filtrarOCCompras('pendiente', this)">🕐 Pendiente</button>
+        <button class="oc-filter-btn rc-filter-btn" onclick="filtrarOCCompras('remitado', this)">📄 Remitado</button>
+        <button class="oc-filter-btn rc-filter-btn" onclick="filtrarOCCompras('controlado', this)">🟠 Controlada</button>
+        <button class="oc-filter-btn rc-filter-btn" onclick="filtrarOCCompras('finalizado', this)">✅ Finalizado</button>
+        <div style="flex:1;"></div>
+        <input type="text" id="rc-search" placeholder="Buscar N° O.C. o proveedor..." style="max-width:260px; margin:0;" oninput="renderReporteCompras()" />
+      </div>
+
+      <div id="reporte-compras-list"></div>
     </div>
 
     <!-- ═══ PANEL SCANNER ═══ -->
@@ -1962,6 +1991,7 @@ function switchPanel(name) {
   document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
   document.getElementById('panel-' + name).classList.add('active');
   if (name === 'ordenes') syncOrdenes();
+  if (name === 'reporte-compras') renderReporteCompras();
   if (name === 'completar-control') {
     // Pre-completar escaneado por con el usuario logueado
     var inp = document.getElementById('input-escaneado-por');
@@ -4054,6 +4084,7 @@ function guardarOCActual() {
   // ── Detectar número duplicado: mismo nro con DISTINTO id (diferente fecha u otro) ──
   var duplicadoNro = ordenes.some(function(o){ return o.nro === nro && o.id !== idNuevo; });
 
+  var esCreadorCompras = CURRENT_USER && CURRENT_USER.rol === 'admin_compras';
   var ocObj = {
     id: idNuevo,
     nro: nro,
@@ -4066,7 +4097,10 @@ function guardarOCActual() {
     lineas: JSON.parse(JSON.stringify(remito)),
     itemsFueraOC: JSON.parse(JSON.stringify(itemsFueraOC)),
     savedAt: new Date().toISOString(),
-    nroDuplicado: duplicadoNro
+    nroDuplicado: duplicadoNro,
+    origen: esCreadorCompras ? 'admin_compras' : 'supervisor',
+    estadoCompras: esCreadorCompras ? 'pendiente' : null,
+    enviadoSupervisor: !esCreadorCompras
   };
 
   var existeIdx = ordenes.findIndex(function(o){ return o.id === idNuevo; });
@@ -4083,7 +4117,12 @@ function guardarOCActual() {
   }
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
-  renderOrdenes();
+  updateBadgeReporteCompras();
+  if (CURRENT_USER && CURRENT_USER.rol === 'admin_compras') {
+    renderReporteCompras();
+  } else {
+    renderOrdenes();
+  }
   _guardarEnHistorial(ocObj);  // Guardar en HISTORIAL OC del Sheet
 
   // ── Limpiar el formulario después de guardar ──
@@ -4128,6 +4167,11 @@ function renderOrdenes() {
   document.querySelectorAll('.oc-card-body.open').forEach(function(el){ abiertos.push(el.id); });
 
   var ordenes = loadOrdenes();
+  // Supervisor NO ve OCs de admin_compras hasta que sean enviadas
+  ordenes = ordenes.filter(function(oc) {
+    if (oc.origen === 'admin_compras' && !oc.enviadoSupervisor) return false;
+    return true;
+  });
   var search = (document.getElementById('oc-search') ? document.getElementById('oc-search').value : '').toLowerCase().trim();
   var container = document.getElementById('ordenes-list');
   if (!container) return;
@@ -5734,7 +5778,7 @@ function aplicarRol(rol) {
   // Resetear todo primero — ocultar todo
   var navScanner = document.getElementById('nav-scanner');
   if (navScanner) navScanner.style.display = 'none';
-  ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
+  ['nav-remito','nav-ordenes','nav-reporte-compras','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -5750,15 +5794,16 @@ function aplicarRol(rol) {
     if (elSC) elSC.style.display = '';
     switchPanel('stock-consulta');
   } else if (esAdminCompras) {
-    // Admin Compras: Nueva OC + Reporte OC (sin Escaneo, sin Usuarios)
-    ['nav-remito','nav-ordenes'].forEach(function(id) {
+    // Admin Compras: Nueva OC + Reporte de Compra (sin Escaneo, sin Usuarios)
+    ['nav-remito','nav-reporte-compras'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = '';
     });
     adaptarFormularioRol('admin_compras');
+    updateBadgeReporteCompras();
     switchPanel('remito');
   } else {
-    // Administrativo — ve todo menos stock-consulta
+    // Administrativo — ve todo menos stock-consulta y reporte-compras
     if (navScanner) navScanner.style.display = '';
     ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
       var el = document.getElementById(id);
@@ -5767,6 +5812,137 @@ function aplicarRol(rol) {
     adaptarFormularioRol('administrativo');
     switchPanel('remito');
   }
+}
+
+// ── PANEL REPORTE DE COMPRA (admin_compras) ─────────────────
+
+var rcFiltroActual = 'todas';
+
+function filtrarOCCompras(filtro, btn) {
+  rcFiltroActual = filtro;
+  document.querySelectorAll('#panel-reporte-compras .rc-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderReporteCompras();
+}
+
+function updateBadgeReporteCompras() {
+  var ordenes = loadOrdenes().filter(function(oc){ return oc.origen === 'admin_compras'; });
+  var badge = document.getElementById('badge-reporte-compras');
+  if (badge) badge.textContent = ordenes.length;
+}
+
+function cambiarEstadoCompras(ocId, nuevoEstado) {
+  var ordenes = loadOrdenes();
+  var oc = ordenes.find(function(o){ return o.id === ocId; });
+  if (!oc) return;
+  oc.estadoCompras = nuevoEstado;
+  saveOrdenes(ordenes);
+  renderReporteCompras();
+}
+
+function renderReporteCompras() {
+  var ordenes = loadOrdenes().filter(function(oc){ return oc.origen === 'admin_compras'; });
+  var search  = (document.getElementById('rc-search') ? document.getElementById('rc-search').value : '').toLowerCase().trim();
+  var container = document.getElementById('reporte-compras-list');
+  if (!container) return;
+
+  // Filtrar por estado
+  var filtradas = ordenes.filter(function(oc) {
+    var ec = oc.estadoCompras || 'pendiente';
+    var matchFiltro =
+      rcFiltroActual === 'todas'     ? true :
+      rcFiltroActual === ec;
+    var matchSearch = !search ||
+      (oc.nro      || '').toLowerCase().includes(search) ||
+      (oc.proveedor|| '').toLowerCase().includes(search);
+    return matchFiltro && matchSearch;
+  });
+
+  // Ordenar: pendientes primero, después remitados, luego el resto
+  var PRIO = { pendiente: 1, remitado: 2, enviado: 3, controlado: 4, finalizado: 5 };
+  filtradas.sort(function(a, b) {
+    var pa = PRIO[a.estadoCompras||'pendiente'] || 9;
+    var pb = PRIO[b.estadoCompras||'pendiente'] || 9;
+    if (pa !== pb) return pa - pb;
+    return (b.savedAt || '') > (a.savedAt || '') ? 1 : -1;
+  });
+
+  if (filtradas.length === 0) {
+    container.innerHTML =
+      '<div class="oc-empty">' +
+      '<i class="ti ti-clipboard-list"></i>' +
+      '<p>No hay Órdenes de Compra en esta sección</p>' +
+      '<small>Creá una O.C. desde "Nueva O.C." y guardala</small>' +
+      '</div>';
+    return;
+  }
+
+  var ESTADO_CFG = {
+    pendiente:  { label: '🕐 Pendiente',  cls: 'badge-pendiente',  dot: 'var(--c-amber)' },
+    remitado:   { label: '📄 Remitado',   cls: 'badge-info',       dot: 'var(--c-blue)' },
+    enviado:    { label: '📤 Enviado',     cls: 'badge-info',       dot: 'var(--c-blue)' },
+    controlado: { label: '🟠 Controlada', cls: 'badge-warn',       dot: 'var(--c-orange, #f97316)' },
+    finalizado: { label: '✅ Finalizado', cls: 'badge-ok',         dot: 'var(--c-green)' }
+  };
+
+  container.innerHTML = '';
+  filtradas.forEach(function(oc, i) {
+    var ec  = oc.estadoCompras || 'pendiente';
+    var cfg = ESTADO_CFG[ec] || ESTADO_CFG['pendiente'];
+    var fechaFmt = oc.fecha ? new Date(oc.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '—';
+    var totalLineas = oc.lineas ? oc.lineas.length : 0;
+
+    // Acciones según estado
+    var acciones = '';
+    if (ec === 'pendiente') {
+      acciones +=
+        '<button class="btn btn-primary btn-sm" onclick="cargarRemitoCompras(\'' + oc.id + '\')">' +
+        '<i class="ti ti-file-invoice"></i> Cargar Remito</button>';
+    }
+    if (ec === 'remitado') {
+      acciones +=
+        '<button class="btn btn-primary btn-sm" onclick="cargarRemitoCompras(\'' + oc.id + '\')">' +
+        '<i class="ti ti-file-invoice"></i> Ver Remito</button>';
+    }
+    if (ec !== 'finalizado' && ec !== 'enviado') {
+      acciones +=
+        '<button class="btn btn-sm" onclick="abrirModalClasificar(\'' + oc.id + '\')">' +
+        '<i class="ti ti-edit"></i> Editar</button>';
+    }
+    acciones +=
+      '<button class="btn btn-danger btn-sm" onclick="eliminarOC(\'' + oc.id + '\')">' +
+      '<i class="ti ti-trash"></i> Eliminar</button>';
+
+    var card = document.createElement('div');
+    card.className = 'oc-card';
+    card.innerHTML =
+      '<div class="oc-card-header" onclick="toggleOCBody(\'rc-body-' + i + '\')">' +
+        '<div class="oc-card-status" style="background:' + cfg.dot + ';"></div>' +
+        '<div class="oc-card-nro">' + escHtml(oc.nro || '—') + '</div>' +
+        '<div class="oc-card-proveedor">' + escHtml(oc.proveedor || '—') + '</div>' +
+        '<div class="oc-card-fecha" title="Fecha de entrega">' + fechaFmt + '</div>' +
+        (oc.nroDuplicado ? '<span class="badge badge-duplicado">⚠ N° repetido</span>' : '') +
+        '<span class="badge ' + cfg.cls + '" style="flex-shrink:0;">' + cfg.label + '</span>' +
+        '<span class="badge badge-neutral" style="flex-shrink:0;">' + totalLineas + ' artículo' + (totalLineas !== 1 ? 's' : '') + '</span>' +
+        '<i class="ti ti-chevron-down" style="font-size:14px; color:var(--c-text3); margin-left:4px; flex-shrink:0;"></i>' +
+      '</div>' +
+      '<div class="oc-card-body" id="rc-body-' + i + '">' +
+        '<div class="oc-meta-grid">' +
+          '<div class="oc-meta-item"><div class="oc-meta-label">Responsable</div><div class="oc-meta-val">' + escHtml(oc.responsable || '—') + '</div></div>' +
+          '<div class="oc-meta-item"><div class="oc-meta-label">Fecha de entrega</div><div class="oc-meta-val">' + fechaFmt + '</div></div>' +
+          '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + (oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—') + '</div></div>' +
+        '</div>' +
+        (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
+        renderLineasOCTable(oc.lineas) +
+        '<div class="oc-actions">' + acciones + '</div>' +
+      '</div>';
+    container.appendChild(card);
+  });
+}
+
+function cargarRemitoCompras(ocId) {
+  // PASO 2 — Panel de comparación (próximamente)
+  showToast('📋 Panel de carga de remito — próximamente');
 }
 
 // ── ADAPTAR FORMULARIO NUEVA OC SEGÚN ROL ──────────────────
