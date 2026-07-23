@@ -1235,6 +1235,90 @@
       <div id="reporte-compras-list"></div>
     </div>
 
+    <!-- ═══ PANEL CARGA DE REMITO (admin_compras) ═══ -->
+    <div id="panel-carga-remito" class="panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Carga de Remito</div>
+          <div class="page-sub" id="cargo-remito-info">Cargá los artículos que llegaron en este remito</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-sm" onclick="exportarControl()"><i class="ti ti-download"></i> Exportar control</button>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Orden de compra</div>
+          <div class="metric-val" id="cr-m-oc">0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Escaneos totales</div>
+          <div class="metric-val" id="cr-m-escaneos">0</div>
+          <div class="metric-sub">unidades registradas</div>
+        </div>
+        <div class="metric-card metric-ok">
+          <div class="metric-label">Líneas completadas</div>
+          <div class="metric-val" id="cr-m-ok">0</div>
+        </div>
+        <div class="metric-card metric-warn">
+          <div class="metric-label">Qué diferencia</div>
+          <div class="metric-val" id="cr-m-diff">0</div>
+        </div>
+      </div>
+
+      <!-- Campos para N° Remito y Fecha -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+          <div class="field">
+            <label style="font-size:11px; color:var(--c-text3); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Primero N° OC y Proveedor</label>
+            <div style="font-size:14px; font-weight:600; font-family:monospace;" id="cr-oc-nro">—</div>
+            <div style="font-size:12px; color:var(--c-text2);" id="cr-oc-proveedor"></div>
+          </div>
+          <div class="field">
+            <label for="cr-remito-nro" style="font-size:11px; color:var(--c-text3); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">N° Remito *</label>
+            <input id="cr-remito-nro" type="text" placeholder="RTO-001" style="font-family:monospace;" />
+          </div>
+          <div class="field">
+            <label for="cr-remito-fecha" style="font-size:11px; color:var(--c-text3); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Fecha Remito *</label>
+            <input id="cr-remito-fecha" type="date" />
+          </div>
+        </div>
+      </div>
+
+      <div id="cr-alert" class="alert"></div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Artículos de la O.C. — Indicá cantidades</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th style="text-align:center;">U. Esperadas</th>
+                <th style="text-align:center; min-width:120px;">Llegó en este remito</th>
+                <th style="text-align:center;">U. Falta</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-carga-remito">
+              <tr><td colspan="6">
+                <div class="empty-state"><i class="ti ti-file-invoice"></i><p>Selecciona una O.C. para cargar remito</p></div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn" onclick="volverAlReporte()"><i class="ti ti-arrow-left"></i> Volver</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="finalizarCargaRemito()"><i class="ti ti-check"></i> FINALIZAR CARGA</button>
+      </div>
+    </div>
+
     <!-- ═══ PANEL SCANNER ═══ -->
     <div id="panel-scanner" class="panel">
       <div class="page-header">
@@ -1987,11 +2071,18 @@ function saveDB() {
 // NAVEGACIÓN
 // ──────────────────────────────────────────────
 function switchPanel(name) {
+  // Validar permisos para panel-carga-remito
+  if (name === 'carga-remito' && (!CURRENT_USER || CURRENT_USER.rol !== 'admin_compras')) {
+    showToast('❌ No tienes acceso a este panel');
+    return;
+  }
+  
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
   document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
   document.getElementById('panel-' + name).classList.add('active');
   if (name === 'ordenes') syncOrdenes();
   if (name === 'reporte-compras') renderReporteCompras();
+  if (name === 'carga-remito') { /* ya está renderizado */ }
   if (name === 'completar-control') {
     // Pre-completar escaneado por con el usuario logueado
     var inp = document.getElementById('input-escaneado-por');
@@ -5941,8 +6032,170 @@ function renderReporteCompras() {
 }
 
 function cargarRemitoCompras(ocId) {
-  // PASO 2 — Panel de comparación (próximamente)
-  showToast('📋 Panel de carga de remito — próximamente');
+  // Solo admin_compras puede acceder a esto
+  if (!CURRENT_USER || CURRENT_USER.rol !== 'admin_compras') {
+    showToast('❌ No tienes permiso para cargar remitos');
+    return;
+  }
+  
+  var ordenes = loadOrdenes();
+  var oc = ordenes.find(function(o){ return o.id === ocId; });
+  if (!oc) { showToast('❌ O.C. no encontrada'); return; }
+  
+  // Guardar referencia global
+  _cargaRemitoOCId = ocId;
+  _cargaRemitoOC = oc;
+  
+  // Limpiar campos
+  document.getElementById('cr-remito-nro').value = '';
+  document.getElementById('cr-remito-fecha').valueAsDate = new Date();
+  document.getElementById('cr-alert').innerHTML = '';
+  
+  // Llenar headers
+  document.getElementById('cr-oc-nro').textContent = escHtml(oc.nro || '—');
+  document.getElementById('cr-oc-proveedor').textContent = escHtml(oc.proveedor || '—');
+  
+  // Renderizar tabla
+  renderTablaCargaRemito(oc);
+  
+  // Cambiar a panel
+  switchPanel('carga-remito');
+}
+
+var _cargaRemitoOCId = null;
+var _cargaRemitoOC = null;
+
+function renderTablaCargaRemito(oc) {
+  var tbody = document.getElementById('tbody-carga-remito');
+  if (!tbody || !oc.lineas || oc.lineas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-file-invoice"></i><p>No hay artículos en esta O.C.</p></div></td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = '';
+  oc.lineas.forEach(function(linea, i) {
+    var cantEsperada = linea.cantUnidades || 0;
+    var cantRecibidoAntes = (linea.cantRecibido || 0); // de remitos anteriores
+    var falta = Math.max(0, cantEsperada - cantRecibidoAntes);
+    
+    var estadoBadge = falta === 0 
+      ? '<span class="badge badge-ok">✓ Completo</span>'
+      : '<span class="badge badge-warn">⚠ Falta</span>';
+    
+    var row = document.createElement('tr');
+    row.innerHTML =
+      '<td class="mono" style="font-size:12px; color:var(--c-text2);">' + escHtml(linea.cod || '—') + '</td>' +
+      '<td style="font-size:13px;">' + escHtml(linea.desc || '—') + '</td>' +
+      '<td style="text-align:center; font-weight:600;">' + cantEsperada + '</td>' +
+      '<td style="text-align:center;"><input type="number" min="0" max="' + falta + '" value="0" id="cr-cant-' + i + '" class="cr-input-cant" style="width:80px; text-align:center; padding:4px 8px; border:1px solid var(--c-border); border-radius:4px; background:var(--c-surface); color:var(--c-text);" /></td>' +
+      '<td style="text-align:center; color:var(--c-text3);">−' + falta + '</td>' +
+      '<td>' + estadoBadge + '</td>';
+    tbody.appendChild(row);
+  });
+  
+  // Agregar listeners a los inputs para calcular totales
+  document.querySelectorAll('.cr-input-cant').forEach(function(inp) {
+    inp.addEventListener('input', actualizarMetricasCargaRemito);
+  });
+}
+
+function actualizarMetricasCargaRemito() {
+  if (!_cargaRemitoOC || !_cargaRemitoOC.lineas) return;
+  
+  var totalEsperado = 0;
+  var totalRecibido = 0;
+  var lineasCompletas = 0;
+  
+  _cargaRemitoOC.lineas.forEach(function(linea, i) {
+    var cantEsperada = linea.cantUnidades || 0;
+    var input = document.getElementById('cr-cant-' + i);
+    var recibidoEsteRemito = input ? parseInt(input.value, 10) || 0 : 0;
+    
+    totalEsperado += cantEsperada;
+    totalRecibido += recibidoEsteRemito;
+    
+    if (recibidoEsteRemito === cantEsperada) lineasCompletas++;
+  });
+  
+  var conDiferencia = Math.abs(_cargaRemitoOC.lineas.length - lineasCompletas);
+  
+  document.getElementById('cr-m-oc').textContent = _cargaRemitoOC.lineas.length;
+  document.getElementById('cr-m-escaneos').textContent = totalRecibido;
+  document.getElementById('cr-m-ok').textContent = lineasCompletas;
+  document.getElementById('cr-m-diff').textContent = conDiferencia;
+}
+
+function finalizarCargaRemito() {
+  if (!_cargaRemitoOCId || !_cargaRemitoOC) return;
+  
+  var nroRemito = document.getElementById('cr-remito-nro').value.trim();
+  var fechaRemito = document.getElementById('cr-remito-fecha').value;
+  var alertDiv = document.getElementById('cr-alert');
+  
+  // Validaciones
+  if (!nroRemito) {
+    alertDiv.innerHTML = '<div style="color:var(--c-red); font-size:13px;"><i class="ti ti-alert-triangle" style="vertical-align:-2px; margin-right:4px;"></i> El N° de Remito es obligatorio</div>';
+    return;
+  }
+  if (!fechaRemito) {
+    alertDiv.innerHTML = '<div style="color:var(--c-red); font-size:13px;"><i class="ti ti-alert-triangle" style="vertical-align:-2px; margin-right:4px;"></i> La Fecha de Remito es obligatoria</div>';
+    return;
+  }
+  
+  // Recolectar datos de cantidades
+  var remito = {
+    nro: nroRemito,
+    fecha: fechaRemito,
+    lineas: []
+  };
+  
+  var tieneAlgo = false;
+  _cargaRemitoOC.lineas.forEach(function(linea, i) {
+    var input = document.getElementById('cr-cant-' + i);
+    var recibido = input ? parseInt(input.value, 10) || 0 : 0;
+    if (recibido > 0) tieneAlgo = true;
+    remito.lineas.push({
+      cod: linea.cod,
+      desc: linea.desc,
+      cantUnidades: linea.cantUnidades,
+      cantRecibidoEsteRemito: recibido,
+      cantRecibidoAntes: linea.cantRecibido || 0,
+      cantRecibidoTotal: (linea.cantRecibido || 0) + recibido
+    });
+  });
+  
+  if (!tieneAlgo) {
+    alertDiv.innerHTML = '<div style="color:var(--c-amber); font-size:13px;"><i class="ti ti-alert-triangle" style="vertical-align:-2px; margin-right:4px;"></i> Debe indicar al menos 1 unidad en algún artículo</div>';
+    return;
+  }
+  
+  // Guardar remito en la OC y cambiar estado
+  if (!_cargaRemitoOC.remitos) _cargaRemitoOC.remitos = [];
+  _cargaRemitoOC.remitos.push(remito);
+  _cargaRemitoOC.estadoCompras = 'remitado';
+  
+  // Guardar en localStorage
+  var ordenes = loadOrdenes();
+  var idx = ordenes.findIndex(function(o){ return o.id === _cargaRemitoOCId; });
+  if (idx >= 0) ordenes[idx] = _cargaRemitoOC;
+  saveOrdenes(ordenes);
+  
+  showToast('✅ Remito #' + nroRemito + ' cargado y enviado al supervisor');
+  
+  // Volver a reporte
+  setTimeout(function() {
+    _cargaRemitoOCId = null;
+    _cargaRemitoOC = null;
+    renderReporteCompras();
+    switchPanel('reporte-compras');
+  }, 800);
+}
+
+function volverAlReporte() {
+  _cargaRemitoOCId = null;
+  _cargaRemitoOC = null;
+  renderReporteCompras();
+  switchPanel('reporte-compras');
 }
 
 // ── ADAPTAR FORMULARIO NUEVA OC SEGÚN ROL ──────────────────
