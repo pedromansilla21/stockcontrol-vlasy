@@ -1296,6 +1296,7 @@
           <table>
             <thead>
               <tr>
+                <th style="width:40px; text-align:center;">✓</th>
                 <th>Código</th>
                 <th>Descripción</th>
                 <th style="text-align:center;">U. Esperadas</th>
@@ -1305,7 +1306,7 @@
               </tr>
             </thead>
             <tbody id="tbody-carga-remito">
-              <tr><td colspan="6">
+              <tr><td colspan="7">
                 <div class="empty-state"><i class="ti ti-file-invoice"></i><p>Selecciona una O.C. para cargar remito</p></div>
               </td></tr>
             </tbody>
@@ -6068,7 +6069,7 @@ var _cargaRemitoOC = null;
 function renderTablaCargaRemito(oc) {
   var tbody = document.getElementById('tbody-carga-remito');
   if (!tbody || !oc.lineas || oc.lineas.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-file-invoice"></i><p>No hay artículos en esta O.C.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-file-invoice"></i><p>No hay artículos en esta O.C.</p></div></td></tr>';
     return;
   }
   
@@ -6083,7 +6084,10 @@ function renderTablaCargaRemito(oc) {
       : '<span class="badge badge-warn">⚠ Falta</span>';
     
     var row = document.createElement('tr');
+    row.id = 'cr-row-' + i;
+    row.style.transition = 'background-color 0.2s';
     row.innerHTML =
+      '<td style="text-align:center; width:40px;"><input type="checkbox" id="cr-check-' + i + '" class="cr-check" style="width:18px; height:18px; cursor:pointer;" /></td>' +
       '<td class="mono" style="font-size:12px; color:var(--c-text2);">' + escHtml(linea.cod || '—') + '</td>' +
       '<td style="font-size:13px;">' + escHtml(linea.desc || '—') + '</td>' +
       '<td style="text-align:center; font-weight:600;">' + cantEsperada + '</td>' +
@@ -6091,12 +6095,39 @@ function renderTablaCargaRemito(oc) {
       '<td style="text-align:center; color:var(--c-text3);">−' + falta + '</td>' +
       '<td>' + estadoBadge + '</td>';
     tbody.appendChild(row);
+    
+    // Listeners
+    var checkbox = document.getElementById('cr-check-' + i);
+    var input = document.getElementById('cr-cant-' + i);
+    
+    input.addEventListener('input', function() {
+      var val = parseInt(input.value, 10) || 0;
+      checkbox.checked = val > 0;
+      actualizarMetricasCargaRemito();
+      // Cambiar color de fila
+      if (val > 0) {
+        row.style.backgroundColor = 'rgba(76, 175, 125, 0.1)';
+      } else {
+        row.style.backgroundColor = '';
+      }
+    });
+    
+    checkbox.addEventListener('change', function() {
+      if (checkbox.checked) {
+        // Si no hay cantidad, poner 1
+        if (!input.value || parseInt(input.value, 10) === 0) {
+          input.value = '1';
+          row.style.backgroundColor = 'rgba(76, 175, 125, 0.1)';
+        }
+      } else {
+        input.value = '0';
+        row.style.backgroundColor = '';
+      }
+      actualizarMetricasCargaRemito();
+    });
   });
   
-  // Agregar listeners a los inputs para calcular totales
-  document.querySelectorAll('.cr-input-cant').forEach(function(inp) {
-    inp.addEventListener('input', actualizarMetricasCargaRemito);
-  });
+  actualizarMetricasCargaRemito();
 }
 
 function actualizarMetricasCargaRemito() {
