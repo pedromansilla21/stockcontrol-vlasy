@@ -6114,9 +6114,9 @@ function renderTablaCargaRemito(oc) {
     
     checkbox.addEventListener('change', function() {
       if (checkbox.checked) {
-        // Si no hay cantidad, poner 1
+        // Si no hay cantidad, poner el máximo (lo que falta)
         if (!input.value || parseInt(input.value, 10) === 0) {
-          input.value = '1';
+          input.value = falta;
           row.style.backgroundColor = 'rgba(76, 175, 125, 0.1)';
         }
       } else {
