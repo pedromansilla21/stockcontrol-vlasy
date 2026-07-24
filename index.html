@@ -4035,7 +4035,7 @@ async function _guardarEnHistorial(oc) {
   } catch(e) {}
 }
 
-// Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA
+// Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA (JSON completo)
 async function _guardarOCAdminSheet(oc) {
   try {
     var cantArticulos = oc.lineas ? oc.lineas.length : 0;
@@ -4043,12 +4043,16 @@ async function _guardarOCAdminSheet(oc) {
     var estado = oc.estadoCompras || 'Pendiente';
     var timestamp = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : new Date().toLocaleString('es-AR');
     
+    // Guardar OC completa en JSON
+    var ocJSON = JSON.stringify(oc);
+    
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({
         accion: 'guardarOCAdmin',
         nro: oc.nro || '—',
+        ocJSON: ocJSON,
         proveedor: oc.proveedor || '—',
         fecha: oc.fecha || '—',
         responsable: oc.responsable || '—',
@@ -4061,7 +4065,7 @@ async function _guardarOCAdminSheet(oc) {
   } catch(e) {}
 }
 
-// Actualiza OC en Sheet cuando se agrega un remito
+// Actualiza OC en Sheet cuando se agrega un remito (JSON completo)
 async function _actualizarOCAdminSheet(oc) {
   try {
     var cantArticulos = oc.lineas ? oc.lineas.length : 0;
@@ -4069,13 +4073,16 @@ async function _actualizarOCAdminSheet(oc) {
     var estado = oc.estadoCompras || 'Pendiente';
     var timestamp = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : new Date().toLocaleString('es-AR');
     
-    // Buscar y actualizar la fila existente por N° OC
+    // Guardar OC completa en JSON
+    var ocJSON = JSON.stringify(oc);
+    
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({
         accion: 'actualizarOCAdmin',
         nro: oc.nro || '—',
+        ocJSON: ocJSON,
         proveedor: oc.proveedor || '—',
         fecha: oc.fecha || '—',
         responsable: oc.responsable || '—',
