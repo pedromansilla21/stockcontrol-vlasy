@@ -4061,6 +4061,33 @@ async function _guardarOCAdminSheet(oc) {
   } catch(e) {}
 }
 
+// Actualiza OC en Sheet cuando se agrega un remito
+async function _actualizarOCAdminSheet(oc) {
+  try {
+    var cantArticulos = oc.lineas ? oc.lineas.length : 0;
+    var remitos = oc.remitos ? oc.remitos.map(function(r){ return r.nro; }).join(', ') : '';
+    var estado = oc.estadoCompras || 'Pendiente';
+    var timestamp = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : new Date().toLocaleString('es-AR');
+    
+    // Buscar y actualizar la fila existente por N° OC
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        accion: 'actualizarOCAdmin',
+        nro: oc.nro || '—',
+        proveedor: oc.proveedor || '—',
+        fecha: oc.fecha || '—',
+        responsable: oc.responsable || '—',
+        estado: estado,
+        cantArticulos: cantArticulos,
+        remitos: remitos,
+        timestamp: timestamp
+      })
+    });
+  } catch(e) {}
+}
+
 // Escribe la lista de O.C. en la hoja ORDENES — UNA FILA POR O.C. (columna A
 // = id, columna B = sus datos en JSON, sin el "registro" que ya vive en su
 // propia hoja). Antes de escribir, limpia un rango generoso para que no
@@ -6138,10 +6165,27 @@ function renderTablaCargaRemito(oc) {
   }
   
   tbody.innerHTML = '';
+  
+  // Filtrar SOLO artículos incompletos (cantidad recibida < cantidad esperada)
+  var articulosIncompletos = oc.lineas.filter(function(linea) {
+    var cantEsperada = linea.cantUnidades || 0;
+    var cantRecibidoAntes = (linea.cantRecibido || 0);
+    var falta = Math.max(0, cantEsperada - cantRecibidoAntes);
+    return falta > 0;  // Solo mostrar si falta algo
+  });
+  
+  if (articulosIncompletos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-check-circle"></i><p>✓ Todos los artículos de esta O.C. han sido completados</p></div></td></tr>';
+    return;
+  }
+  
   oc.lineas.forEach(function(linea, i) {
     var cantEsperada = linea.cantUnidades || 0;
-    var cantRecibidoAntes = (linea.cantRecibido || 0); // de remitos anteriores
+    var cantRecibidoAntes = (linea.cantRecibido || 0);
     var falta = Math.max(0, cantEsperada - cantRecibidoAntes);
+    
+    // Saltar artículos completos
+    if (falta === 0) return;
     
     var estadoBadge = falta === 0 
       ? '<span class="badge badge-ok">✓ Completo</span>'
@@ -6168,7 +6212,6 @@ function renderTablaCargaRemito(oc) {
       var val = parseInt(input.value, 10) || 0;
       checkbox.checked = val > 0;
       actualizarMetricasCargaRemito();
-      // Cambiar color de fila
       if (val > 0) {
         row.style.backgroundColor = 'rgba(76, 175, 125, 0.1)';
       } else {
@@ -6178,7 +6221,6 @@ function renderTablaCargaRemito(oc) {
     
     checkbox.addEventListener('change', function() {
       if (checkbox.checked) {
-        // Si no hay cantidad, poner el máximo (lo que falta)
         if (!input.value || parseInt(input.value, 10) === 0) {
           input.value = falta;
           row.style.backgroundColor = 'rgba(76, 175, 125, 0.1)';
@@ -6269,11 +6311,23 @@ function finalizarCargaRemito() {
   _cargaRemitoOC.remitos.push(remito);
   _cargaRemitoOC.estadoCompras = 'remitado';
   
+  // Actualizar cantidades recibidas en las líneas
+  _cargaRemitoOC.lineas.forEach(function(linea, i) {
+    var input = document.getElementById('cr-cant-' + i);
+    var recibidoEsteRemito = input ? parseInt(input.value, 10) || 0 : 0;
+    if (recibidoEsteRemito > 0) {
+      linea.cantRecibido = (linea.cantRecibido || 0) + recibidoEsteRemito;
+    }
+  });
+  
   // Guardar en localStorage
   var ordenes = loadOrdenes();
   var idx = ordenes.findIndex(function(o){ return o.id === _cargaRemitoOCId; });
   if (idx >= 0) ordenes[idx] = _cargaRemitoOC;
   saveOrdenes(ordenes);
+  
+  // Actualizar OC en Sheet con remitos
+  _actualizarOCAdminSheet(_cargaRemitoOC);
   
   showToast('✅ Remito #' + nroRemito + ' cargado y enviado al supervisor');
   
