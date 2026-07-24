@@ -4186,6 +4186,20 @@ function guardarOCActual() {
   setTimeout(function(){ guardarOCActual._guardando = false; }, 1500);
 
   if (remito.length === 0) { showToast('No hay líneas en la O.C. para guardar'); guardarOCActual._guardando = false; return; }
+  
+  // ── VALIDAR PROVEEDOR ──
+  var proveedorSeleccionado = document.getElementById('rem-proveedor').value.trim();
+  if (!proveedorSeleccionado) {
+    showToast('❌ Debes seleccionar un proveedor');
+    guardarOCActual._guardando = false;
+    return;
+  }
+  if (PROVEEDORES_LISTA.indexOf(proveedorSeleccionado) === -1) {
+    showToast('❌ El proveedor debe ser uno de la lista: ' + PROVEEDORES_LISTA.join(', '));
+    guardarOCActual._guardando = false;
+    return;
+  }
+  
   var nro = document.getElementById('rem-nro').value.trim() || '(sin número)';
   var fecha = document.getElementById('rem-fecha').value || '';
   var ordenes = loadOrdenes();
@@ -6310,7 +6324,7 @@ function _generarNroOC() {
 }
 
 // ── AUTOCOMPLETE PROVEEDORES ────────────────────────────────
-var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand'];
+var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand', 'HideHere'];
 
 function mostrarSugerenciasProveedor() {
   var input = document.getElementById('rem-proveedor');
