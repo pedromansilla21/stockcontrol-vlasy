@@ -182,6 +182,21 @@
   .user-card-name { font-size: 12px; font-weight: 600; }
   .user-card-role { font-size: 10px; color: var(--c-text3); }
 
+  /* ── AUTOCOMPLETE ── */
+  .autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid var(--c-border2);
+    transition: background-color 0.15s;
+  }
+  .autocomplete-item:hover {
+    background: var(--c-surface2);
+  }
+  .autocomplete-item:last-child {
+    border-bottom: none;
+  }
+
   /* ── LOGIN — SELECCIÓN DE ROL ── */
   .roles-grid {
     display: grid;
@@ -1091,7 +1106,11 @@
         <div class="card-title">Datos de la Orden de Compra</div>
         <div class="form-grid-4">
           <div class="field"><label>N° Orden de Compra</label><input id="rem-nro" oninput="triggerAutosave()" class="mono" placeholder="OC-00123" /></div>
-          <div class="field"><label>Proveedor</label><input id="rem-proveedor" placeholder="Nombre del proveedor" /></div>
+          <div class="field" style="position:relative;">
+            <label>Proveedor</label>
+            <input id="rem-proveedor" placeholder="Nombre del proveedor" autocomplete="off" oninput="mostrarSugerenciasProveedor()" onblur="ocultarSugerenciasProveedor()" />
+            <div id="rem-proveedor-list" class="autocomplete-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--c-surface); border:1px solid var(--c-border); border-top:none; border-radius:0 0 var(--radius-sm) var(--radius-sm); max-height:200px; overflow-y:auto; z-index:10;"></div>
+          </div>
           <div class="field"><label id="label-fecha">Fecha de recepción</label><input id="rem-fecha" onchange="triggerAutosave()" type="date" /></div>
           <div class="field" id="field-lote"><label>Lote (general)</label><input id="rem-lote" oninput="triggerAutosave()" class="mono" placeholder="L-2024" /></div>
         </div>
@@ -6288,6 +6307,49 @@ function _generarNroOC() {
 
   var siguiente = maxNum + 1;
   return 'OC-' + String(siguiente).padStart(5, '0');
+}
+
+// ── AUTOCOMPLETE PROVEEDORES ────────────────────────────────
+var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand'];
+
+function mostrarSugerenciasProveedor() {
+  var input = document.getElementById('rem-proveedor');
+  var lista = document.getElementById('rem-proveedor-list');
+  var valor = input.value.toLowerCase().trim();
+  
+  if (!valor) {
+    lista.style.display = 'none';
+    return;
+  }
+  
+  var filtrados = PROVEEDORES_LISTA.filter(function(p) {
+    return p.toLowerCase().includes(valor);
+  });
+  
+  if (filtrados.length === 0) {
+    lista.style.display = 'none';
+    return;
+  }
+  
+  lista.innerHTML = '';
+  filtrados.forEach(function(proveedor) {
+    var item = document.createElement('div');
+    item.className = 'autocomplete-item';
+    item.textContent = proveedor;
+    item.addEventListener('click', function() {
+      input.value = proveedor;
+      lista.style.display = 'none';
+    });
+    lista.appendChild(item);
+  });
+  
+  lista.style.display = 'block';
+}
+
+function ocultarSugerenciasProveedor() {
+  setTimeout(function() {
+    document.getElementById('rem-proveedor-list').style.display = 'none';
+  }, 200);
 }
 
 
