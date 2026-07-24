@@ -4035,6 +4035,32 @@ async function _guardarEnHistorial(oc) {
   } catch(e) {}
 }
 
+// Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA
+async function _guardarOCAdminSheet(oc) {
+  try {
+    var cantArticulos = oc.lineas ? oc.lineas.length : 0;
+    var remitos = oc.remitos ? oc.remitos.map(function(r){ return r.nro; }).join(', ') : '';
+    var estado = oc.estadoCompras || 'Pendiente';
+    var timestamp = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : new Date().toLocaleString('es-AR');
+    
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        accion: 'guardarOCAdmin',
+        nro: oc.nro || '—',
+        proveedor: oc.proveedor || '—',
+        fecha: oc.fecha || '—',
+        responsable: oc.responsable || '—',
+        estado: estado,
+        cantArticulos: cantArticulos,
+        remitos: remitos,
+        timestamp: timestamp
+      })
+    });
+  } catch(e) {}
+}
+
 // Escribe la lista de O.C. en la hoja ORDENES — UNA FILA POR O.C. (columna A
 // = id, columna B = sus datos en JSON, sin el "registro" que ya vive en su
 // propia hoja). Antes de escribir, limpia un rango generoso para que no
@@ -4249,6 +4275,11 @@ function guardarOCActual() {
     renderOrdenes();
   }
   _guardarEnHistorial(ocObj);  // Guardar en HISTORIAL OC del Sheet
+  
+  // Si es admin_compras, guardar también en ORDENES_ADMIN_PRUEBA
+  if (esCreadorCompras) {
+    _guardarOCAdminSheet(ocObj);
+  }
 
   // ── Limpiar el formulario después de guardar ──
   remito = [];
