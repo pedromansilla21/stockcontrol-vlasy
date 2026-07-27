@@ -197,6 +197,60 @@
     border-bottom: none;
   }
 
+  /* ── NOTIFICACIÓN FLOTANTE ── */
+  .notificacion-remito {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #5BBFD6 0%, #4CAF7D 100%);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 9999;
+    max-width: 320px;
+    animation: slideIn 0.3s ease-out;
+    cursor: pointer;
+    transition: opacity 0.3s;
+  }
+  .notificacion-remito:hover {
+    opacity: 0.95;
+  }
+  .notificacion-remito-titulo {
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .notificacion-remito-detalle {
+    font-size: 12px;
+    opacity: 0.9;
+  }
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+  }
+
   /* ── LOGIN — SELECCIÓN DE ROL ── */
   .roles-grid {
     display: grid;
@@ -4095,6 +4149,31 @@ async function _actualizarOCAdminSheet(oc) {
   } catch(e) {}
 }
 
+// Guarda alerta de remito en ALERTAS para Supervisor Pedidos
+async function _guardarAlertaRemito(nroRemito, nroOC, lineasRemito) {
+  try {
+    // Contar total de artículos en el remito
+    var cantArticulos = lineasRemito ? lineasRemito.length : 0;
+    
+    // Buscar fila disponible en ALERTAS
+    var filas = await sheetsRead('ALERTAS!A:A');
+    var filaDisponible = filas.length + 1;
+    
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        accion: 'guardarAlertaRemito',
+        fila: filaDisponible,
+        rto: nroRemito,
+        oc: nroOC,
+        cantArticulos: cantArticulos,
+        supervisor: 'Supervisor Pedidos'
+      })
+    });
+  } catch(e) {}
+}
+
 // Escribe la lista de O.C. en la hoja ORDENES — UNA FILA POR O.C. (columna A
 // = id, columna B = sus datos en JSON, sin el "registro" que ya vive en su
 // propia hoja). Antes de escribir, limpia un rango generoso para que no
@@ -6002,6 +6081,89 @@ function aplicarRol(rol) {
     adaptarFormularioRol('administrativo');
     switchPanel('remito');
   }
+  
+  // Iniciar sincronización de alertas si es Supervisor Pedidos
+  if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
+    iniciarSincAlertasRemito();
+  }
+}
+
+// ── SINCRONIZACIÓN DE ALERTAS REMITO ──────────────────────────
+var _alertasRemitoVistas = [];
+var _sincAlertasInterval = null;
+
+function iniciarSincAlertasRemito() {
+  // Sincronizar cada 3 segundos
+  if (_sincAlertasInterval) clearInterval(_sincAlertasInterval);
+  _sincAlertasInterval = setInterval(syncAlertasRemito, 3000);
+  syncAlertasRemito(); // Primera vez inmediatamente
+}
+
+async function syncAlertasRemito() {
+  try {
+    var filas = await sheetsRead('ALERTAS!A:A');
+    if (!filas || filas.length === 0) return;
+    
+    filas.forEach(function(fila, idx) {
+      if (!fila || !fila[0]) return;
+      var valor = String(fila[0]).trim();
+      
+      // Buscar alertas que comienzan con REMITO|
+      if (valor.startsWith('REMITO|')) {
+        var id = 'alerta-' + idx;
+        if (_alertasRemitoVistas.indexOf(id) === -1) {
+          _alertasRemitoVistas.push(id);
+          var partes = valor.split('|');
+          if (partes.length >= 4) {
+            var rto = partes[1];
+            var oc = partes[2];
+            var cant = partes[3];
+            mostrarNotificacionRemito(rto, oc, cant, idx);
+          }
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+function mostrarNotificacionRemito(rto, oc, cant, filaAlerta) {
+  var container = document.createElement('div');
+  container.className = 'notificacion-remito';
+  container.id = 'notif-remito-' + filaAlerta;
+  container.innerHTML =
+    '<div class="notificacion-remito-titulo"><i class="ti ti-package"></i>📦 ' + escHtml(rto) + '</div>' +
+    '<div class="notificacion-remito-detalle">' + cant + ' artículos | OC ' + escHtml(oc) + '</div>';
+  
+  document.body.appendChild(container);
+  
+  // Auto-desaparecer después de 5 segundos
+  setTimeout(function() {
+    container.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(function() { container.remove(); }, 300);
+    // Limpiar alerta del Sheet
+    _limpiarAlertaRemito(filaAlerta);
+  }, 5000);
+  
+  // Click para cerrar
+  container.addEventListener('click', function() {
+    container.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(function() { container.remove(); }, 300);
+    _limpiarAlertaRemito(filaAlerta);
+  });
+}
+
+function _limpiarAlertaRemito(fila) {
+  try {
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        accion: 'setAlerta',
+        fila: fila + 1,
+        valor: 'VACIO'
+      })
+    });
+  } catch(e) {}
 }
 
 // ── PANEL REPORTE DE COMPRA (admin_compras) ─────────────────
@@ -6335,6 +6497,9 @@ function finalizarCargaRemito() {
   
   // Actualizar OC en Sheet con remitos
   _actualizarOCAdminSheet(_cargaRemitoOC);
+  
+  // Guardar alerta para Supervisor Pedidos
+  _guardarAlertaRemito(nroRemito, _cargaRemitoOC.nro, remito.lineas);
   
   showToast('✅ Remito #' + nroRemito + ' cargado y enviado al supervisor');
   
