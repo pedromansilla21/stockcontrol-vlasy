@@ -4155,16 +4155,15 @@ async function _guardarAlertaRemito(nroRemito, nroOC, lineasRemito) {
     // Contar total de artículos en el remito
     var cantArticulos = lineasRemito ? lineasRemito.length : 0;
     
-    // Buscar fila disponible en ALERTAS
-    var filas = await sheetsRead('ALERTAS!A:A');
-    var filaDisponible = filas.length + 1;
+    // Usar fila 5 fija para alertas de remito
+    var filaRemito = 5;
     
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({
         accion: 'guardarAlertaRemito',
-        fila: filaDisponible,
+        fila: filaRemito,
         rto: nroRemito,
         oc: nroOC,
         cantArticulos: cantArticulos,
@@ -6101,28 +6100,26 @@ function iniciarSincAlertasRemito() {
 
 async function syncAlertasRemito() {
   try {
-    var filas = await sheetsRead('ALERTAS!A:A');
+    var filas = await sheetsRead('ALERTAS!A5:A5');
     if (!filas || filas.length === 0) return;
     
-    filas.forEach(function(fila, idx) {
-      if (!fila || !fila[0]) return;
-      var valor = String(fila[0]).trim();
-      
-      // Buscar alertas que comienzan con REMITO|
-      if (valor.startsWith('REMITO|')) {
-        var id = 'alerta-' + idx;
-        if (_alertasRemitoVistas.indexOf(id) === -1) {
-          _alertasRemitoVistas.push(id);
-          var partes = valor.split('|');
-          if (partes.length >= 4) {
-            var rto = partes[1];
-            var oc = partes[2];
-            var cant = partes[3];
-            mostrarNotificacionRemito(rto, oc, cant, idx);
-          }
+    var valor = String(filas[0][0] || '').trim();
+    if (!valor || valor === 'VACIO') return;
+    
+    // Buscar alertas que comienzan con REMITO|
+    if (valor.startsWith('REMITO|')) {
+      var id = 'alerta-remito-5';
+      if (_alertasRemitoVistas.indexOf(id) === -1) {
+        _alertasRemitoVistas.push(id);
+        var partes = valor.split('|');
+        if (partes.length >= 4) {
+          var rto = partes[1];
+          var oc = partes[2];
+          var cant = partes[3];
+          mostrarNotificacionRemito(rto, oc, cant, 5);
         }
       }
-    });
+    }
   } catch(e) {}
 }
 
