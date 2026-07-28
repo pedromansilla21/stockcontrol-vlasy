@@ -6171,8 +6171,6 @@ function aplicarRol(rol) {
     if (navScanner) navScanner.style.display = '';
     switchPanel('scanner');
     _revisarSesionGuardada();
-    // Iniciar sincronización de alertas
-    iniciarSincAlertasOperario();
   } else if (esBuscador) {
     // Buscador solo ve Stock Consulta
     var elSC = document.getElementById('nav-stock-consulta');
@@ -6202,115 +6200,6 @@ function aplicarRol(rol) {
   if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
     iniciarSincAlertasRemito();
   }
-}
-
-// ── SINCRONIZACIÓN DE ALERTAS PARA OPERARIOS ──────────────────
-var _sincAlertasOperarioInterval = null;
-var _alertasOperarioVistas = [];
-
-function iniciarSincAlertasOperario() {
-  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
-  
-  // Chequeo inmediato al entrar (para alertas que quizás llegaron mientras no estaba)
-  syncAlertasOperario().then(function() {
-    // Luego, sincronizar cada 3 segundos
-    if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-    _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
-  }).catch(function() {
-    // Si falla el chequeo inicial, igual iniciar el intervalo
-    if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-    _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
-  });
-}
-
-async function syncAlertasOperario() {
-  try {
-    if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
-    
-    var filaAlerta = CURRENT_USER.filaAlerta;
-    var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
-    
-    if (!filas || filas.length === 0) return;
-    
-    var valor = String(filas[0][0] || '').trim();
-    
-    // Si la celda está vacía o dice "VACIO", limpiar alertas vistas (nueva sesión)
-    if (!valor || valor === 'VACIO' || valor === '') {
-      _alertasOperarioVistas = []; // Reset para detectar nueva alerta cuando llegue
-      return;
-    }
-    
-    // ID único para esta alerta (evitar duplicados)
-    var id = 'alerta-op-' + filaAlerta + '-' + valor;
-    
-    if (_alertasOperarioVistas.indexOf(id) === -1) {
-      _alertasOperarioVistas.push(id);
-      mostrarNotificacionAlerta(valor, filaAlerta);
-    }
-  } catch(e) {}
-}
-
-function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
-  // Parsear el formato de alerta: "EN_ESCANEO|OC-001|proveedor|..." 
-  var partes = alertaTexto.split('|');
-  var tipo = partes[0] || 'ALERTA';
-  var ocNro = partes[1] || '—';
-  var proveedor = partes[2] || '—';
-  
-  // Buscar la O.C. en el sistema para obtener detalles
-  var ordenes = loadOrdenes();
-  var oc = ordenes.find(function(o) { return o.nro === ocNro; });
-  
-  var cantArticulos = oc && oc.lineas ? oc.lineas.length : 0;
-  var cantCajas = oc && oc.lineas ? oc.lineas.reduce(function(s, l) { return s + (l.cajasEsperadas || 0); }, 0) : 0;
-  
-  // Crear MODAL CENTRAL (estilo imagen 3)
-  var overlay = document.createElement('div');
-  overlay.id = 'modal-alerta-' + filaAlerta;
-  overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999;';
-  
-  var modal = document.createElement('div');
-  modal.style.cssText = 'background:var(--c-surface2); border-radius:16px; padding:40px 32px; max-width:420px; width:90%; text-align:center; box-shadow:0 24px 80px rgba(0,0,0,0.5);';
-  
-  modal.innerHTML =
-    '<div style="font-size:64px; margin-bottom:16px;">📦</div>' +
-    '<div style="font-size:16px; font-weight:600; margin-bottom:4px;">O.C. #' + escHtml(ocNro) + ' lista</div>' +
-    '<div style="font-size:14px; color:var(--c-text2); margin-bottom:16px;">' + escHtml(proveedor) + '</div>' +
-    '<div style="font-size:13px; color:var(--c-text3); margin-bottom:24px; line-height:1.6;">' +
-      cantArticulos + ' artículo' + (cantArticulos !== 1 ? 's' : '') + '. ' +
-      cantCajas + ' caja' + (cantCajas !== 1 ? 's' : '') + ' esperada' + (cantCajas !== 1 ? 's' : '') +
-    '</div>' +
-    '<button class="btn btn-success" style="width:100%; height:48px; font-size:14px; font-weight:600;" onclick="_cerrarModalAlertaYCargar(' + filaAlerta + ', \'' + ocNro + '\')">✓ Cargar y empezar escaneo</button>';
-  
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-}
-
-function _cerrarModalAlertaYCargar(filaAlerta, ocNro) {
-  var modal = document.getElementById('modal-alerta-' + filaAlerta);
-  if (modal && modal.parentNode) {
-    modal.parentNode.remove();
-  }
-  // Marcar como leída
-  _marcarAlertaComoLeida(filaAlerta);
-  // Cargar la O.C. automáticamente
-  var ordenes = loadOrdenes();
-  var oc = ordenes.find(function(o) { return o.nro === ocNro; });
-  if (oc) cargarOC(oc);
-}
-
-function _marcarAlertaComoLeida(filaAlerta) {
-  try {
-    fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({
-        accion: 'setAlerta',
-        fila: filaAlerta,
-        valor: 'VACIO'
-      })
-    });
-  } catch(e) {}
 }
 
 // ── SINCRONIZACIÓN DE ALERTAS REMITO ──────────────────────────
