@@ -3163,6 +3163,7 @@ function finalizarControl() {
     contenedor:   remitoDatos.contenedor || '—',
     responsable:  remitoDatos.operario   || '—',
     obs:          remitoDatos.obs        || '',
+    esPalet:      !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
     lineas:       JSON.parse(JSON.stringify(remito)),
     // El detalle de escaneos (registro) ya no viaja en esta celda — se
     // sincronizó aparte a la hoja "ESCANEOS" (ver arriba).
@@ -3184,7 +3185,11 @@ function finalizarControl() {
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
   _guardarEnHistorial(ocObj, escaneadoPorVal);
-  _guardarDetalleHistorial(ocObj, escaneadoPorVal);
+  // Solo guardar detalle en HISTORIAL COMPLETO si NO es palet
+  // (los palets van a HISTORIAL DE PALETS, manejado dentro de _guardarEnHistorial)
+  if (!ocObj.esPalet) {
+    _guardarDetalleHistorial(ocObj, escaneadoPorVal);
+  }
 
   // Limpiar panel de escaneo (para todos los roles)
   remito = [];
@@ -4120,12 +4125,13 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     var guardada = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : '';
     var fila = [oc.nro||'', oc.proveedor||'', fecha, lineas, cajasEsp, cajasEsc, estado, guardada, oc.id||''];
     
-    // Detectar si es control de palet — verificación ROBUSTA
+    // Detectar si es control de palet — usar objeto OC + checkbox como doble verificación
     var checkPalet = document.getElementById('rem-es-palet');
-    var esPalet = checkPalet && checkPalet.checked === true;
-    var paletValue = document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '';
+    var esPalet = (oc.esPalet === true) || (checkPalet && checkPalet.checked === true);
+    var paletValue = (oc.palet && oc.palet !== '—') || 
+                     (document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '');
     
-    if (esPalet && paletValue !== '') {
+    if (esPalet && paletValue) {
       // Guardar en HISTORIAL DE PALETS
       _guardarEnHistorialPalets(oc, escaneadoPor);
     } else {
@@ -4189,7 +4195,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           operario: escaneadoPor || '—'
         };
       }
-      filasAgrupadas[clave].cant += (linea.cantUnidades || 1);
+      filasAgrupadas[clave].cant += (linea.unidadesControladas || linea.cantUnidades || 0);
     });
     
     // Enviar filas al GAS
@@ -4479,7 +4485,8 @@ function guardarOCActual() {
     nroDuplicado: duplicadoNro,
     origen: esCreadorCompras ? 'admin_compras' : 'supervisor',
     estadoCompras: esCreadorCompras ? 'pendiente' : null,
-    enviadoSupervisor: !esCreadorCompras
+    enviadoSupervisor: !esCreadorCompras,
+    esPalet: !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked)
   };
 
   var existeIdx = ordenes.findIndex(function(o){ return o.id === idNuevo; });
@@ -5022,6 +5029,9 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
   document.getElementById('rem-contenedor').value = oc.contenedor !== '\u2014' ? oc.contenedor : '';
   document.getElementById('rem-operario').value   = oc.responsable !== '\u2014' ? oc.responsable : '';
   document.getElementById('rem-obs').value        = oc.obs || '';
+  // Setear checkbox de palet si la OC es un control de palet
+  var chkPalet = document.getElementById('rem-es-palet');
+  if (chkPalet) chkPalet.checked = !!(oc.esPalet);
 
   renderTablaRemito();
   renderTablaControl();
@@ -6239,14 +6249,14 @@ var _sincAlertasOperarioInterval = null;
 var _alertasOperarioVistas = [];
 
 function iniciarSincAlertasOperario() {
-  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
-  
-  // Sincronizar cada 3 segundos
+  // Las alertas de O.C. para operarios las maneja _checkAlertaEscaneo() (cada 8s)
+  // que ya tiene su propio modal nativo. No duplicar con otro sistema.
+  // Solo iniciar si NO es operario (para otros roles que puedan necesitarlo)
+  if (!CURRENT_USER || CURRENT_USER.rol === 'operario') return;
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
   _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
-  // Primera vez con pequeño delay para asegurar que CURRENT_USER esté listo
   setTimeout(syncAlertasOperario, 500);
-  setTimeout(syncAlertasOperario, 3000); // segunda lectura por si la primera falla
+  setTimeout(syncAlertasOperario, 3000);
 }
 
 async function syncAlertasOperario() {
