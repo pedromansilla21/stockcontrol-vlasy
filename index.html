@@ -6239,30 +6239,52 @@ async function syncAlertasOperario() {
 }
 
 function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
-  // Parsear el formato de alerta: "TAREA|OC-001|..." o similar
+  // Parsear el formato de alerta: "EN_ESCANEO|OC-001|proveedor|..." 
   var partes = alertaTexto.split('|');
   var tipo = partes[0] || 'ALERTA';
   var ocNro = partes[1] || '—';
-  var detalles = partes.slice(2).join(' | ');
+  var proveedor = partes[2] || '—';
   
-  var container = document.createElement('div');
-  container.className = 'notificacion-remito'; // Reusamos el CSS de remito
-  container.id = 'notif-alerta-' + filaAlerta;
-  container.innerHTML =
-    '<div class="notificacion-remito-titulo"><i class="ti ti-bell"></i>📋 ' + escHtml(tipo) + ' — ' + escHtml(ocNro) + '</div>' +
-    '<div class="notificacion-remito-detalle">' + (detalles ? escHtml(detalles) : 'Nueva tarea') + '</div>';
+  // Buscar la O.C. en el sistema para obtener detalles
+  var ordenes = loadOrdenes();
+  var oc = ordenes.find(function(o) { return o.nro === ocNro; });
   
-  document.body.appendChild(container);
+  var cantArticulos = oc && oc.lineas ? oc.lineas.length : 0;
+  var cantCajas = oc && oc.lineas ? oc.lineas.reduce(function(s, l) { return s + (l.cajasEsperadas || 0); }, 0) : 0;
   
-  // No desaparecer automáticamente — operario debe reconocerla
-  container.style.cursor = 'pointer';
+  // Crear MODAL CENTRAL
+  var overlay = document.createElement('div');
+  overlay.id = 'modal-alerta-' + filaAlerta;
+  overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:9999;';
   
-  container.addEventListener('click', function() {
-    container.style.animation = 'slideOut 0.3s ease-out';
-    setTimeout(function() { container.remove(); }, 300);
-    // Marcar como leída en el Sheet
-    _marcarAlertaComoLeida(filaAlerta);
-  });
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--c-surface2); border-radius:16px; padding:40px 32px; max-width:420px; width:90%; text-align:center; box-shadow:0 24px 80px rgba(0,0,0,0.5);';
+  
+  modal.innerHTML =
+    '<div style="font-size:64px; margin-bottom:16px;">📦</div>' +
+    '<div style="font-size:16px; font-weight:600; margin-bottom:4px;">O.C. #' + escHtml(ocNro) + ' lista</div>' +
+    '<div style="font-size:14px; color:var(--c-text2); margin-bottom:16px;">' + escHtml(proveedor) + '</div>' +
+    '<div style="font-size:13px; color:var(--c-text3); margin-bottom:24px; line-height:1.6;">' +
+      cantArticulos + ' artículo' + (cantArticulos !== 1 ? 's' : '') + '. ' +
+      cantCajas + ' caja' + (cantCajas !== 1 ? 's' : '') + ' esperada' + (cantCajas !== 1 ? 's' : '') +
+    '</div>' +
+    '<button class="btn btn-success" style="width:100%; height:48px; font-size:14px; font-weight:600;" onclick="_cerrarModalAlertaYCargar(' + filaAlerta + ', \'' + ocNro + '\')">✓ Cargar y empezar escaneo</button>';
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function _cerrarModalAlertaYCargar(filaAlerta, ocNro) {
+  var modal = document.getElementById('modal-alerta-' + filaAlerta);
+  if (modal && modal.parentNode) {
+    modal.parentNode.remove();
+  }
+  // Marcar como leída
+  _marcarAlertaComoLeida(filaAlerta);
+  // Cargar la O.C. automáticamente
+  var ordenes = loadOrdenes();
+  var oc = ordenes.find(function(o) { return o.nro === ocNro; });
+  if (oc) cargarOC(oc);
 }
 
 function _marcarAlertaComoLeida(filaAlerta) {
