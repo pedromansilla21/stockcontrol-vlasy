@@ -6233,7 +6233,9 @@ function iniciarSincAlertasOperario() {
   // Sincronizar cada 3 segundos
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
   _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
-  syncAlertasOperario(); // Primera vez inmediatamente
+  // Primera vez con pequeño delay para asegurar que CURRENT_USER esté listo
+  setTimeout(syncAlertasOperario, 500);
+  setTimeout(syncAlertasOperario, 3000); // segunda lectura por si la primera falla
 }
 
 async function syncAlertasOperario() {
