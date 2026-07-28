@@ -4195,7 +4195,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           operario: escaneadoPor || '—'
         };
       }
-      filasAgrupadas[clave].cant += (linea.unidadesControladas || linea.cantUnidades || 0);
+      filasAgrupadas[clave].cant += (typeof linea.unidadesControladas !== 'undefined' ? linea.unidadesControladas : (linea.cantUnidades || 0));
     });
     
     // Enviar filas al GAS
