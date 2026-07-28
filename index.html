@@ -6131,9 +6131,19 @@ function _completarLogin(selected) {
   sessionStorage.removeItem('_alv');
   sessionStorage.removeItem('_alv_fin');
   localStorage.removeItem('oc_en_escaneo');
-  // Resetear estado de escaneo al cambiar de usuario
-  remitoDatos = {};
+  localStorage.removeItem(SAVE_KEY);  // Limpiar sesión guardada
+  // Resetear TODAS las variables globales al cambiar de usuario
+  remito = [];
+  registro = [];
   itemsFueraOC = [];
+  remitoDatos = {};
+  _registroSincronizadoHasta = 0;
+  // Limpiar interfaz visual
+  renderTablaRemito();
+  renderTablaControl();
+  renderRegistro();
+  renderItemsFueraOC();
+  updateMetrics();
 
   // Registrar sesión activa en el Sheet y arrancar heartbeat
   _registrarSesionActiva(selected.name);
