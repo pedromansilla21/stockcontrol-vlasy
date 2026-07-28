@@ -4136,24 +4136,18 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
   try {
     if (!oc.lineas || oc.lineas.length === 0) return;
     
-    var palet = document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '—';
-    var contenedor = document.getElementById('rem-contenedor') ? document.getElementById('rem-contenedor').value.trim() : '—';
+    var palet = oc.palet || '—';
+    var contenedor = oc.contenedor || '—';
     var ubicacion = document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—';
     var proveedor = oc.proveedor || '—'; // Marca = Proveedor
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     
-    // Agrupar líneas: Cod Prod + Lote (del operario) + Vencimiento (del operario) + Palet = misma fila
+    // Agrupar líneas: Cod Prod + Lote (ya en oc.lineas) + Vencimiento (ya en oc.lineas) + Palet = misma fila
     var filasAgrupadas = {};
-    oc.lineas.forEach(function(linea, i) {
-      // Leer lo que EL OPERARIO completó en "Completar control"
-      var loteEl = document.getElementById('cc-lote-' + i);
-      var mesEl = document.getElementById('cc-mes-' + i);
-      var anioEl = document.getElementById('cc-anio-' + i);
-      
-      var loteOperario = loteEl ? loteEl.value.trim() : '—';
-      var vencimientoOperario = (mesEl && anioEl && mesEl.value && anioEl.value) 
-        ? (anioEl.value + '-' + String(mesEl.value).padStart(2, '0'))
-        : '—';
+    oc.lineas.forEach(function(linea) {
+      // Los datos ya ESTÁN en linea (fueron llenados por operario en "Completar control")
+      var loteOperario = linea.lote || '—';
+      var vencimientoOperario = linea.fechaLote || '—';  // Ya tiene formato YYYY-MM
       
       var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
       if (!filasAgrupadas[clave]) {
