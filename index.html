@@ -7525,14 +7525,23 @@ function _checkAlertaEscaneo() {
 
 var _alertaEscaneoFila = 1;
 
-function aceptarAlertaEscaneo() {
+async function aceptarAlertaEscaneo() {
   document.getElementById('modal-alerta-escaneo').classList.remove('open');
   if (!_alertaEscaneoOcId) return;
   var fila = _alertaEscaneoFila || (CURRENT_USER && CURRENT_USER.filaAlerta) || 1;
-  fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'EN_ESCANEO|' + _alertaEscaneoOcId, fila: fila }) });
-  _ejecutarEnvioEscaneo(_alertaEscaneoOcId);
-  switchPanel('scanner');
+  var ocId = _alertaEscaneoOcId;
   _alertaEscaneoOcId = null;
+  
+  // Marcar como EN_ESCANEO en el sheet
+  fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'EN_ESCANEO|' + ocId, fila: fila }) });
+  
+  // Sincronizar ordenes primero para asegurar que tenemos la OC con sus lineas
+  showToast('Cargando O.C...');
+  try { await syncOrdenes(); } catch(e) {}
+  
+  // Ahora sí ejecutar con datos frescos
+  _ejecutarEnvioEscaneo(ocId);
+  switchPanel('scanner');
 }
 </script>
 
