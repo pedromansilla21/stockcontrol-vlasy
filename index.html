@@ -3221,8 +3221,16 @@ function finalizarControl() {
     }).catch(function(){});
   }, 120000); // 2 minutos
 
-  // Si es operario: quedarse en escaneo
+  // Si es operario: quedarse en escaneo y LIBERAR su slot en ALERTAS
   if (CURRENT_USER && CURRENT_USER.rol === 'operario') {
+    // Borrar ALERTAS para que el admin pueda mandar otra O.C.
+    if (CURRENT_USER.filaAlerta) {
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta })
+      });
+    }
     switchPanel('scanner');
     showToast(todoCompleto ? '\u2705 O.C. finalizada \u2014 esperando la pr\u00f3xima' : '\u26a0 O.C. guardada con diferencias');
     return;
@@ -6264,8 +6272,8 @@ function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
   container.addEventListener('click', function() {
     container.style.animation = 'slideOut 0.3s ease-out';
     setTimeout(function() { container.remove(); }, 300);
-    // Marcar como leída en el Sheet
-    _marcarAlertaComoLeida(filaAlerta);
+    // NO llamar a _marcarAlertaComoLeida() — ALERTAS se mantiene activo
+    // hasta que el operario finalice el escaneo en finalizarControl()
   });
 }
 
@@ -7415,25 +7423,21 @@ function _limpiarAlertaHuerfana() {
       localStorage.removeItem('oc_en_escaneo');
       return;
     }
-    var ocId = val.split('|')[0];
-    if (ocId === 'FINALIZADO') {
+    // Solo limpiar si está FINALIZADO, NO si está en escaneo
+    if (val.startsWith('FINALIZADO|')) {
       localStorage.removeItem('oc_en_escaneo');
       // Limpiar la celda del operario
       fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
       return;
     }
-    if (ocId === 'EN_ESCANEO') {
+    // Si dice EN_ESCANEO, mantener (no limpiar)
+    if (val.startsWith('EN_ESCANEO|')) {
       localStorage.setItem('oc_en_escaneo', '1');
       return;
     }
-    // OC real: verificar si existe
+    // Para cualquier otra O.C., MANTENERLA (no limpiarla automáticamente)
+    // Solo se limpia cuando el operario hace click en la notificación o finaliza
     localStorage.setItem('oc_en_escaneo', '1');
-    var ordenes = loadOrdenes();
-    var oc = ordenes.find(function(o){ return o.id === ocId; });
-    if (!oc) {
-      localStorage.removeItem('oc_en_escaneo');
-      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
-    }
   }).catch(function(){});
 }
 
