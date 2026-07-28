@@ -4150,12 +4150,23 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     var proveedor = oc.proveedor || '—'; // Marca = Proveedor
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     
-    // Agrupar líneas: Cod Prod + Lote (ya en oc.lineas) + Vencimiento (ya en oc.lineas) + Palet = misma fila
+    // Agrupar líneas: Cod Prod + Lote + Vencimiento + Palet = misma fila
     var filasAgrupadas = {};
-    oc.lineas.forEach(function(linea) {
-      // Los datos ya ESTÁN en linea (fueron llenados por operario en "Completar control")
-      var loteOperario = linea.lote || '—';
-      var vencimientoOperario = linea.fechaLote || '—';  // Ya tiene formato YYYY-MM
+    oc.lineas.forEach(function(linea, i) {
+      // Leer del DOM directamente (más confiable que oc.lineas para fecha/lote)
+      // porque _commitCompletarControlValues() puede tener timing issues
+      var loteEl = document.getElementById('cc-lote-' + i);
+      var mesEl  = document.getElementById('cc-mes-'  + i);
+      var anioEl = document.getElementById('cc-anio-' + i);
+
+      // Prioridad: DOM > linea object
+      var loteOperario = (loteEl && loteEl.value.trim()) || linea.lote || '—';
+      var vencimientoOperario = '—';
+      if (mesEl && anioEl && mesEl.value && anioEl.value) {
+        vencimientoOperario = anioEl.value + '-' + String(mesEl.value).padStart(2, '0');
+      } else if (linea.fechaLote) {
+        vencimientoOperario = linea.fechaLote;
+      }
       
       var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
       if (!filasAgrupadas[clave]) {
@@ -6263,29 +6274,36 @@ async function syncAlertasOperario() {
 }
 
 function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
-  // Parsear el formato de alerta: "TAREA|OC-001|..." o similar
   var partes = alertaTexto.split('|');
-  var tipo = partes[0] || 'ALERTA';
-  var ocNro = partes[1] || '—';
-  var detalles = partes.slice(2).join(' | ');
-  
+  var ocId = partes[0] || '';
+  var prov = partes[1] || '—';
+  var nro  = partes[2] || '—';
+
+  // Ignorar alertas que NO son de O.C. (REMITO, EN_ESCANEO, FINALIZADO, etc.)
+  if (!ocId || ocId === 'VACIO' || ocId === 'EN_ESCANEO' ||
+      ocId === 'FINALIZADO' || ocId === 'REMITO') return;
+
   var container = document.createElement('div');
-  container.className = 'notificacion-remito'; // Reusamos el CSS de remito
+  container.className = 'notificacion-remito';
   container.id = 'notif-alerta-' + filaAlerta;
-  container.innerHTML =
-    '<div class="notificacion-remito-titulo"><i class="ti ti-bell"></i>📋 ' + escHtml(tipo) + ' — ' + escHtml(ocNro) + '</div>' +
-    '<div class="notificacion-remito-detalle">' + (detalles ? escHtml(detalles) : 'Nueva tarea') + '</div>';
-  
-  document.body.appendChild(container);
-  
-  // No desaparecer automáticamente — operario debe reconocerla
   container.style.cursor = 'pointer';
-  
+  container.innerHTML =
+    '<div class="notificacion-remito-titulo"><i class="ti ti-barcode"></i> O.C. #' + escHtml(nro) + ' lista para escanear</div>' +
+    '<div class="notificacion-remito-detalle">' + escHtml(prov) + ' — Tocá para cargar</div>';
+
+  document.body.appendChild(container);
+
   container.addEventListener('click', function() {
     container.style.animation = 'slideOut 0.3s ease-out';
     setTimeout(function() { container.remove(); }, 300);
-    // NO llamar a _marcarAlertaComoLeida() — ALERTAS se mantiene activo
-    // hasta que el operario finalice el escaneo en finalizarControl()
+    // Cargar la O.C. directamente al clickear
+    var ordenes = loadOrdenes();
+    var oc = ordenes.find(function(o){ return o.id === ocId; });
+    if (oc) {
+      _ejecutarEnvioEscaneo(ocId, filaAlerta);
+    } else {
+      showToast('⚠ No se encontró la O.C. — esperá un momento y volvé a tocar');
+    }
   });
 }
 
