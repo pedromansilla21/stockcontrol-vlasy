@@ -5486,6 +5486,7 @@ function _revisarSesionGuardada() {
     if (!s.remito || s.remito.length === 0) { clearSession(); return false; }
     if (remito.length > 0) return false; // ya hay algo cargado, no pisar
     // Si la sesión es de otro usuario, descartarla silenciosamente
+    // Si usuario está vacío (timing issue), NO descartar — asumir del usuario actual
     if (s.usuario && CURRENT_USER && s.usuario !== CURRENT_USER.name) {
       clearSession();
       return false;
@@ -5564,6 +5565,8 @@ function recuperarSesion() {
     dot.className = 'dot-save saved';
     txt.textContent = 'Sesión recuperada';
     showToast('✓ Sesión recuperada — ' + remito.length + ' líneas, ' + registro.length + ' escaneos');
+    // Guardar inmediatamente con el usuario correcto para que próxima recuperación funcione
+    saveSession();
   } catch(e) {
     showToast('Error al recuperar la sesión');
     document.getElementById('modal-recover').classList.remove('open');
