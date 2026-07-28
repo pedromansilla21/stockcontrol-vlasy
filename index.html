@@ -5437,6 +5437,7 @@ function saveSession() {
     mergedDatos.nroProv = remitoDatos.nroProv || '';
     var esPalet = document.getElementById('rem-es-palet') ? document.getElementById('rem-es-palet').checked : false;
     var payload = {
+      usuario: CURRENT_USER ? CURRENT_USER.name : '',
       remitoDatos: mergedDatos,
       remito: remito,
       registro: registro,
@@ -6133,13 +6134,20 @@ function _completarLogin(selected) {
   sessionStorage.removeItem('_alv');
   sessionStorage.removeItem('_alv_fin');
   localStorage.removeItem('oc_en_escaneo');
-  localStorage.removeItem(SAVE_KEY);  // Limpiar sesión guardada
   // Resetear TODAS las variables globales al cambiar de usuario
   remito = [];
   registro = [];
   itemsFueraOC = [];
   remitoDatos = {};
   _registroSincronizadoHasta = 0;
+  // Solo borrar sesión guardada si es OTRO usuario diferente al que tenía sesión
+  // Si es el MISMO usuario que vuelve (reconexión), conservar la sesión para recuperarla
+  var sesionGuardada = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+  var mismoUsuario = sesionGuardada && sesionGuardada.remitoDatos && 
+    CURRENT_USER && sesionGuardada.usuario === CURRENT_USER.name;
+  if (!mismoUsuario) {
+    localStorage.removeItem(SAVE_KEY);
+  }
   // Limpiar interfaz visual
   renderTablaRemito();
   renderTablaControl();
@@ -7549,10 +7557,15 @@ function confirmarEscaneadoPor() {
       _detenerHeartbeat();
       var payload = JSON.stringify({ accion: 'escribirRango', rango: 'USUARIOS!E' + (_getFilaUsuario(CURRENT_USER.name)), values: [['']] });
       navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'application/json' }));
-      // Si es operario, limpiar su celda de ALERTAS
+      // Solo limpiar ALERTAS si el operario NO estaba escaneando
+      // Si estaba escaneando (remito.length > 0), mantener ALERTAS para
+      // que el admin vea que sigue ocupado y el operario pueda recuperar al volver
       if (CURRENT_USER.rol === 'operario' && CURRENT_USER.filaAlerta) {
-        var payloadAlerta = JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta });
-        navigator.sendBeacon(GAS_URL, new Blob([payloadAlerta], { type: 'application/json' }));
+        var estabaEscaneando = remito && remito.length > 0;
+        if (!estabaEscaneando) {
+          var payloadAlerta = JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta });
+          navigator.sendBeacon(GAS_URL, new Blob([payloadAlerta], { type: 'application/json' }));
+        }
       }
     }
   });
