@@ -3183,7 +3183,7 @@ function finalizarControl() {
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
-  _guardarEnHistorial(ocObj);
+  _guardarEnHistorial(ocObj, escaneadoPorVal);
   _guardarDetalleHistorial(ocObj, escaneadoPorVal);
 
   // Limpiar panel de escaneo (para todos los roles)
@@ -4101,7 +4101,7 @@ async function _agregarDetalleHistorial(oc, lineasNuevas, escaneadoPor) {
 }
 
 
-async function _guardarEnHistorial(oc) {
+async function _guardarEnHistorial(oc, escaneadoPor) {
   // Guarda una fila legible en la hoja HISTORIAL OC
   try {
     var lineas  = oc.lineas ? oc.lineas.length : 0;
@@ -4119,7 +4119,7 @@ async function _guardarEnHistorial(oc) {
     
     if (esPalet && paletValue !== '') {
       // Guardar en HISTORIAL DE PALETS
-      _guardarEnHistorialPalets(oc);
+      _guardarEnHistorialPalets(oc, escaneadoPor);
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
       fetch(GAS_URL, {
@@ -4132,39 +4132,48 @@ async function _guardarEnHistorial(oc) {
 }
 
 // Guarda en HISTORIAL DE PALETS (control de palet)
-async function _guardarEnHistorialPalets(oc) {
+async function _guardarEnHistorialPalets(oc, escaneadoPor) {
   try {
     if (!oc.lineas || oc.lineas.length === 0) return;
     
     var palet = document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '—';
     var contenedor = document.getElementById('rem-contenedor') ? document.getElementById('rem-contenedor').value.trim() : '—';
     var ubicacion = document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—';
-    var loteGeneral = document.getElementById('rem-lote') ? document.getElementById('rem-lote').value.trim() : '—';
-    var operario = CURRENT_USER ? CURRENT_USER.name : '—';
-    var fechaOC = oc.fecha || new Date().toISOString().split('T')[0];
+    var proveedor = oc.proveedor || '—'; // Marca = Proveedor
+    var fechaHoy = new Date().toLocaleDateString('es-AR');
     
-    // Agrupar líneas: Cod Prod + Fecha + Palet = misma fila con Cant sumada
+    // Agrupar líneas: Cod Prod + Lote (del operario) + Vencimiento (del operario) + Palet = misma fila
     var filasAgrupadas = {};
-    oc.lineas.forEach(function(linea) {
-      var clave = (linea.cod || '—') + '|' + (linea.fecha || fechaOC) + '|' + (linea.vencimiento || '—') + '|' + palet;
+    oc.lineas.forEach(function(linea, i) {
+      // Leer lo que EL OPERARIO completó en "Completar control"
+      var loteEl = document.getElementById('cc-lote-' + i);
+      var mesEl = document.getElementById('cc-mes-' + i);
+      var anioEl = document.getElementById('cc-anio-' + i);
+      
+      var loteOperario = loteEl ? loteEl.value.trim() : '—';
+      var vencimientoOperario = (mesEl && anioEl && mesEl.value && anioEl.value) 
+        ? (anioEl.value + '-' + String(mesEl.value).padStart(2, '0'))
+        : '—';
+      
+      var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
       if (!filasAgrupadas[clave]) {
         filasAgrupadas[clave] = {
           cod: linea.cod || '—',
           desc: linea.desc || '—',
           categoria: linea.categoria || '—',
-          marca: linea.marca || '—',
+          marca: proveedor,
           palet: palet,
           contenedor: contenedor,
-          lote: linea.lote || loteGeneral || '—',
-          fecha: linea.fecha || fechaOC,
+          lote: loteOperario,
+          fecha: vencimientoOperario,
           cant: 0,
           un: linea.un || 'UND',
           ubicacion: ubicacion,
-          vencimiento: linea.vencimiento || '—',
+          vencimiento: '—',
           observacion: oc.obs || '',
-          controlPalet: '✓',
-          controlUbicacion: '✓',
-          operario: operario
+          controlPalet: fechaHoy,
+          controlUbicacion: fechaHoy,
+          operario: escaneadoPor || '—'
         };
       }
       filasAgrupadas[clave].cant += (linea.cantUnidades || 1);
@@ -5424,12 +5433,14 @@ function saveSession() {
     // crea otra de cero ya "finalizada").
     mergedDatos.ocId    = remitoDatos.ocId || '';
     mergedDatos.nroProv = remitoDatos.nroProv || '';
+    var esPalet = document.getElementById('rem-es-palet') ? document.getElementById('rem-es-palet').checked : false;
     var payload = {
       remitoDatos: mergedDatos,
       remito: remito,
       registro: registro,
       itemsFueraOC: itemsFueraOC,
       registroSincronizadoHasta: _registroSincronizadoHasta,
+      esPalet: esPalet,
       savedAt: new Date().toISOString()
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -5510,6 +5521,13 @@ function recuperarSesion() {
     // se reenvían a ESCANEOS escaneos que ya se habían subido antes del
     // refresh/corte, duplicándolos en el historial.
     _registroSincronizadoHasta = (typeof s.registroSincronizadoHasta === 'number') ? s.registroSincronizadoHasta : 0;
+    
+    // Restaurar estado de Palet si estaba marcado
+    if (s.esPalet === true) {
+      var checkPalet = document.getElementById('rem-es-palet');
+      if (checkPalet) checkPalet.checked = true;
+    }
+    
     var d = remitoDatos;
     if (d.nro && d.nro!=='—')        _setVal('rem-nro', d.nro);
     if (d.proveedor && d.proveedor!=='—') _setVal('rem-proveedor', d.proveedor);
