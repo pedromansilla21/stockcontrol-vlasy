@@ -2442,13 +2442,13 @@ function toggleControlPalet() {
   var fieldUbicacion = document.getElementById('field-ubicacion');
   
   if (esPalet) {
-    // ✓ Control de Palet: Mostrar Palet, Contenedor, Ubicación — Ocultar Lote (general)
+    // Ocultar Lote, mostrar Palet, Contenedor y Ubicación
     if (fieldLote) fieldLote.style.display = 'none';
     if (fieldPalet) fieldPalet.style.display = '';
     if (fieldContenedor) fieldContenedor.style.display = '';
     if (fieldUbicacion) fieldUbicacion.style.display = '';
   } else {
-    // ✗ O.C. Normal: Mostrar Lote (general) — Palet/Contenedor opcionales, Ubicación oculta
+    // Mostrar Lote, Palet, Contenedor y ocultar Ubicación
     if (fieldLote) fieldLote.style.display = '';
     if (fieldPalet) fieldPalet.style.display = '';
     if (fieldContenedor) fieldContenedor.style.display = '';
@@ -3183,13 +3183,8 @@ function finalizarControl() {
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
-  _guardarEnHistorial(ocObj, escaneadoPorVal);
-  
-  // Solo guardar detalle si NO es control de palet (palets se guardan en sheet separada)
-  var esPalet = document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked;
-  if (!esPalet) {
-    _guardarDetalleHistorial(ocObj, escaneadoPorVal);
-  }
+  _guardarEnHistorial(ocObj);
+  _guardarDetalleHistorial(ocObj, escaneadoPorVal);
 
   // Limpiar panel de escaneo (para todos los roles)
   remito = [];
@@ -4106,7 +4101,7 @@ async function _agregarDetalleHistorial(oc, lineasNuevas, escaneadoPor) {
 }
 
 
-async function _guardarEnHistorial(oc, escaneadoPor) {
+async function _guardarEnHistorial(oc) {
   // Guarda una fila legible en la hoja HISTORIAL OC
   try {
     var lineas  = oc.lineas ? oc.lineas.length : 0;
@@ -4124,7 +4119,7 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     
     if (esPalet && paletValue !== '') {
       // Guardar en HISTORIAL DE PALETS
-      _guardarEnHistorialPalets(oc, escaneadoPor);
+      _guardarEnHistorialPalets(oc);
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
       fetch(GAS_URL, {
@@ -4137,47 +4132,39 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
 }
 
 // Guarda en HISTORIAL DE PALETS (control de palet)
-async function _guardarEnHistorialPalets(oc, escaneadoPor) {
+async function _guardarEnHistorialPalets(oc) {
   try {
     if (!oc.lineas || oc.lineas.length === 0) return;
     
     var palet = document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '—';
     var contenedor = document.getElementById('rem-contenedor') ? document.getElementById('rem-contenedor').value.trim() : '—';
     var ubicacion = document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—';
-    var proveedor = oc.proveedor || '—'; // Marca = Proveedor
-    var fechaHoy = new Date().toLocaleDateString('es-AR');
+    var loteGeneral = document.getElementById('rem-lote') ? document.getElementById('rem-lote').value.trim() : '—';
+    var operario = CURRENT_USER ? CURRENT_USER.name : '—';
+    var fechaOC = oc.fecha || new Date().toISOString().split('T')[0];
     
-    // Agrupar líneas: Cod Prod + Lote (del operario) + Vencimiento (del operario) + Palet = misma fila con Cant sumada
+    // Agrupar líneas: Cod Prod + Fecha + Palet = misma fila con Cant sumada
     var filasAgrupadas = {};
-    oc.lineas.forEach(function(linea, i) {
-      // Leer lo que EL OPERARIO completó en "Completar control"
-      var loteEl = document.getElementById('cc-lote-' + i);
-      var mesEl = document.getElementById('cc-mes-' + i);
-      var anioEl = document.getElementById('cc-anio-' + i);
-      
-      var loteOperario = loteEl ? loteEl.value.trim() : '—';
-      var vencimientoOperario = (mesEl && anioEl && mesEl.value && anioEl.value) 
-        ? (anioEl.value + '-' + String(mesEl.value).padStart(2, '0'))
-        : '—';
-      
-      var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
+    oc.lineas.forEach(function(linea) {
+      var clave = (linea.cod || '—') + '|' + (linea.fecha || fechaOC) + '|' + (linea.vencimiento || '—') + '|' + palet;
       if (!filasAgrupadas[clave]) {
         filasAgrupadas[clave] = {
           cod: linea.cod || '—',
           desc: linea.desc || '—',
           categoria: linea.categoria || '—',
-          marca: proveedor,
+          marca: linea.marca || '—',
           palet: palet,
           contenedor: contenedor,
-          lote: loteOperario,
-          fecha: vencimientoOperario,  // Vencimiento (MM/AAAA format)
+          lote: linea.lote || loteGeneral || '—',
+          fecha: linea.fecha || fechaOC,
           cant: 0,
           un: linea.un || 'UND',
           ubicacion: ubicacion,
+          vencimiento: linea.vencimiento || '—',
           observacion: oc.obs || '',
-          controlPalet: fechaHoy,
-          controlUbicacion: fechaHoy,
-          operario: escaneadoPor || '—'
+          controlPalet: '✓',
+          controlUbicacion: '✓',
+          operario: operario
         };
       }
       filasAgrupadas[clave].cant += (linea.cantUnidades || 1);
@@ -4194,7 +4181,6 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
       })
     });
   } catch(e) { console.error('Error en _guardarEnHistorialPalets:', e); }
-}
 }
 
 // Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA (JSON completo)
@@ -5438,14 +5424,12 @@ function saveSession() {
     // crea otra de cero ya "finalizada").
     mergedDatos.ocId    = remitoDatos.ocId || '';
     mergedDatos.nroProv = remitoDatos.nroProv || '';
-    var esPalet = document.getElementById('rem-es-palet') ? document.getElementById('rem-es-palet').checked : false;
     var payload = {
       remitoDatos: mergedDatos,
       remito: remito,
       registro: registro,
       itemsFueraOC: itemsFueraOC,
       registroSincronizadoHasta: _registroSincronizadoHasta,
-      esPalet: esPalet,
       savedAt: new Date().toISOString()
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -5526,16 +5510,6 @@ function recuperarSesion() {
     // se reenvían a ESCANEOS escaneos que ya se habían subido antes del
     // refresh/corte, duplicándolos en el historial.
     _registroSincronizadoHasta = (typeof s.registroSincronizadoHasta === 'number') ? s.registroSincronizadoHasta : 0;
-    
-    // Restaurar estado de "Control de Palet"
-    if (s.esPalet === true) {
-      var checkPalet = document.getElementById('rem-es-palet');
-      if (checkPalet) {
-        checkPalet.checked = true;
-        toggleControlPalet(); // Mostrar/ocultar campos según estado
-      }
-    }
-    
     var d = remitoDatos;
     if (d.nro && d.nro!=='—')        _setVal('rem-nro', d.nro);
     if (d.proveedor && d.proveedor!=='—') _setVal('rem-proveedor', d.proveedor);
@@ -5548,10 +5522,8 @@ function recuperarSesion() {
     if (d.operario && d.operario!=='—') {
       document.getElementById('operario-badge').style.display = 'flex';
       document.getElementById('operario-nombre').textContent = d.operario;
-      var etiquetaLote = s.esPalet ? 'Palet: ' : 'Lote: ';
-      var valorLote = s.esPalet ? (d.palet||'—') : (d.lote||'—');
       document.getElementById('scan-remito-info').textContent =
-        'Remito: ' + (d.nro||'—') + ' · ' + (d.proveedor||'—') + ' · ' + etiquetaLote + valorLote;
+        'Remito: ' + (d.nro||'—') + ' · ' + (d.proveedor||'—') + ' · Lote: ' + (d.lote||'—');
     }
     renderTablaRemito();
     renderTablaControl();
@@ -6178,6 +6150,8 @@ function aplicarRol(rol) {
     if (navScanner) navScanner.style.display = '';
     switchPanel('scanner');
     _revisarSesionGuardada();
+    // Iniciar sincronización de alertas
+    iniciarSincAlertasOperario();
   } else if (esBuscador) {
     // Buscador solo ve Stock Consulta
     var elSC = document.getElementById('nav-stock-consulta');
@@ -6207,6 +6181,84 @@ function aplicarRol(rol) {
   if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
     iniciarSincAlertasRemito();
   }
+}
+
+// ── SINCRONIZACIÓN DE ALERTAS PARA OPERARIOS ──────────────────
+var _sincAlertasOperarioInterval = null;
+var _alertasOperarioVistas = [];
+
+function iniciarSincAlertasOperario() {
+  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
+  
+  // Sincronizar cada 3 segundos
+  if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
+  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
+  syncAlertasOperario(); // Primera vez inmediatamente
+}
+
+async function syncAlertasOperario() {
+  try {
+    if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
+    
+    var filaAlerta = CURRENT_USER.filaAlerta;
+    var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
+    
+    if (!filas || filas.length === 0) return;
+    
+    var valor = String(filas[0][0] || '').trim();
+    
+    // Si la celda está vacía o dice "VACIO", no hacer nada
+    if (!valor || valor === 'VACIO' || valor === '') return;
+    
+    // ID único para esta alerta (evitar duplicados)
+    var id = 'alerta-op-' + filaAlerta + '-' + valor;
+    
+    if (_alertasOperarioVistas.indexOf(id) === -1) {
+      _alertasOperarioVistas.push(id);
+      mostrarNotificacionAlerta(valor, filaAlerta);
+    }
+  } catch(e) {}
+}
+
+function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
+  // Parsear el formato de alerta: "TAREA|OC-001|..." o similar
+  var partes = alertaTexto.split('|');
+  var tipo = partes[0] || 'ALERTA';
+  var ocNro = partes[1] || '—';
+  var detalles = partes.slice(2).join(' | ');
+  
+  var container = document.createElement('div');
+  container.className = 'notificacion-remito'; // Reusamos el CSS de remito
+  container.id = 'notif-alerta-' + filaAlerta;
+  container.innerHTML =
+    '<div class="notificacion-remito-titulo"><i class="ti ti-bell"></i>📋 ' + escHtml(tipo) + ' — ' + escHtml(ocNro) + '</div>' +
+    '<div class="notificacion-remito-detalle">' + (detalles ? escHtml(detalles) : 'Nueva tarea') + '</div>';
+  
+  document.body.appendChild(container);
+  
+  // No desaparecer automáticamente — operario debe reconocerla
+  container.style.cursor = 'pointer';
+  
+  container.addEventListener('click', function() {
+    container.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(function() { container.remove(); }, 300);
+    // Marcar como leída en el Sheet
+    _marcarAlertaComoLeida(filaAlerta);
+  });
+}
+
+function _marcarAlertaComoLeida(filaAlerta) {
+  try {
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({
+        accion: 'setAlerta',
+        fila: filaAlerta,
+        valor: 'VACIO'
+      })
+    });
+  } catch(e) {}
 }
 
 // ── SINCRONIZACIÓN DE ALERTAS REMITO ──────────────────────────
