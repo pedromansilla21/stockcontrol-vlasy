@@ -5485,6 +5485,11 @@ function _revisarSesionGuardada() {
     var s = JSON.parse(raw);
     if (!s.remito || s.remito.length === 0) { clearSession(); return false; }
     if (remito.length > 0) return false; // ya hay algo cargado, no pisar
+    // Si la sesión es de otro usuario, descartarla silenciosamente
+    if (s.usuario && CURRENT_USER && s.usuario !== CURRENT_USER.name) {
+      clearSession();
+      return false;
+    }
     var d = s.remitoDatos || {};
     var savedDate = s.savedAt ? new Date(s.savedAt).toLocaleString('es-AR') : '—';
     var grid = document.getElementById('recover-info-grid');
@@ -6134,20 +6139,14 @@ function _completarLogin(selected) {
   sessionStorage.removeItem('_alv');
   sessionStorage.removeItem('_alv_fin');
   localStorage.removeItem('oc_en_escaneo');
-  // Resetear TODAS las variables globales al cambiar de usuario
+  // Resetear variables globales
   remito = [];
   registro = [];
   itemsFueraOC = [];
   remitoDatos = {};
   _registroSincronizadoHasta = 0;
-  // Solo borrar sesión guardada si es OTRO usuario diferente al que tenía sesión
-  // Si es el MISMO usuario que vuelve (reconexión), conservar la sesión para recuperarla
-  var sesionGuardada = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-  var mismoUsuario = sesionGuardada && sesionGuardada.remitoDatos && 
-    CURRENT_USER && sesionGuardada.usuario === CURRENT_USER.name;
-  if (!mismoUsuario) {
-    localStorage.removeItem(SAVE_KEY);
-  }
+  // NO borrar SAVE_KEY aquí — _revisarSesionGuardada() la lee después del login
+  // y decide si mostrar el popup de recuperación o descartarla
   // Limpiar interfaz visual
   renderTablaRemito();
   renderTablaControl();
