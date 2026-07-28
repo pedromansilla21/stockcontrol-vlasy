@@ -3183,7 +3183,7 @@ function finalizarControl() {
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
-  _guardarEnHistorial(ocObj);
+  _guardarEnHistorial(ocObj, escaneadoPorVal);
   
   // Solo guardar detalle si NO es control de palet (palets se guardan en sheet separada)
   var esPalet = document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked;
@@ -4106,7 +4106,7 @@ async function _agregarDetalleHistorial(oc, lineasNuevas, escaneadoPor) {
 }
 
 
-async function _guardarEnHistorial(oc) {
+async function _guardarEnHistorial(oc, escaneadoPor) {
   // Guarda una fila legible en la hoja HISTORIAL OC
   try {
     var lineas  = oc.lineas ? oc.lineas.length : 0;
@@ -4124,7 +4124,7 @@ async function _guardarEnHistorial(oc) {
     
     if (esPalet && paletValue !== '') {
       // Guardar en HISTORIAL DE PALETS
-      _guardarEnHistorialPalets(oc);
+      _guardarEnHistorialPalets(oc, escaneadoPor);
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
       fetch(GAS_URL, {
@@ -4137,41 +4137,47 @@ async function _guardarEnHistorial(oc) {
 }
 
 // Guarda en HISTORIAL DE PALETS (control de palet)
-async function _guardarEnHistorialPalets(oc) {
+async function _guardarEnHistorialPalets(oc, escaneadoPor) {
   try {
     if (!oc.lineas || oc.lineas.length === 0) return;
     
     var palet = document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '—';
     var contenedor = document.getElementById('rem-contenedor') ? document.getElementById('rem-contenedor').value.trim() : '—';
     var ubicacion = document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—';
-    var loteGeneral = document.getElementById('rem-lote') ? document.getElementById('rem-lote').value.trim() : '—';
-    var operario = CURRENT_USER ? CURRENT_USER.name : '—';
-    var fechaOC = oc.fecha || new Date().toISOString().split('T')[0];
+    var proveedor = oc.proveedor || '—'; // Marca = Proveedor
+    var fechaHoy = new Date().toLocaleDateString('es-AR');
     
-    // Agrupar líneas: Cod Prod + Fecha + Vencimiento + Lote + Palet = misma fila con Cant sumada
-    // (Si tienen diferente lote o vencimiento, son líneas SEPARADAS)
+    // Agrupar líneas: Cod Prod + Lote (del operario) + Vencimiento (del operario) + Palet = misma fila con Cant sumada
     var filasAgrupadas = {};
-    oc.lineas.forEach(function(linea) {
-      var loteLinea = linea.lote || loteGeneral || '—';
-      var clave = (linea.cod || '—') + '|' + (linea.fecha || fechaOC) + '|' + (linea.vencimiento || '—') + '|' + loteLinea + '|' + palet;
+    oc.lineas.forEach(function(linea, i) {
+      // Leer lo que EL OPERARIO completó en "Completar control"
+      var loteEl = document.getElementById('cc-lote-' + i);
+      var mesEl = document.getElementById('cc-mes-' + i);
+      var anioEl = document.getElementById('cc-anio-' + i);
+      
+      var loteOperario = loteEl ? loteEl.value.trim() : '—';
+      var vencimientoOperario = (mesEl && anioEl && mesEl.value && anioEl.value) 
+        ? (anioEl.value + '-' + String(mesEl.value).padStart(2, '0'))
+        : '—';
+      
+      var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
       if (!filasAgrupadas[clave]) {
         filasAgrupadas[clave] = {
           cod: linea.cod || '—',
           desc: linea.desc || '—',
           categoria: linea.categoria || '—',
-          marca: linea.marca || '—',
+          marca: proveedor,
           palet: palet,
           contenedor: contenedor,
-          lote: loteLinea,
-          fecha: linea.fecha || fechaOC,
+          lote: loteOperario,
+          fecha: vencimientoOperario,  // Vencimiento (MM/AAAA format)
           cant: 0,
           un: linea.un || 'UND',
           ubicacion: ubicacion,
-          vencimiento: linea.vencimiento || '—',
           observacion: oc.obs || '',
-          controlPalet: '✓',
-          controlUbicacion: '✓',
-          operario: operario
+          controlPalet: fechaHoy,
+          controlUbicacion: fechaHoy,
+          operario: escaneadoPor || '—'
         };
       }
       filasAgrupadas[clave].cant += (linea.cantUnidades || 1);
@@ -4188,6 +4194,7 @@ async function _guardarEnHistorialPalets(oc) {
       })
     });
   } catch(e) { console.error('Error en _guardarEnHistorialPalets:', e); }
+}
 }
 
 // Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA (JSON completo)
