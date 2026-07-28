@@ -6279,31 +6279,39 @@ function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
   var prov = partes[1] || '—';
   var nro  = partes[2] || '—';
 
-  // Ignorar alertas que NO son de O.C. (REMITO, EN_ESCANEO, FINALIZADO, etc.)
+  // Ignorar alertas que NO son de O.C.
   if (!ocId || ocId === 'VACIO' || ocId === 'EN_ESCANEO' ||
       ocId === 'FINALIZADO' || ocId === 'REMITO') return;
 
-  var container = document.createElement('div');
-  container.className = 'notificacion-remito';
-  container.id = 'notif-alerta-' + filaAlerta;
-  container.style.cursor = 'pointer';
-  container.innerHTML =
-    '<div class="notificacion-remito-titulo"><i class="ti ti-barcode"></i> O.C. #' + escHtml(nro) + ' lista para escanear</div>' +
-    '<div class="notificacion-remito-detalle">' + escHtml(prov) + ' — Tocá para cargar</div>';
+  // Si ya hay un modal de esta alerta, no duplicar
+  if (document.getElementById('modal-oc-alerta-' + filaAlerta)) return;
 
-  document.body.appendChild(container);
+  // Buscar datos de la OC para mostrar detalles
+  var ordenes = loadOrdenes();
+  var oc = ordenes.find(function(o){ return o.id === ocId; });
+  var cantArticulos = oc && oc.lineas ? oc.lineas.length : '—';
+  var cantUnidades = oc && oc.lineas ? oc.lineas.reduce(function(s,l){ return s + (l.cantUnidades||0); }, 0) : '—';
 
-  container.addEventListener('click', function() {
-    container.style.animation = 'slideOut 0.3s ease-out';
-    setTimeout(function() { container.remove(); }, 300);
-    // Cargar la O.C. directamente al clickear
-    var ordenes = loadOrdenes();
-    var oc = ordenes.find(function(o){ return o.id === ocId; });
-    if (oc) {
-      _ejecutarEnvioEscaneo(ocId, filaAlerta);
-    } else {
-      showToast('⚠ No se encontró la O.C. — esperá un momento y volvé a tocar');
-    }
+  // Crear overlay oscuro
+  var overlay = document.createElement('div');
+  overlay.id = 'modal-oc-alerta-' + filaAlerta;
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:9999;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--c-surface2);border-radius:16px;padding:36px 32px;max-width:400px;width:90%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5);';
+  modal.innerHTML =
+    '<div style="font-size:56px;margin-bottom:12px;">📦</div>' +
+    '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">O.C. #' + escHtml(nro) + ' lista</div>' +
+    '<div style="font-size:14px;color:var(--c-text2);margin-bottom:8px;">' + escHtml(prov) + '</div>' +
+    '<div style="font-size:13px;color:var(--c-text3);margin-bottom:28px;">' + cantArticulos + ' artículo' + (cantArticulos !== 1 ? 's' : '') + ' · ' + cantUnidades + ' unidades esperadas</div>' +
+    '<button id="btn-cargar-oc-alerta-' + filaAlerta + '" class="btn btn-success" style="width:100%;height:48px;font-size:15px;font-weight:600;"><i class="ti ti-barcode"></i> Cargar y empezar escaneo</button>';
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  document.getElementById('btn-cargar-oc-alerta-' + filaAlerta).addEventListener('click', function() {
+    overlay.remove();
+    _ejecutarEnvioEscaneo(ocId, filaAlerta);
   });
 }
 
