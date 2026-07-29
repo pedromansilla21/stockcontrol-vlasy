@@ -1159,10 +1159,10 @@
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
           <div class="card-title" style="margin-bottom:0;">Datos de la Orden de Compra</div>
-          <label id="label-control-palet" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--c-surface3); border:2px solid var(--c-border); border-radius:8px; padding:6px 14px; transition:all 0.2s;" onclick="document.getElementById('rem-es-palet').click()">
-            <i class="ti ti-packages" style="font-size:16px; color:var(--c-text2);" id="icon-palet"></i>
-            <span style="font-size:13px; font-weight:600; color:var(--c-text2);" id="texto-palet">Control de Palet</span>
-            <input type="checkbox" id="rem-es-palet" onchange="toggleControlPalet()" style="display:none;" />
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--c-surface3); border:2px solid var(--c-border); border-radius:8px; padding:6px 14px; user-select:none;" id="label-control-palet">
+            <i class="ti ti-packages" style="font-size:16px;" id="icon-palet"></i>
+            <span style="font-size:13px; font-weight:600;" id="texto-palet">Control de Palet</span>
+            <input type="checkbox" id="rem-es-palet" onchange="toggleControlPalet()" style="width:16px; height:16px; cursor:pointer; accent-color:var(--c-green, #10B981);" />
           </label>
         </div>
         <div class="form-grid-4">
