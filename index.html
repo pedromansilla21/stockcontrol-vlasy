@@ -2822,9 +2822,9 @@ function abrirPanelCompletarControl() {
             'value="' + (r.fechaLote ? r.fechaLote.split('-')[0] : '') + '" ' +
             'style="width:64px; text-align:center; padding:5px 4px;" />' +
           '</td>' +
-          '<td><input type="text" id="cc-lote-' + i + '" value="' + escHtml(r.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
-          '<td><input type="text" id="cc-palet-' + i + '" value="' + escHtml(r.palet || '') + '" placeholder="Ej: P-01" /></td>' +
-          '<td><input type="text" id="cc-contenedor-' + i + '" value="' + escHtml(r.contenedor || '') + '" placeholder="Ej: CTR-01" /></td>' +
+          '<td><input type="text" id="cc-lote-' + i + '" value="' + escHtml(r.lote || '') + '" placeholder="Ej: L-2024" autocomplete="off" /></td>' +
+          '<td><input type="text" id="cc-palet-' + i + '" value="' + escHtml(r.palet || '') + '" placeholder="Ej: P-01" autocomplete="off" /></td>' +
+          '<td><input type="text" id="cc-contenedor-' + i + '" value="' + escHtml(r.contenedor || '') + '" placeholder="Ej: CTR-01" autocomplete="off" /></td>' +
           '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleDividirLinea(' + i + ')" title="Dividir en varios lotes/fechas/palets" style="font-size:11px; padding:4px 8px;"><i class="ti ti-git-branch"></i> Dividir</button></td>' +
         '</tr>';
     } else {
@@ -4178,7 +4178,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     
     var palet = oc.palet || '—';
     var contenedor = oc.contenedor || '—';
-    var ubicacion = document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—';
+    var ubicacion = oc.ubicacion || (document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '') || '—';
     var proveedor = oc.proveedor || '—'; // Marca = Proveedor
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     
@@ -4512,7 +4512,8 @@ function guardarOCActual() {
     origen: esCreadorCompras ? 'admin_compras' : 'supervisor',
     estadoCompras: esCreadorCompras ? 'pendiente' : null,
     enviadoSupervisor: !esCreadorCompras,
-    esPalet: !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked)
+    esPalet: !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
+    ubicacion: document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() || '—' : '—'
   };
 
   var existeIdx = ordenes.findIndex(function(o){ return o.id === idNuevo; });
