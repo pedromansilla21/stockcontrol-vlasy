@@ -7533,10 +7533,17 @@ function _checkAlertaEscaneo() {
     if (remitoDatos.ocId && remitoDatos.ocId === ocId) return;
     var vistas = JSON.parse(sessionStorage.getItem('_alv') || '[]');
     if (vistas.indexOf(val) >= 0) return;
+    // Verificar si la OC está en caché ANTES de marcarla como vista
+    var pendiente = (_ordenesCache || []).find(function(o){ return o.id === ocId; });
+    if (!pendiente) {
+      // OC no está en caché todavía — sincronizar y NO marcar como vista
+      // para que el próximo ciclo (8s) lo reintente
+      syncOrdenes().catch(function(){});
+      return;
+    }
+    // Recién ahora marcar como vista (OC encontrada, se va a mostrar)
     vistas.push(val);
     sessionStorage.setItem('_alv', JSON.stringify(vistas));
-    var pendiente = (_ordenesCache || []).find(function(o){ return o.id === ocId; });
-    if (!pendiente) return;
     _alertaEscaneoOcId = ocId;
     _alertaEscaneoFila = fila; // guardar para usarla al aceptar
     var nro  = partes[2] || (pendiente.nro || '');
