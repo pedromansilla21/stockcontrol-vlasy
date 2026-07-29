@@ -4211,8 +4211,50 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     // Agrupar líneas: Cod Prod + Lote + Vencimiento + Palet = misma fila
     var filasAgrupadas = {};
     oc.lineas.forEach(function(linea, i) {
+
+      // Si la línea tiene DIVISIONES → una fila por cada división
+      if (linea.divisiones && linea.divisiones.length > 0) {
+        linea.divisiones.forEach(function(d, j) {
+          // Leer del DOM primero (más confiable)
+          var cajasEl = document.getElementById('cc-div-' + i + '-' + j + '-cajas');
+          var mesEl   = document.getElementById('cc-div-' + i + '-' + j + '-mes');
+          var anioEl  = document.getElementById('cc-div-' + i + '-' + j + '-anio');
+          var loteEl  = document.getElementById('cc-div-' + i + '-' + j + '-lote');
+
+          var cajas = (cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : (parseInt(d.cajas, 10) || 0);
+          var unidades = cajas * (linea.unidadesPorCaja || linea.cantCaja || 1);
+          var lote = (loteEl && loteEl.value.trim()) || d.lote || '—';
+          var fecha = '—';
+          var mes = (mesEl && mesEl.value) ? mesEl.value : d.mes;
+          var anio = (anioEl && anioEl.value) ? anioEl.value : d.anio;
+          if (mes && anio) fecha = anio + '-' + String(mes).padStart(2, '0');
+
+          var clave = (linea.cod || '—') + '|' + lote + '|' + fecha + '|' + palet + '|div' + j;
+          if (!filasAgrupadas[clave]) {
+            filasAgrupadas[clave] = {
+              cod: linea.cod || '—',
+              desc: linea.desc || '—',
+              categoria: linea.categoria || '—',
+              marca: proveedor,
+              palet: palet,
+              contenedor: contenedor,
+              lote: lote,
+              fecha: fecha,
+              cant: 0,
+              un: linea.un || 'UND',
+              ubicacion: ubicacion,
+              observacion: oc.obs || '',
+              controlPalet: fechaHoy,
+              controlUbicacion: fechaHoy,
+              operario: escaneadoPor || '—'
+            };
+          }
+          filasAgrupadas[clave].cant += unidades;
+        });
+        return; // No procesar la línea entera si tiene divisiones
+      }
+
       // Leer del DOM directamente (más confiable que oc.lineas para fecha/lote)
-      // porque _commitCompletarControlValues() puede tener timing issues
       var loteEl = document.getElementById('cc-lote-' + i);
       var mesEl  = document.getElementById('cc-mes-'  + i);
       var anioEl = document.getElementById('cc-anio-' + i);
