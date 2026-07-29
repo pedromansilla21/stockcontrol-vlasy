@@ -1165,20 +1165,20 @@
           </div>
         </div>
         <div class="form-grid-4">
-          <div class="field"><label>N° Orden de Compra</label><input id="rem-nro" oninput="triggerAutosave()" class="mono" placeholder="OC-00123" /></div>
+          <div class="field"><label>N° Orden de Compra</label><input id="rem-nro" oninput="triggerAutosave()" class="mono" placeholder="OC-00123" autocomplete="off" /></div>
           <div class="field" style="position:relative;">
             <label>Proveedor</label>
             <input id="rem-proveedor" placeholder="Nombre del proveedor" autocomplete="off" oninput="mostrarSugerenciasProveedor()" onblur="ocultarSugerenciasProveedor()" />
             <div id="rem-proveedor-list" class="autocomplete-dropdown" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--c-surface); border:1px solid var(--c-border); border-top:none; border-radius:0 0 var(--radius-sm) var(--radius-sm); max-height:200px; overflow-y:auto; z-index:10;"></div>
           </div>
           <div class="field"><label id="label-fecha">Fecha de recepción</label><input id="rem-fecha" onchange="triggerAutosave()" type="date" /></div>
-          <div class="field" id="field-lote"><label>Lote (general)</label><input id="rem-lote" oninput="triggerAutosave()" class="mono" placeholder="L-2024" /></div>
+          <div class="field" id="field-lote"><label>Lote (general)</label><input id="rem-lote" oninput="triggerAutosave()" class="mono" placeholder="L-2024" autocomplete="off" /></div>
         </div>
         <div class="form-grid-4">
-          <div class="field" id="field-palet"><label>N° Palet</label><input id="rem-palet" class="mono" placeholder="45" /></div>
-          <div class="field" id="field-contenedor"><label>N° Contenedor</label><input id="rem-contenedor" class="mono" placeholder="E01" /></div>
-          <div class="field" id="field-ubicacion" style="display:none;"><label>Ubicación</label><input id="rem-ubicacion" class="mono" placeholder="L-2824" /></div>
-          <div class="field"><label id="label-responsable">Responsable de carga *</label><input id="rem-operario" placeholder="Nombre y apellido" /></div>
+          <div class="field" id="field-palet"><label>N° Palet</label><input id="rem-palet" class="mono" placeholder="45" autocomplete="off" /></div>
+          <div class="field" id="field-contenedor"><label>N° Contenedor</label><input id="rem-contenedor" class="mono" placeholder="E01" autocomplete="off" /></div>
+          <div class="field" id="field-ubicacion" style="display:none;"><label>Ubicación</label><input id="rem-ubicacion" class="mono" placeholder="L-2824" autocomplete="off" /></div>
+          <div class="field"><label id="label-responsable">Responsable de carga *</label><input id="rem-operario" placeholder="Nombre y apellido" autocomplete="off" /></div>
           <div class="field"><label>Observaciones</label><input id="rem-obs" placeholder="Opcional" /></div>
         </div>
       </div>
