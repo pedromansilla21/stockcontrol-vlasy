@@ -1159,10 +1159,11 @@
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
           <div class="card-title" style="margin-bottom:0;">Datos de la Orden de Compra</div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; font-weight:600; color:var(--c-text2);">Control de Palet:</label>
-            <input type="checkbox" id="rem-es-palet" onchange="toggleControlPalet()" style="width:18px; height:18px; cursor:pointer;" />
-          </div>
+          <label id="label-control-palet" style="display:flex; align-items:center; gap:8px; cursor:pointer; background:var(--c-surface3); border:2px solid var(--c-border); border-radius:8px; padding:6px 14px; transition:all 0.2s;" onclick="document.getElementById('rem-es-palet').click()">
+            <i class="ti ti-packages" style="font-size:16px; color:var(--c-text2);" id="icon-palet"></i>
+            <span style="font-size:13px; font-weight:600; color:var(--c-text2);" id="texto-palet">Control de Palet</span>
+            <input type="checkbox" id="rem-es-palet" onchange="toggleControlPalet()" style="display:none;" />
+          </label>
         </div>
         <div class="form-grid-4">
           <div class="field"><label>N° Orden de Compra</label><input id="rem-nro" oninput="triggerAutosave()" class="mono" placeholder="OC-00123" autocomplete="off" /></div>
@@ -1466,7 +1467,16 @@
 
       <div class="card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <div class="card-title" style="margin-bottom:0;">Estado de líneas</div>
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div class="card-title" style="margin-bottom:0;">Estado de líneas</div>
+            <span id="info-palet-escaneo" style="display:none; font-size:12px; color:var(--c-text3); background:var(--c-surface3); border-radius:6px; padding:3px 10px;">
+              <i class="ti ti-packages" style="font-size:12px; vertical-align:-1px;"></i>
+              Palet <strong id="info-palet-nro" style="color:var(--c-text2);"></strong>
+              &nbsp;·&nbsp;
+              <i class="ti ti-map-pin" style="font-size:12px; vertical-align:-1px;"></i>
+              <strong id="info-palet-ubi" style="color:var(--c-text2);"></strong>
+            </span>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="abrirPanelCompletarControl()">
             <i class="ti ti-clipboard-check"></i> Completar control
           </button>
@@ -2441,14 +2451,30 @@ function toggleControlPalet() {
   var fieldContenedor = document.getElementById('field-contenedor');
   var fieldUbicacion = document.getElementById('field-ubicacion');
   
+  // Actualizar estilo visual del botón
+  var labelBtn = document.getElementById('label-control-palet');
+  var iconPalet = document.getElementById('icon-palet');
+  var textoPalet = document.getElementById('texto-palet');
+  if (labelBtn) {
+    if (esPalet) {
+      labelBtn.style.background = 'var(--c-teal, #0D9488)';
+      labelBtn.style.borderColor = 'var(--c-teal, #0D9488)';
+      if (iconPalet) iconPalet.style.color = '#fff';
+      if (textoPalet) { textoPalet.style.color = '#fff'; textoPalet.textContent = '📦 Control de Palet ACTIVO'; }
+    } else {
+      labelBtn.style.background = 'var(--c-surface3)';
+      labelBtn.style.borderColor = 'var(--c-border)';
+      if (iconPalet) iconPalet.style.color = 'var(--c-text2)';
+      if (textoPalet) { textoPalet.style.color = 'var(--c-text2)'; textoPalet.textContent = 'Control de Palet'; }
+    }
+  }
+
   if (esPalet) {
-    // Ocultar Lote, mostrar Palet, Contenedor y Ubicación
     if (fieldLote) fieldLote.style.display = 'none';
     if (fieldPalet) fieldPalet.style.display = '';
     if (fieldContenedor) fieldContenedor.style.display = '';
     if (fieldUbicacion) fieldUbicacion.style.display = '';
   } else {
-    // Mostrar Lote, Palet, Contenedor y ocultar Ubicación
     if (fieldLote) fieldLote.style.display = '';
     if (fieldPalet) fieldPalet.style.display = '';
     if (fieldContenedor) fieldContenedor.style.display = '';
@@ -5062,6 +5088,17 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
   // Setear ubicacion para que _guardarEnHistorialPalets la pueda leer
   var elUbi = document.getElementById('rem-ubicacion');
   if (elUbi) elUbi.value = (oc.ubicacion && oc.ubicacion !== '—') ? oc.ubicacion : '';
+  // Mostrar N° Palet y Ubicación en "Estado de líneas" si es palet
+  var infoPalet = document.getElementById('info-palet-escaneo');
+  if (infoPalet) {
+    if (oc.esPalet && oc.palet && oc.palet !== '—') {
+      document.getElementById('info-palet-nro').textContent = oc.palet;
+      document.getElementById('info-palet-ubi').textContent = (oc.ubicacion && oc.ubicacion !== '—') ? oc.ubicacion : '—';
+      infoPalet.style.display = '';
+    } else {
+      infoPalet.style.display = 'none';
+    }
+  }
 
   renderTablaRemito();
   renderTablaControl();
@@ -6860,7 +6897,7 @@ function _generarNroOC() {
 }
 
 // ── AUTOCOMPLETE PROVEEDORES ────────────────────────────────
-var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand', 'HideHere'];
+var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand', 'HideHere', 'Vlasy'];
 
 function mostrarSugerenciasProveedor() {
   var input = document.getElementById('rem-proveedor');
