@@ -3663,10 +3663,36 @@ function confirmarAgregarItemFueraOC() {
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
 
-  // Registrar SOLO la línea nueva en HISTORIAL COMPLETO, sin tocar lo que ya
-  // estaba — usa la acción que solo agrega (agregarDetalleHistorial), para
-  // no perder el historial real de cuándo pasó cada cosa.
-  _agregarDetalleHistorial(oc, [nuevaLinea], oc.escaneadoPor || oc.responsable || '');
+  // Si es palet → actualizar HISTORIAL DE PALETS con la nueva línea
+  // Si es OC normal → registrar en HISTORIAL COMPLETO
+  if (oc.esPalet) {
+    var fechaHoy = new Date().toLocaleDateString('es-AR');
+    var filasPalet = [{
+      cod:          nuevaLinea.cod || '—',
+      desc:         nuevaLinea.desc || '—',
+      categoria:    nuevaLinea.categoria || '—',
+      marca:        oc.proveedor || '—',
+      cant:         nuevaLinea.unidadesControladas || nuevaLinea.cantUnidades || 0,
+      un:           nuevaLinea.un || 'UND',
+      fecha:        nuevaLinea.fechaLote || '—',
+      lote:         nuevaLinea.lote || '—',
+      palet:        oc.palet || '—',
+      contenedor:   oc.contenedor || '—',
+      ubicacion:    oc.ubicacion || '—',
+      observacion:  oc.obs || '',
+      controlPalet:     fechaHoy,
+      controlUbicacion: fechaHoy,
+      operario:     oc.escaneadoPor || oc.responsable || '—'
+    }];
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: filasPalet })
+    });
+  } else {
+    // Registrar SOLO la línea nueva en HISTORIAL COMPLETO
+    _agregarDetalleHistorial(oc, [nuevaLinea], oc.escaneadoPor || oc.responsable || '');
+  }
 
   cerrarModalAgregarFueraOC();
   renderOrdenes();
