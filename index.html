@@ -5059,6 +5059,9 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
   // Setear checkbox de palet si la OC es un control de palet
   var chkPalet = document.getElementById('rem-es-palet');
   if (chkPalet) chkPalet.checked = !!(oc.esPalet);
+  // Setear ubicacion para que _guardarEnHistorialPalets la pueda leer
+  var elUbi = document.getElementById('rem-ubicacion');
+  if (elUbi) elUbi.value = (oc.ubicacion && oc.ubicacion !== '—') ? oc.ubicacion : '';
 
   renderTablaRemito();
   renderTablaControl();
