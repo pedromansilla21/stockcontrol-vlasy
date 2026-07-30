@@ -4222,12 +4222,13 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     var filas = oc.lineas.map(function(linea) {
       return {
-        cod: linea.cod || '—',
-        palet: oc.palet || '—',
+        cod:            linea.cod   || '—',
+        palet:          oc.palet    || '—',
+        lote:           linea.lote  || '—',
         cantRestar: typeof linea.unidadesControladas !== 'undefined'
           ? linea.unidadesControladas
           : (linea.cantUnidades || 0),
-        operario: escaneadoPor || '—',
+        operario:       escaneadoPor || '—',
         fechaReposicion: fechaHoy
       };
     });
@@ -5085,14 +5086,28 @@ function abrirModalReposicion(ocId) {
     '</tr></thead><tbody>';
 
   (oc.lineas || []).forEach(function(linea, i) {
-    html += '<tr style="border-top:1px solid var(--c-border);">' +
-      '<td style="padding:8px;">' + escHtml(linea.desc || linea.cod || '—') + '</td>' +
-      '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + (linea.cantUnidades || 0) + ' u.</td>' +
-      '<td style="text-align:center; padding:8px;">' +
-        '<input type="number" id="rep-cant-' + i + '" min="0" max="' + (linea.cantUnidades || 0) + '" value="0" ' +
-        'style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:6px; color:var(--c-text1);" />' +
-      '</td>' +
-    '</tr>';
+    var upCajaM = parseInt(linea.unidadesPorCaja || linea.cantCaja || 1, 10);
+    if (isNaN(upCajaM) || upCajaM < 1) upCajaM = 1;
+    if (linea.divisiones && linea.divisiones.length > 0) {
+      html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="3" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc || linea.cod || '—') + '</td></tr>';
+      linea.divisiones.forEach(function(div, j) {
+        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaM;
+        html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="padding:6px 8px 6px 20px; color:var(--c-text2); font-size:12px;">Lote ' + escHtml(div.lote || '—') + ' &nbsp;·&nbsp; ' + escHtml((div.mes || '—') + '/' + (div.anio || '—')) + '</td>' +
+          '<td style="text-align:center; padding:6px 8px; color:var(--c-text2);">' + divCant + ' u.</td>' +
+          '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-' + i + '-' + j + '" min="0" max="' + divCant + '" value="0" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:6px; color:var(--c-text1);" /></td>' +
+        '</tr>';
+      });
+    } else {
+      html += '<tr style="border-top:1px solid var(--c-border);">' +
+        '<td style="padding:8px;">' + escHtml(linea.desc || linea.cod || '—') + '</td>' +
+        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + (linea.cantUnidades || 0) + ' u.</td>' +
+        '<td style="text-align:center; padding:8px;">' +
+          '<input type="number" id="rep-cant-' + i + '" min="0" max="' + (linea.cantUnidades || 0) + '" value="0" ' +
+          'style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:6px; color:var(--c-text1);" />' +
+        '</td>' +
+      '</tr>';
+    }
   });
 
   html += '</tbody></table>';
@@ -5119,21 +5134,49 @@ function enviarReposicion() {
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
   (_reposicionOC.lineas || []).forEach(function(linea, i) {
-    var cantEl = document.getElementById('rep-cant-' + i);
-    var cantRaw = cantEl ? cantEl.value : '0';
-    var cant = parseInt(cantRaw, 10);
-    if (isNaN(cant) || cant <= 0) return;
     var upCaja = parseInt(linea.unidadesPorCaja || linea.cantCaja || linea.un_x_caja || 1, 10);
     if (isNaN(upCaja) || upCaja < 1) upCaja = 1;
-    // Copiar TODO de la linea original y solo pisar las cantidades
-    var lineaRep = JSON.parse(JSON.stringify(linea));
-    lineaRep.cantUnidades    = cant;
-    lineaRep.cajasEsperadas  = Math.ceil(cant / upCaja);
-    lineaRep.cajasEscaneadas = 0;
-    lineaRep.unidadesControladas = 0;
-    lineaRep.unidadesPorCaja = upCaja;
-    lineaRep.cantCaja        = upCaja;
-    lineasReposicion.push(lineaRep);
+
+    if (linea.divisiones && linea.divisiones.length > 0) {
+      // Una línea de reposición por división seleccionada
+      linea.divisiones.forEach(function(div, j) {
+        var cantEl = document.getElementById('rep-cant-' + i + '-' + j);
+        var cant = parseInt(cantEl ? cantEl.value : '0', 10);
+        if (isNaN(cant) || cant <= 0) return;
+        var lineaRep = JSON.parse(JSON.stringify(linea));
+        lineaRep.cantUnidades        = cant;
+        lineaRep.cajasEsperadas      = Math.ceil(cant / upCaja);
+        lineaRep.cajasEscaneadas     = 0;
+        lineaRep.unidadesControladas = 0;
+        lineaRep.unidadesPorCaja     = upCaja;
+        lineaRep.cantCaja            = upCaja;
+        // Guardar lote/fecha de esta división específica
+        lineaRep.lote     = div.lote || '—';
+        lineaRep.mes      = div.mes  || '';
+        lineaRep.anio     = div.anio || '';
+        lineaRep.fechaLote = (div.mes || '') + '/' + (div.anio || '');
+        // Limpiar divisiones para no arrastrar datos del palet al Completar control
+        lineaRep.divisiones = [];
+        lineasReposicion.push(lineaRep);
+      });
+    } else {
+      var cantEl = document.getElementById('rep-cant-' + i);
+      var cant = parseInt(cantEl ? cantEl.value : '0', 10);
+      if (isNaN(cant) || cant <= 0) return;
+      var lineaRep = JSON.parse(JSON.stringify(linea));
+      lineaRep.cantUnidades        = cant;
+      lineaRep.cajasEsperadas      = Math.ceil(cant / upCaja);
+      lineaRep.cajasEscaneadas     = 0;
+      lineaRep.unidadesControladas = 0;
+      lineaRep.unidadesPorCaja     = upCaja;
+      lineaRep.cantCaja            = upCaja;
+      lineaRep.lote                = '—';
+      lineaRep.mes                 = '';
+      lineaRep.anio                = '';
+      lineaRep.fechaLote           = '';
+      lineaRep.divisiones          = [];
+      lineasReposicion.push(lineaRep);
+    }
   });
 
   if (lineasReposicion.length === 0) { showToast('⚠ Indicá al menos una cantidad a retirar'); return; }
