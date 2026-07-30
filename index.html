@@ -4225,6 +4225,24 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
       mode: 'no-cors',
       body: JSON.stringify({ accion: 'restarCantPalet', filas: filas })
     });
+
+    // Actualizar cantUnidades en la OC original del palet (para que el reporte muestre el stock actual)
+    if (oc.paletOriginalId) {
+      var ordenes = loadOrdenes();
+      var ocOriginal = ordenes.find(function(o){ return o.id === oc.paletOriginalId; });
+      if (ocOriginal && ocOriginal.lineas) {
+        oc.lineas.forEach(function(lineaRep) {
+          var cantRestada = typeof lineaRep.unidadesControladas !== 'undefined'
+            ? lineaRep.unidadesControladas : (lineaRep.cantUnidades || 0);
+          var lineaOrig = ocOriginal.lineas.find(function(l){ return l.cod === lineaRep.cod; });
+          if (lineaOrig && cantRestada > 0) {
+            lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
+          }
+        });
+        saveOrdenes(ordenes);
+        renderOrdenes();
+      }
+    }
   } catch(e) { console.error('Error en _restarEnHistorialPalets:', e); }
 }
 
@@ -7799,17 +7817,24 @@ async function aceptarAlertaEscaneo() {
   var fila = _alertaEscaneoFila || (CURRENT_USER && CURRENT_USER.filaAlerta) || 1;
   var ocId = _alertaEscaneoOcId;
   _alertaEscaneoOcId = null;
-  
-  // Marcar como EN_ESCANEO en el sheet
+
   fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'EN_ESCANEO|' + ocId, fila: fila }) });
-  
-  // Sincronizar ordenes primero para asegurar que tenemos la OC con sus lineas
-  showToast('Cargando O.C...');
-  try { await syncOrdenes(); } catch(e) {}
-  
-  // Ahora sí ejecutar con datos frescos
-  _ejecutarEnvioEscaneo(ocId);
-  switchPanel('scanner');
+
+  // Buscar OC localmente primero — si está, cargar inmediatamente sin sync
+  var ordenesLocal = loadOrdenes();
+  var ocLocal = ordenesLocal.find(function(o){ return o.id === ocId; });
+
+  if (ocLocal) {
+    // Encontrada localmente — cargar YA sin esperar sync
+    _ejecutarEnvioEscaneo(ocId);
+    switchPanel('scanner');
+  } else {
+    // No está localmente — sincronizar y después cargar
+    showToast('Cargando O.C...');
+    try { await syncOrdenes(); } catch(e) {}
+    _ejecutarEnvioEscaneo(ocId);
+    switchPanel('scanner');
+  }
 }
 </script>
 
