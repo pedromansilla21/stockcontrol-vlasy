@@ -3194,6 +3194,7 @@ function finalizarControl() {
     esPalet:         !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
     esReposicion:    !!(remitoDatos.esReposicion),
     paletOriginalId: remitoDatos.paletOriginalId || null,
+    ubicacion:       remitoDatos.ubicacion || (document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—') || '—',
     lineas:          JSON.parse(JSON.stringify(remito)),
     // El detalle de escaneos (registro) ya no viaja en esta celda — se
     // sincronizó aparte a la hoja "ESCANEOS" (ver arriba).
@@ -3210,7 +3211,13 @@ function finalizarControl() {
   if (escaneadoPorInput) escaneadoPorInput.value = '';
   ocObj.escaneadoPor = escaneadoPorVal;  // se guarda para poder loguear bien si más tarde se agrega algo desde Reportes
 
-  if (ocIdx >= 0) { ordenes[ocIdx] = ocObj; } else { ordenes.unshift(ocObj); }
+  if (ocObj.esReposicion) {
+    // Las OCs de reposición no se conservan en ordenes — se eliminan al finalizar
+    // para que no aparezcan en el reporte. El descuento queda en HISTORIAL DE PALETS.
+    if (ocIdx >= 0) { ordenes.splice(ocIdx, 1); }
+  } else {
+    if (ocIdx >= 0) { ordenes[ocIdx] = ocObj; } else { ordenes.unshift(ocObj); }
+  }
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
@@ -5287,7 +5294,8 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     lote: oc.lote || '\u2014', palet: oc.palet, contenedor: oc.contenedor,
     operario: oc.responsable, obs: oc.obs, nroProv: oc.nroProv || '',
     esReposicion: oc.esReposicion || false,
-    paletOriginalId: oc.paletOriginalId || null
+    paletOriginalId: oc.paletOriginalId || null,
+    ubicacion: oc.ubicacion || '—'
   };
   remito        = JSON.parse(JSON.stringify(oc.lineas));
   registro      = JSON.parse(JSON.stringify(oc.registro || []));
