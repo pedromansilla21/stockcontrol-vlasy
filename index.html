@@ -4972,18 +4972,10 @@ function renderLineasOCTable(lineas, ocId) {
   var tieneLote = lineas.some(function(l){
     return l.lote || (l.divisiones && l.divisiones.some(function(d){ return d.lote; }));
   });
-  var esPalet = lineas.some(function(l){ return l.divisiones; });
+  var esPalet = lineas.some(function(l){ return l.divisiones && l.divisiones.length > 0; });
 
-  // Buscador (solo para palets o cuando hay muchos artículos)
-  var buscador = (esPalet || lineas.length > 5)
-    ? '<div style="margin-bottom:10px;">' +
-        '<input type="text" id="palet-search-' + uid + '" placeholder="🔍 Buscar artículo..." oninput="filtrarFilasPalet(\'' + uid + '\')" ' +
-        'style="width:100%; padding:7px 12px; font-size:13px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); box-sizing:border-box;" /></div>'
-    : '';
-
-  var html = resumen + buscador +
+  var html = resumen +
     '<div class="table-wrap oc-lineas-table"><table id="palet-table-' + uid + '" style="font-size:13px;"><thead><tr>' +
-    (esPalet ? '<th style="width:36px; text-align:center; padding:8px 4px;"><input type="checkbox" title="Seleccionar todos" onchange="toggleTodosChk(\'' + uid + '\', this.checked)" /></th>' : '<th style="width:36px;"></th>') +
     '<th style="padding:8px;">Código</th><th style="padding:8px;">Artículo</th>' +
     '<th style="text-align:center; padding:8px;">Esp.</th>' +
     '<th style="text-align:center; padding:8px;">Esc.</th>' +
@@ -5003,9 +4995,7 @@ function renderLineasOCTable(lineas, ocId) {
     if (isNaN(upCajaL) || upCajaL < 1) upCajaL = 1;
 
     if (l.divisiones && l.divisiones.length > 0) {
-      // Fila header del artículo — checkbox con key = índice de línea
       html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '" style="background:rgba(255,255,255,0.03);">' +
-        '<td style="text-align:center; padding:8px 4px;"></td>' +
         '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
         '<td style="font-weight:600; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + '</td>' +
         '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspL + ' u.</td>' +
@@ -5016,13 +5006,9 @@ function renderLineasOCTable(lineas, ocId) {
       '</tr>';
       l.divisiones.forEach(function(div, j) {
         var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
-        if (divCant === 0) return; // ocultar divisiones vacías
+        if (divCant === 0) return;
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
-        var chkKey = i + '-' + j;
         html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
-          '<td style="text-align:center; padding:6px 4px;">' +
-            '<input type="checkbox" class="palet-chk-' + uid + '" data-key="' + chkKey + '" data-ocid="' + uid + '" title="Seleccionar para reposición" />' +
-          '</td>' +
           '<td style="padding:6px 8px;"></td>' +
           '<td style="padding:6px 8px 6px 20px; font-size:12px; color:var(--c-text2);">↳ Lote ' + escHtml(div.lote || '—') + '</td>' +
           '<td style="text-align:center; padding:6px 8px; color:var(--c-text2); font-size:12px;">' + divCant + ' u.</td>' +
@@ -5040,9 +5026,6 @@ function renderLineasOCTable(lineas, ocId) {
       }
       var chkKey = String(i);
       html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
-        '<td style="text-align:center; padding:8px 4px;">' +
-          '<input type="checkbox" class="palet-chk-' + uid + '" data-key="' + chkKey + '" data-ocid="' + uid + '" />' +
-        '</td>' +
         '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
         '<td style="font-weight:' + (ok?'600':'400') + '; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + (l.agregadaEnEscaneo ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:4px;">+ AGREGADA</span>' : '') + '</td>' +
         '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspL + ' u.</td>' +
@@ -5167,8 +5150,13 @@ function abrirModalReposicion(ocId) {
 
   // Líneas del palet
   var container = document.getElementById('rep-lineas-container');
-  var html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+  var repUid = uid;
+  var html = '<div style="margin-bottom:10px;">' +
+    '<input type="text" id="palet-search-' + repUid + '" placeholder="🔍 Buscar artículo..." oninput="filtrarFilasPalet(\'' + repUid + '\')" ' +
+    'style="width:100%; padding:7px 12px; font-size:13px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); box-sizing:border-box;" /></div>' +
+  '<table id="palet-table-' + repUid + '" style="width:100%; border-collapse:collapse; font-size:13px;">' +
     '<thead><tr>' +
+    '<th style="width:32px; text-align:center; padding:6px 4px;"><input type="checkbox" title="Seleccionar todos" onchange="toggleTodosChk(\'' + repUid + '\', this.checked)" /></th>' +
     '<th style="text-align:left; padding:6px 8px; color:var(--c-text3); font-weight:600;">Artículo</th>' +
     '<th style="text-align:center; padding:6px 8px; color:var(--c-text3); font-weight:600;">Stock actual</th>' +
     '<th style="text-align:center; padding:6px 8px; color:var(--c-text3); font-weight:600;">U. a retirar</th>' +
@@ -5178,13 +5166,14 @@ function abrirModalReposicion(ocId) {
     var upCajaM = parseInt(linea.unidadesPorCaja || linea.cantCaja || 1, 10);
     if (isNaN(upCajaM) || upCajaM < 1) upCajaM = 1;
     if (linea.divisiones && linea.divisiones.length > 0) {
-      html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="3" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc || linea.cod || '—') + '</td></tr>';
+      html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="4" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc || linea.cod || '—') + '</td></tr>';
       linea.divisiones.forEach(function(div, j) {
         var divCant = (parseInt(div.cajas, 10) || 0) * upCajaM;
         if (divCant === 0) return; // ocultar divisiones vacías
         var chkKey = i + '-' + j;
         var preseleccionado = haySeleccion && seleccionados.has(chkKey);
-        html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">' +
+        html += '<tr class="palet-row" data-desc="' + escHtml((linea.desc||linea.cod||'').toLowerCase()) + '" style="border-top:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="text-align:center; padding:6px 4px; width:32px;"><input type="checkbox" class="palet-chk-' + repUid + '" data-key="' + chkKey + '"' + (preseleccionado ? ' checked' : '') + ' /></td>' +
           '<td style="padding:6px 8px 6px 20px; color:var(--c-text2); font-size:12px;">Lote ' + escHtml(div.lote || '—') + ' &nbsp;·&nbsp; ' + escHtml((div.mes || '—') + '/' + (div.anio || '—')) + '</td>' +
           '<td style="text-align:center; padding:6px 8px; color:var(--c-text2);">' + divCant + ' u.</td>' +
           '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-' + i + '-' + j + '" min="0" max="' + divCant + '" value="' + (preseleccionado ? divCant : 0) + '" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid ' + (preseleccionado ? 'var(--c-green)' : 'var(--c-border)') + '; border-radius:6px; color:var(--c-text1);" /></td>' +
@@ -5193,7 +5182,8 @@ function abrirModalReposicion(ocId) {
     } else {
       var chkKey = String(i);
       var preseleccionado = haySeleccion && seleccionados.has(chkKey);
-      html += '<tr style="border-top:1px solid var(--c-border);">' +
+      html += '<tr class="palet-row" data-desc="' + escHtml((linea.desc||linea.cod||'').toLowerCase()) + '" style="border-top:1px solid var(--c-border);">' +
+        '<td style="text-align:center; padding:8px 4px; width:32px;"><input type="checkbox" class="palet-chk-' + repUid + '" data-key="' + chkKey + '"' + (preseleccionado ? ' checked' : '') + ' /></td>' +
         '<td style="padding:8px;">' + escHtml(linea.desc || linea.cod || '—') + '</td>' +
         '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + (linea.cantUnidades || 0) + ' u.</td>' +
         '<td style="text-align:center; padding:8px;">' +
