@@ -7707,7 +7707,7 @@ function _checkFinalizadoOC() {
       // antes de que el admin la detecte y el popup nunca aparece.
       // El fallback de 2 minutos en finalizarControl() cubre el caso en
       // que el admin no esté conectado.
-      if (!CURRENT_USER || CURRENT_USER.rol !== 'administrativo') return;
+      if (!CURRENT_USER || (CURRENT_USER.rol !== 'administrativo' && CURRENT_USER.name !== 'Supervisor Pedidos')) return;
 
       // Limpiar la fila ahora que el admin ya la leyó
       fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
