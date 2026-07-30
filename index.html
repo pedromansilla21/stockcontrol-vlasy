@@ -4249,6 +4249,16 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
           var lineaOrig = ocOriginal.lineas.find(function(l){ return l.cod === lineaRep.cod; });
           if (lineaOrig && cantRestada > 0) {
             lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
+            // Si la reposición viene de una división específica (tiene lote), actualizar esa división
+            if (lineaRep.lote && lineaRep.lote !== '—' && lineaOrig.divisiones && lineaOrig.divisiones.length > 0) {
+              var upCajaOrig = parseInt(lineaOrig.unidadesPorCaja || lineaOrig.cantCaja || 1, 10);
+              if (isNaN(upCajaOrig) || upCajaOrig < 1) upCajaOrig = 1;
+              var divOrig = lineaOrig.divisiones.find(function(d){ return String(d.lote) === String(lineaRep.lote); });
+              if (divOrig) {
+                var cajasRestar = Math.ceil(cantRestada / upCajaOrig);
+                divOrig.cajas = Math.max(0, (parseInt(divOrig.cajas, 10) || 0) - cajasRestar);
+              }
+            }
           }
         });
         saveOrdenes(ordenes);
@@ -4938,7 +4948,10 @@ function renderLineasOCTable(lineas) {
   // Resumen rápido
   var total     = lineas.length;
   var completas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); }).length;
-  var conLote   = lineas.filter(function(l){ return l.lote && l.lote.trim(); }).length;
+  var conLote   = lineas.filter(function(l){
+    return (l.lote && l.lote.trim()) ||
+           (l.divisiones && l.divisiones.some(function(d){ return d.lote && String(d.lote).trim(); }));
+  }).length;
 
   var resumen =
     '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
@@ -4956,8 +4969,14 @@ function renderLineasOCTable(lineas) {
         : '') +
     '</div>';
 
-  var tieneFecha = lineas.some(function(l){ return l.fechaLote; });
-  var tieneLote  = lineas.some(function(l){ return l.lote; });
+  var tieneFecha = lineas.some(function(l){
+    return l.fechaLote ||
+           (l.divisiones && l.divisiones.some(function(d){ return d.mes || d.anio; }));
+  });
+  var tieneLote  = lineas.some(function(l){
+    return l.lote ||
+           (l.divisiones && l.divisiones.some(function(d){ return d.lote; }));
+  });
 
   var html = resumen +
     '<div class="table-wrap oc-lineas-table"><table><thead><tr>' +
@@ -4976,20 +4995,50 @@ function renderLineasOCTable(lineas) {
     var ok      = uCtrlL > 0 && diffU === 0;
     var sobraL  = diffU > 0;
     var cntColor = ok ? 'var(--c-green)' : sobraL ? 'var(--c-red)' : uCtrlL > 0 ? 'var(--c-amber)' : 'inherit';
-    var fechaFmt = '';
-    if (l.fechaLote) {
-      var p = l.fechaLote.split('-');
-      fechaFmt = p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : p.length === 2 ? p[1]+'/'+p[0] : l.fechaLote;
-    }
-    html += '<tr>' +
-      '<td class="mono" style="font-size:11px;">' + escHtml(l.cod) + '</td>' +
-      '<td style="font-weight:' + (ok?'600':'400') + '; color:' + (ok?'var(--c-green)':sobraL?'var(--c-red)':uCtrlL>0?'var(--c-amber)':'inherit') + ';">' + escHtml(l.desc) + (l.agregadaEnEscaneo ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:4px;">+ AGREGADA</span>' : '') + '</td>' +
-      '<td style="text-align:center; color:var(--c-text2);">' + uEspL + ' u.</td>' +
-      '<td style="text-align:center; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' \u26a0' : ok ? ' \u2713' : '') + (l.cajasEscaneadas > 0 ? '<span style="font-size:10px; color:var(--c-text3); display:block;">(' + l.cajasEscaneadas + ' caja' + (l.cajasEscaneadas!==1?'s':'') + (l.unidadesSueltas>0?'+'+l.unidadesSueltas+'u.s.':'') + ')</span>' : '') + '</td>' +
-      (tieneFecha ? '<td style="font-size:11px; color:var(--c-text2); white-space:nowrap;">' + (fechaFmt || '—') + '</td>' : '') +
-      (tieneLote  ? '<td class="mono" style="font-size:11px;">' + escHtml(l.lote || '—') + '</td>' : '') +
-      '<td><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
+    var upCajaL = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10);
+    if (isNaN(upCajaL) || upCajaL < 1) upCajaL = 1;
+
+    if (l.divisiones && l.divisiones.length > 0) {
+      // Fila header del artículo (totales)
+      html += '<tr style="background:rgba(255,255,255,0.03);">' +
+        '<td class="mono" style="font-size:11px;">' + escHtml(l.cod) + '</td>' +
+        '<td style="font-weight:600; color:' + (ok?'var(--c-green)':sobraL?'var(--c-red)':uCtrlL>0?'var(--c-amber)':'inherit') + ';">' + escHtml(l.desc) + '</td>' +
+        '<td style="text-align:center; color:var(--c-text2);">' + uEspL + ' u.</td>' +
+        '<td style="text-align:center; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' \u26a0' : ok ? ' \u2713' : '') + '</td>' +
+        (tieneFecha ? '<td></td>' : '') +
+        (tieneLote  ? '<td></td>' : '') +
+        '<td><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
       '</tr>';
+      // Sub-filas por división
+      l.divisiones.forEach(function(div) {
+        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
+        var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
+        html += '<tr>' +
+          '<td></td>' +
+          '<td style="padding-left:20px; font-size:11px; color:var(--c-text2);">↳ Lote ' + escHtml(div.lote || '—') + '</td>' +
+          '<td style="text-align:center; color:var(--c-text2); font-size:11px;">' + divCant + ' u.</td>' +
+          '<td></td>' +
+          (tieneFecha ? '<td style="font-size:11px; color:var(--c-text2);">' + escHtml(divFecha) + '</td>' : '') +
+          (tieneLote  ? '<td class="mono" style="font-size:11px;">' + escHtml(div.lote || '—') + '</td>' : '') +
+          '<td></td>' +
+        '</tr>';
+      });
+    } else {
+      var fechaFmt = '';
+      if (l.fechaLote) {
+        var p = l.fechaLote.split('-');
+        fechaFmt = p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : p.length === 2 ? p[1]+'/'+p[0] : l.fechaLote;
+      }
+      html += '<tr>' +
+        '<td class="mono" style="font-size:11px;">' + escHtml(l.cod) + '</td>' +
+        '<td style="font-weight:' + (ok?'600':'400') + '; color:' + (ok?'var(--c-green)':sobraL?'var(--c-red)':uCtrlL>0?'var(--c-amber)':'inherit') + ';">' + escHtml(l.desc) + (l.agregadaEnEscaneo ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:4px;">+ AGREGADA</span>' : '') + '</td>' +
+        '<td style="text-align:center; color:var(--c-text2);">' + uEspL + ' u.</td>' +
+        '<td style="text-align:center; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' \u26a0' : ok ? ' \u2713' : '') + (l.cajasEscaneadas > 0 ? '<span style="font-size:10px; color:var(--c-text3); display:block;">(' + l.cajasEscaneadas + ' caja' + (l.cajasEscaneadas!==1?'s':'') + (l.unidadesSueltas>0?'+'+l.unidadesSueltas+'u.s.':'') + ')</span>' : '') + '</td>' +
+        (tieneFecha ? '<td style="font-size:11px; color:var(--c-text2); white-space:nowrap;">' + (fechaFmt || '—') + '</td>' : '') +
+        (tieneLote  ? '<td class="mono" style="font-size:11px;">' + escHtml(l.lote || '—') + '</td>' : '') +
+        '<td><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
+      '</tr>';
+    }
   });
   return html + '</tbody></table></div>';
 }
