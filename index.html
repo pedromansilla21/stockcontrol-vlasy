@@ -5057,6 +5057,11 @@ function renderLineasOCTable(lineas, ocId) {
 }
 
 function toggleOCBody(id) {
+  var body = document.getElementById(id);
+  if (body) body.classList.toggle('open');
+}
+
+function filtrarFilasPalet(uid) {
   var input = document.getElementById('palet-search-' + uid);
   if (!input) return;
   var q = input.value.toLowerCase().trim();
