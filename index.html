@@ -4687,6 +4687,7 @@ function renderOrdenes() {
   // Supervisor NO ve OCs de admin_compras hasta que sean enviadas
   ordenes = ordenes.filter(function(oc) {
     if (oc.origen === 'admin_compras' && !oc.enviadoSupervisor) return false;
+    if (oc.esReposicion === true) return false; // Las reposiciones no aparecen en el reporte
     return true;
   });
   var search = (document.getElementById('oc-search') ? document.getElementById('oc-search').value : '').toLowerCase().trim();
@@ -5092,16 +5093,19 @@ function enviarReposicion() {
     var cantRaw = cantEl ? cantEl.value : '0';
     var cant = parseInt(cantRaw, 10);
     if (isNaN(cant) || cant <= 0) return; // saltar si no es número válido o es 0
-    var upCaja = linea.unidadesPorCaja || linea.cantCaja || 1;
+    var upCaja = parseInt(linea.unidadesPorCaja || linea.cantCaja || linea.un_x_caja || 1, 10);
+    if (isNaN(upCaja) || upCaja < 1) upCaja = 1;
     lineasReposicion.push({
       cod: linea.cod,
       desc: linea.desc,
       un: linea.un || 'UND',
       categoria: linea.categoria || '—',
-      cantUnidades: cant,  // ← lo que el admin quiere retirar
+      cantUnidades: cant,
       cajasEsperadas: Math.ceil(cant / upCaja),
       unidadesPorCaja: upCaja,
-      cantCaja: upCaja
+      cantCaja: upCaja,
+      ean: linea.ean || '',
+      dun: linea.dun || ''
     });
   });
 
@@ -5137,11 +5141,9 @@ function enviarReposicion() {
   ordenes.unshift(repOC);
   saveOrdenes(ordenes);
 
-  // Esperar que el sheet se actualice antes de mandar la alerta
-  // para que el operario pueda encontrar la OC al hacer sync
-  showToast('Guardando reposición...');
+  // Pequeño delay para que el sheet se actualice antes de mandar la alerta
+  showToast('Enviando reposición...');
   setTimeout(function() {
-    // Enviar alerta al operario
     var valorAlerta = repId + '|' + (repOC.proveedor) + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
     fetch(GAS_URL, {
       method: 'POST',
@@ -5149,7 +5151,7 @@ function enviarReposicion() {
       body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: userObj.filaAlerta })
     });
     showToast('✅ Reposición enviada a ' + operarioNombre);
-  }, 3000); // 3 segundos para que el sheet se actualice
+  }, 800);
 }
 
 // ── FIN REPOSICIÓN ─────────────────────────────────────────────
