@@ -4706,7 +4706,11 @@ function guardarOCActual() {
 }
 
 function updateBadgeOrdenes() {
-  var ordenes = loadOrdenes();
+  var ordenes = loadOrdenes().filter(function(oc) {
+    if (oc.origen === 'admin_compras' && !oc.enviadoSupervisor) return false;
+    if (oc.esReposicion === true) return false;
+    return true;
+  });
   var badge = document.getElementById('badge-ordenes');
   if (badge) badge.textContent = ordenes.length;
 }
@@ -4831,7 +4835,7 @@ function renderOrdenes() {
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
         renderResumenEscaneo(oc) +
         renderItemsFueraOCReporte(oc) +
-        renderLineasOCTable(oc.lineas) +
+        renderLineasOCTable(oc.lineas, oc.id) +
         '<div class="oc-actions">' +
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
           (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
@@ -4942,8 +4946,9 @@ function renderResumenEscaneo(oc) {
   return html;
 }
 
-function renderLineasOCTable(lineas) {
+function renderLineasOCTable(lineas, ocId) {
   if (!lineas || lineas.length === 0) return '<p style="font-size:12px; color:var(--c-text3);">Sin líneas</p>';
+  var uid = ocId ? String(ocId).replace(/[^a-zA-Z0-9_-]/g, '_') : 'noid';
 
   // Resumen rápido
   var total     = lineas.length;
@@ -4954,40 +4959,39 @@ function renderLineasOCTable(lineas) {
   }).length;
 
   var resumen =
-    '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
-      '<span style="font-size:11px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); padding:3px 10px; color:var(--c-text2);">' +
-        '<b>' + total + '</b> líneas' +
-      '</span>' +
-      '<span style="font-size:11px; background:var(--c-green-bg); border:1px solid var(--c-green); border-radius:var(--radius-sm); padding:3px 10px; color:var(--c-green);">' +
-        '✓ <b>' + completas + '</b> completas' +
-      '</span>' +
-      (total - completas > 0
-        ? '<span style="font-size:11px; background:var(--c-red-bg,#2a1010); border:1px solid var(--c-red); border-radius:var(--radius-sm); padding:3px 10px; color:var(--c-red);">⚠ <b>' + (total - completas) + '</b> con diferencia</span>'
-        : '') +
-      (conLote > 0
-        ? '<span style="font-size:11px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); padding:3px 10px; color:var(--c-text2);"><i class="ti ti-tag"></i> <b>' + conLote + '</b> con lote</span>'
-        : '') +
+    '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">' +
+      '<span style="font-size:12px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); padding:4px 12px; color:var(--c-text2);"><b>' + total + '</b> líneas</span>' +
+      '<span style="font-size:12px; background:var(--c-green-bg); border:1px solid var(--c-green); border-radius:var(--radius-sm); padding:4px 12px; color:var(--c-green);">✓ <b>' + completas + '</b> completas</span>' +
+      (total - completas > 0 ? '<span style="font-size:12px; background:var(--c-red-bg,#2a1010); border:1px solid var(--c-red); border-radius:var(--radius-sm); padding:4px 12px; color:var(--c-red);">⚠ <b>' + (total-completas) + '</b> con diferencia</span>' : '') +
+      (conLote > 0 ? '<span style="font-size:12px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); padding:4px 12px; color:var(--c-text2);"><i class="ti ti-tag"></i> <b>' + conLote + '</b> con lote</span>' : '') +
     '</div>';
 
   var tieneFecha = lineas.some(function(l){
-    return l.fechaLote ||
-           (l.divisiones && l.divisiones.some(function(d){ return d.mes || d.anio; }));
+    return l.fechaLote || (l.divisiones && l.divisiones.some(function(d){ return d.mes || d.anio; }));
   });
-  var tieneLote  = lineas.some(function(l){
-    return l.lote ||
-           (l.divisiones && l.divisiones.some(function(d){ return d.lote; }));
+  var tieneLote = lineas.some(function(l){
+    return l.lote || (l.divisiones && l.divisiones.some(function(d){ return d.lote; }));
   });
+  var esPalet = lineas.some(function(l){ return l.divisiones; });
 
-  var html = resumen +
-    '<div class="table-wrap oc-lineas-table"><table><thead><tr>' +
-    '<th>Código</th><th>Artículo</th>' +
-    '<th style="text-align:center">Esp.</th>' +
-    '<th style="text-align:center">Esc.</th>' +
-    (tieneFecha ? '<th>Fecha</th>' : '') +
-    (tieneLote  ? '<th>Lote</th>'  : '') +
-    '<th>Estado</th></tr></thead><tbody>';
+  // Buscador (solo para palets o cuando hay muchos artículos)
+  var buscador = (esPalet || lineas.length > 5)
+    ? '<div style="margin-bottom:10px;">' +
+        '<input type="text" id="palet-search-' + uid + '" placeholder="🔍 Buscar artículo..." oninput="filtrarFilasPalet(\'' + uid + '\')" ' +
+        'style="width:100%; padding:7px 12px; font-size:13px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); box-sizing:border-box;" /></div>'
+    : '';
 
-  lineas.forEach(function(l) {
+  var html = resumen + buscador +
+    '<div class="table-wrap oc-lineas-table"><table id="palet-table-' + uid + '" style="font-size:13px;"><thead><tr>' +
+    (esPalet ? '<th style="width:36px; text-align:center; padding:8px 4px;"><input type="checkbox" title="Seleccionar todos" onchange="toggleTodosChk(\'' + uid + '\', this.checked)" /></th>' : '<th style="width:36px;"></th>') +
+    '<th style="padding:8px;">Código</th><th style="padding:8px;">Artículo</th>' +
+    '<th style="text-align:center; padding:8px;">Esp.</th>' +
+    '<th style="text-align:center; padding:8px;">Esc.</th>' +
+    (tieneFecha ? '<th style="padding:8px;">Fecha</th>' : '') +
+    (tieneLote  ? '<th style="padding:8px;">Lote</th>'  : '') +
+    '<th style="padding:8px;">Estado</th></tr></thead><tbody>';
+
+  lineas.forEach(function(l, i) {
     var badge    = getBadge(l);
     var uCtrlL  = l.unidadesControladas || 0;
     var uEspL   = l.cantUnidades        || 0;
@@ -4999,28 +5003,33 @@ function renderLineasOCTable(lineas) {
     if (isNaN(upCajaL) || upCajaL < 1) upCajaL = 1;
 
     if (l.divisiones && l.divisiones.length > 0) {
-      // Fila header del artículo (totales)
-      html += '<tr style="background:rgba(255,255,255,0.03);">' +
-        '<td class="mono" style="font-size:11px;">' + escHtml(l.cod) + '</td>' +
-        '<td style="font-weight:600; color:' + (ok?'var(--c-green)':sobraL?'var(--c-red)':uCtrlL>0?'var(--c-amber)':'inherit') + ';">' + escHtml(l.desc) + '</td>' +
-        '<td style="text-align:center; color:var(--c-text2);">' + uEspL + ' u.</td>' +
-        '<td style="text-align:center; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' \u26a0' : ok ? ' \u2713' : '') + '</td>' +
-        (tieneFecha ? '<td></td>' : '') +
-        (tieneLote  ? '<td></td>' : '') +
-        '<td><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
+      // Fila header del artículo — checkbox con key = índice de línea
+      html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '" style="background:rgba(255,255,255,0.03);">' +
+        '<td style="text-align:center; padding:8px 4px;"></td>' +
+        '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
+        '<td style="font-weight:600; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + '</td>' +
+        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspL + ' u.</td>' +
+        '<td style="text-align:center; padding:8px; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' ⚠' : ok ? ' ✓' : '') + '</td>' +
+        (tieneFecha ? '<td style="padding:8px;"></td>' : '') +
+        (tieneLote  ? '<td style="padding:8px;"></td>' : '') +
+        '<td style="padding:8px;"><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
       '</tr>';
-      // Sub-filas por división
-      l.divisiones.forEach(function(div) {
+      l.divisiones.forEach(function(div, j) {
         var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
+        if (divCant === 0) return; // ocultar divisiones vacías
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
-        html += '<tr>' +
-          '<td></td>' +
-          '<td style="padding-left:20px; font-size:11px; color:var(--c-text2);">↳ Lote ' + escHtml(div.lote || '—') + '</td>' +
-          '<td style="text-align:center; color:var(--c-text2); font-size:11px;">' + divCant + ' u.</td>' +
-          '<td></td>' +
-          (tieneFecha ? '<td style="font-size:11px; color:var(--c-text2);">' + escHtml(divFecha) + '</td>' : '') +
-          (tieneLote  ? '<td class="mono" style="font-size:11px;">' + escHtml(div.lote || '—') + '</td>' : '') +
-          '<td></td>' +
+        var chkKey = i + '-' + j;
+        html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
+          '<td style="text-align:center; padding:6px 4px;">' +
+            '<input type="checkbox" class="palet-chk-' + uid + '" data-key="' + chkKey + '" data-ocid="' + uid + '" title="Seleccionar para reposición" />' +
+          '</td>' +
+          '<td style="padding:6px 8px;"></td>' +
+          '<td style="padding:6px 8px 6px 20px; font-size:12px; color:var(--c-text2);">↳ Lote ' + escHtml(div.lote || '—') + '</td>' +
+          '<td style="text-align:center; padding:6px 8px; color:var(--c-text2); font-size:12px;">' + divCant + ' u.</td>' +
+          '<td style="padding:6px 8px;"></td>' +
+          (tieneFecha ? '<td style="font-size:12px; color:var(--c-text2); padding:6px 8px;">' + escHtml(divFecha) + '</td>' : '') +
+          (tieneLote  ? '<td class="mono" style="font-size:12px; padding:6px 8px;">' + escHtml(div.lote || '—') + '</td>' : '') +
+          '<td style="padding:6px 8px;"></td>' +
         '</tr>';
       });
     } else {
@@ -5029,14 +5038,18 @@ function renderLineasOCTable(lineas) {
         var p = l.fechaLote.split('-');
         fechaFmt = p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : p.length === 2 ? p[1]+'/'+p[0] : l.fechaLote;
       }
-      html += '<tr>' +
-        '<td class="mono" style="font-size:11px;">' + escHtml(l.cod) + '</td>' +
-        '<td style="font-weight:' + (ok?'600':'400') + '; color:' + (ok?'var(--c-green)':sobraL?'var(--c-red)':uCtrlL>0?'var(--c-amber)':'inherit') + ';">' + escHtml(l.desc) + (l.agregadaEnEscaneo ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:4px;">+ AGREGADA</span>' : '') + '</td>' +
-        '<td style="text-align:center; color:var(--c-text2);">' + uEspL + ' u.</td>' +
-        '<td style="text-align:center; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' \u26a0' : ok ? ' \u2713' : '') + (l.cajasEscaneadas > 0 ? '<span style="font-size:10px; color:var(--c-text3); display:block;">(' + l.cajasEscaneadas + ' caja' + (l.cajasEscaneadas!==1?'s':'') + (l.unidadesSueltas>0?'+'+l.unidadesSueltas+'u.s.':'') + ')</span>' : '') + '</td>' +
-        (tieneFecha ? '<td style="font-size:11px; color:var(--c-text2); white-space:nowrap;">' + (fechaFmt || '—') + '</td>' : '') +
-        (tieneLote  ? '<td class="mono" style="font-size:11px;">' + escHtml(l.lote || '—') + '</td>' : '') +
-        '<td><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
+      var chkKey = String(i);
+      html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
+        '<td style="text-align:center; padding:8px 4px;">' +
+          '<input type="checkbox" class="palet-chk-' + uid + '" data-key="' + chkKey + '" data-ocid="' + uid + '" />' +
+        '</td>' +
+        '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
+        '<td style="font-weight:' + (ok?'600':'400') + '; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + (l.agregadaEnEscaneo ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:4px;">+ AGREGADA</span>' : '') + '</td>' +
+        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspL + ' u.</td>' +
+        '<td style="text-align:center; padding:8px; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' ⚠' : ok ? ' ✓' : '') + (l.cajasEscaneadas > 0 ? '<span style="font-size:10px; color:var(--c-text3); display:block;">(' + l.cajasEscaneadas + ' caja' + (l.cajasEscaneadas!==1?'s':'') + (l.unidadesSueltas>0?'+'+l.unidadesSueltas+'u.s.':'') + ')</span>' : '') + '</td>' +
+        (tieneFecha ? '<td style="font-size:12px; color:var(--c-text2); padding:8px; white-space:nowrap;">' + (fechaFmt || '—') + '</td>' : '') +
+        (tieneLote  ? '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.lote || '—') + '</td>' : '') +
+        '<td style="padding:8px;"><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
       '</tr>';
     }
   });
@@ -5044,8 +5057,22 @@ function renderLineasOCTable(lineas) {
 }
 
 function toggleOCBody(id) {
-  var body = document.getElementById(id);
-  if (body) body.classList.toggle('open');
+  var input = document.getElementById('palet-search-' + uid);
+  if (!input) return;
+  var q = input.value.toLowerCase().trim();
+  var table = document.getElementById('palet-table-' + uid);
+  if (!table) return;
+  table.querySelectorAll('tr.palet-row').forEach(function(tr) {
+    var desc = (tr.dataset.desc || '').toLowerCase();
+    tr.style.display = (!q || desc.indexOf(q) > -1) ? '' : 'none';
+  });
+}
+
+function toggleTodosChk(uid, checked) {
+  document.querySelectorAll('.palet-chk-' + uid).forEach(function(chk) {
+    var tr = chk.closest('tr');
+    if (tr && tr.style.display !== 'none') chk.checked = checked;
+  });
 }
 
 function mostrarConfirmEnvioEscaneo(oc) {
@@ -5121,6 +5148,14 @@ function abrirModalReposicion(ocId) {
   if (!oc) return;
   _reposicionOC = oc;
 
+  // Leer checkboxes seleccionados del reporte (si hay alguno marcado, pre-filtramos)
+  var uid = String(ocId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  var seleccionados = new Set();
+  document.querySelectorAll('.palet-chk-' + uid).forEach(function(chk) {
+    if (chk.checked) seleccionados.add(chk.dataset.key);
+  });
+  var haySeleccion = seleccionados.size > 0;
+
   // Subtítulo
   document.getElementById('rep-subtitulo').textContent =
     'Palet ' + (oc.palet || '—') + ' · ' + (oc.proveedor || '—');
@@ -5141,19 +5176,24 @@ function abrirModalReposicion(ocId) {
       html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="3" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc || linea.cod || '—') + '</td></tr>';
       linea.divisiones.forEach(function(div, j) {
         var divCant = (parseInt(div.cajas, 10) || 0) * upCajaM;
+        if (divCant === 0) return; // ocultar divisiones vacías
+        var chkKey = i + '-' + j;
+        var preseleccionado = haySeleccion && seleccionados.has(chkKey);
         html += '<tr style="border-top:1px solid rgba(255,255,255,0.05);">' +
           '<td style="padding:6px 8px 6px 20px; color:var(--c-text2); font-size:12px;">Lote ' + escHtml(div.lote || '—') + ' &nbsp;·&nbsp; ' + escHtml((div.mes || '—') + '/' + (div.anio || '—')) + '</td>' +
           '<td style="text-align:center; padding:6px 8px; color:var(--c-text2);">' + divCant + ' u.</td>' +
-          '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-' + i + '-' + j + '" min="0" max="' + divCant + '" value="0" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:6px; color:var(--c-text1);" /></td>' +
+          '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-' + i + '-' + j + '" min="0" max="' + divCant + '" value="' + (preseleccionado ? divCant : 0) + '" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid ' + (preseleccionado ? 'var(--c-green)' : 'var(--c-border)') + '; border-radius:6px; color:var(--c-text1);" /></td>' +
         '</tr>';
       });
     } else {
+      var chkKey = String(i);
+      var preseleccionado = haySeleccion && seleccionados.has(chkKey);
       html += '<tr style="border-top:1px solid var(--c-border);">' +
         '<td style="padding:8px;">' + escHtml(linea.desc || linea.cod || '—') + '</td>' +
         '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + (linea.cantUnidades || 0) + ' u.</td>' +
         '<td style="text-align:center; padding:8px;">' +
-          '<input type="number" id="rep-cant-' + i + '" min="0" max="' + (linea.cantUnidades || 0) + '" value="0" ' +
-          'style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:6px; color:var(--c-text1);" />' +
+          '<input type="number" id="rep-cant-' + i + '" min="0" max="' + (linea.cantUnidades || 0) + '" value="' + (preseleccionado ? (linea.cantUnidades || 0) : 0) + '" ' +
+          'style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid ' + (preseleccionado ? 'var(--c-green)' : 'var(--c-border)') + '; border-radius:6px; color:var(--c-text1);" />' +
         '</td>' +
       '</tr>';
     }
@@ -6919,7 +6959,7 @@ function renderReporteCompras() {
           '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + (oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—') + '</div></div>' +
         '</div>' +
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
-        renderLineasOCTable(oc.lineas) +
+        renderLineasOCTable(oc.lineas, oc.id) +
         '<div class="oc-actions">' + acciones + '</div>' +
       '</div>';
     container.appendChild(card);
