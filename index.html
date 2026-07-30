@@ -3252,15 +3252,17 @@ function finalizarControl() {
     }).catch(function(){});
   }, 120000); // 2 minutos
 
-  // Si es operario: quedarse en escaneo y LIBERAR su slot en ALERTAS
+  // Si es operario: quedarse en escaneo
+  // Esperar 30 segundos antes de liberar el slot para que el admin vea FINALIZADO
   if (CURRENT_USER && CURRENT_USER.rol === 'operario') {
-    // Borrar ALERTAS para que el admin pueda mandar otra O.C.
     if (CURRENT_USER.filaAlerta) {
-      fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta })
-      });
+      setTimeout(function() {
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta })
+        });
+      }, 30000); // 30 segundos para que el admin vea FINALIZADO
     }
     switchPanel('scanner');
     showToast(todoCompleto ? '\u2705 O.C. finalizada \u2014 esperando la pr\u00f3xima' : '\u26a0 O.C. guardada con diferencias');
@@ -5087,13 +5089,20 @@ function enviarReposicion() {
   var lineasReposicion = [];
   (_reposicionOC.lineas || []).forEach(function(linea, i) {
     var cantEl = document.getElementById('rep-cant-' + i);
-    var cant = cantEl ? parseInt(cantEl.value, 10) : 0;
-    if (cant > 0) {
-      lineasReposicion.push(Object.assign({}, linea, {
-        cantUnidades: cant,
-        cajasEsperadas: Math.ceil(cant / (linea.unidadesPorCaja || linea.cantCaja || 1))
-      }));
-    }
+    var cantRaw = cantEl ? cantEl.value : '0';
+    var cant = parseInt(cantRaw, 10);
+    if (isNaN(cant) || cant <= 0) return; // saltar si no es número válido o es 0
+    var upCaja = linea.unidadesPorCaja || linea.cantCaja || 1;
+    lineasReposicion.push({
+      cod: linea.cod,
+      desc: linea.desc,
+      un: linea.un || 'UND',
+      categoria: linea.categoria || '—',
+      cantUnidades: cant,  // ← lo que el admin quiere retirar
+      cajasEsperadas: Math.ceil(cant / upCaja),
+      unidadesPorCaja: upCaja,
+      cantCaja: upCaja
+    });
   });
 
   if (lineasReposicion.length === 0) { showToast('⚠ Indicá al menos una cantidad a retirar'); return; }
