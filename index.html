@@ -5096,18 +5096,15 @@ function enviarReposicion() {
     if (isNaN(cant) || cant <= 0) return;
     var upCaja = parseInt(linea.unidadesPorCaja || linea.cantCaja || linea.un_x_caja || 1, 10);
     if (isNaN(upCaja) || upCaja < 1) upCaja = 1;
-    lineasReposicion.push({
-      cod: linea.cod,
-      desc: linea.desc,
-      un: linea.un || 'UND',
-      categoria: linea.categoria || '—',
-      cantUnidades: cant,
-      cajasEsperadas: Math.ceil(cant / upCaja),
-      unidadesPorCaja: upCaja,
-      cantCaja: upCaja,
-      ean: linea.ean || '',
-      dun: linea.dun || ''
-    });
+    // Copiar TODO de la linea original y solo pisar las cantidades
+    var lineaRep = JSON.parse(JSON.stringify(linea));
+    lineaRep.cantUnidades    = cant;
+    lineaRep.cajasEsperadas  = Math.ceil(cant / upCaja);
+    lineaRep.cajasEscaneadas = 0;
+    lineaRep.unidadesControladas = 0;
+    lineaRep.unidadesPorCaja = upCaja;
+    lineaRep.cantCaja        = upCaja;
+    lineasReposicion.push(lineaRep);
   });
 
   if (lineasReposicion.length === 0) { showToast('⚠ Indicá al menos una cantidad a retirar'); return; }
