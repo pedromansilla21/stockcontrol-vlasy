@@ -5069,13 +5069,12 @@ function abrirModalReposicion(ocId) {
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Poblar select de operarios
-  var usuarios = loadUsers ? loadUsers() : [];
-  var operarios = usuarios.filter(function(u){ return (u.rol || 'operario') === 'operario'; });
+  // Poblar select de operarios — igual que enviarOCAlEscaneo
+  var usuarios = loadUsers().filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
   var sel = document.getElementById('rep-operario-select');
   sel.innerHTML = '<option value="">— Seleccioná un operario —</option>';
-  operarios.forEach(function(u) {
-    sel.innerHTML += '<option value="' + escHtml(u.name) + '">' + escHtml(u.name) + '</option>';
+  usuarios.forEach(function(u) {
+    sel.innerHTML += '<option value="' + u.filaAlerta + '">' + escHtml(u.name) + '</option>';
   });
 
   document.getElementById('modal-reposicion').classList.add('open');
@@ -5083,8 +5082,10 @@ function abrirModalReposicion(ocId) {
 
 function enviarReposicion() {
   if (!_reposicionOC) return;
-  var operarioNombre = document.getElementById('rep-operario-select').value;
-  if (!operarioNombre) { showToast('⚠ Elegí un operario'); return; }
+  var sel = document.getElementById('rep-operario-select');
+  var filaAlerta = sel ? parseInt(sel.value, 10) : 0;
+  var operarioNombre = sel ? sel.options[sel.selectedIndex].text : '';
+  if (!filaAlerta || isNaN(filaAlerta)) { showToast('⚠ Elegí un operario'); return; }
 
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
@@ -5092,7 +5093,7 @@ function enviarReposicion() {
     var cantEl = document.getElementById('rep-cant-' + i);
     var cantRaw = cantEl ? cantEl.value : '0';
     var cant = parseInt(cantRaw, 10);
-    if (isNaN(cant) || cant <= 0) return; // saltar si no es número válido o es 0
+    if (isNaN(cant) || cant <= 0) return;
     var upCaja = parseInt(linea.unidadesPorCaja || linea.cantCaja || linea.un_x_caja || 1, 10);
     if (isNaN(upCaja) || upCaja < 1) upCaja = 1;
     lineasReposicion.push({
@@ -5111,12 +5112,6 @@ function enviarReposicion() {
 
   if (lineasReposicion.length === 0) { showToast('⚠ Indicá al menos una cantidad a retirar'); return; }
 
-  // Buscar filaAlerta del operario
-  var usuarios = loadUsers ? loadUsers() : [];
-  var userObj = usuarios.find(function(u){ return u.name === operarioNombre; });
-  if (!userObj || !userObj.filaAlerta) { showToast('⚠ No se encontró la fila de alerta del operario'); return; }
-
-  // Crear objeto de reposición (basado en la OC del palet)
   var repId = 'REP_' + _reposicionOC.id + '_' + Date.now();
   var repOC = {
     id: repId,
@@ -5136,22 +5131,26 @@ function enviarReposicion() {
     estadoManual: 'pendiente'
   };
 
-  // Guardar en ordenes locales Y en el sheet
+  // Guardar en ordenes (para que el operario pueda sincronizar)
   var ordenes = loadOrdenes();
   ordenes.unshift(repOC);
   saveOrdenes(ordenes);
 
-  // Pequeño delay para que el sheet se actualice antes de mandar la alerta
+  document.getElementById('modal-reposicion').classList.remove('open');
   showToast('Enviando reposición...');
+
+  // Enviar alerta con el mismo mecanismo que enviarOCAlEscaneo
   setTimeout(function() {
-    var valorAlerta = repId + '|' + (repOC.proveedor) + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+    var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
-      body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: userObj.filaAlerta })
+      body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
     });
     showToast('✅ Reposición enviada a ' + operarioNombre);
   }, 800);
+
+  _reposicionOC = null;
 }
 
 // ── FIN REPOSICIÓN ─────────────────────────────────────────────
