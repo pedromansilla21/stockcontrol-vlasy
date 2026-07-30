@@ -3146,15 +3146,17 @@ function finalizarControl() {
       }
     }
     // 2. Fecha y lote obligatorios en todas las líneas (divididas o no).
-    //    Para líneas divididas, cada parte debe tener fecha y lote.
-    if (r.divisiones && r.divisiones.length > 0) {
-      r.divisiones.forEach(function(d, j) {
-        if (!d.mes || !d.anio) errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta la fecha.');
-        if (!d.lote)           errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el lote.');
-      });
-    } else {
-      if (!r.fechaLote) errores.push('• ' + desc + ': falta la fecha.');
-      if (!r.lote)      errores.push('• ' + desc + ': falta el lote.');
+    //    En reposición no aplica (no se controla fecha/lote al retirar).
+    if (!remitoDatos.esReposicion) {
+      if (r.divisiones && r.divisiones.length > 0) {
+        r.divisiones.forEach(function(d, j) {
+          if (!d.mes || !d.anio) errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta la fecha.');
+          if (!d.lote)           errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el lote.');
+        });
+      } else {
+        if (!r.fechaLote) errores.push('• ' + desc + ': falta la fecha.');
+        if (!r.lote)      errores.push('• ' + desc + ': falta el lote.');
+      }
     }
   });
 
@@ -3189,8 +3191,10 @@ function finalizarControl() {
     contenedor:   remitoDatos.contenedor || '—',
     responsable:  remitoDatos.operario   || '—',
     obs:          remitoDatos.obs        || '',
-    esPalet:      !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
-    lineas:       JSON.parse(JSON.stringify(remito)),
+    esPalet:         !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
+    esReposicion:    !!(remitoDatos.esReposicion),
+    paletOriginalId: remitoDatos.paletOriginalId || null,
+    lineas:          JSON.parse(JSON.stringify(remito)),
     // El detalle de escaneos (registro) ya no viaja en esta celda — se
     // sincronizó aparte a la hoja "ESCANEOS" (ver arriba).
     itemsFueraOC: JSON.parse(JSON.stringify(itemsFueraOC)),
@@ -5281,7 +5285,9 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     ocId: oc.id,
     nro: oc.nro, proveedor: oc.proveedor, fecha: oc.fecha,
     lote: oc.lote || '\u2014', palet: oc.palet, contenedor: oc.contenedor,
-    operario: oc.responsable, obs: oc.obs, nroProv: oc.nroProv || ''
+    operario: oc.responsable, obs: oc.obs, nroProv: oc.nroProv || '',
+    esReposicion: oc.esReposicion || false,
+    paletOriginalId: oc.paletOriginalId || null
   };
   remito        = JSON.parse(JSON.stringify(oc.lineas));
   registro      = JSON.parse(JSON.stringify(oc.registro || []));
