@@ -5123,22 +5123,24 @@ function enviarReposicion() {
     estadoManual: 'pendiente'
   };
 
-  // Guardar en ordenes locales
+  // Guardar en ordenes locales Y en el sheet
   var ordenes = loadOrdenes();
   ordenes.unshift(repOC);
   saveOrdenes(ordenes);
 
-  // Enviar alerta al operario
-  var valorAlerta = repId + '|' + (repOC.proveedor) + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
-  fetch(GAS_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: userObj.filaAlerta })
-  });
-
-  document.getElementById('modal-reposicion').classList.remove('open');
-  showToast('✅ Reposición enviada a ' + operarioNombre);
-  _reposicionOC = null;
+  // Esperar que el sheet se actualice antes de mandar la alerta
+  // para que el operario pueda encontrar la OC al hacer sync
+  showToast('Guardando reposición...');
+  setTimeout(function() {
+    // Enviar alerta al operario
+    var valorAlerta = repId + '|' + (repOC.proveedor) + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: userObj.filaAlerta })
+    });
+    showToast('✅ Reposición enviada a ' + operarioNombre);
+  }, 3000); // 3 segundos para que el sheet se actualice
 }
 
 // ── FIN REPOSICIÓN ─────────────────────────────────────────────
