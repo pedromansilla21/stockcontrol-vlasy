@@ -5208,6 +5208,23 @@ async function abrirModalReposicion(ocId) {
         });
         // Actualizar _reposicionOC con los datos frescos
         _reposicionOC = Object.assign({}, oc, { lineas: lineasParaModal });
+
+        // Actualizar también la OC en ordenes locales para que el resumen del reporte sea correcto
+        var ordenesLocal = loadOrdenes();
+        var ocIdx = ordenesLocal.findIndex(function(o){ return o.id === oc.id; });
+        if (ocIdx >= 0) {
+          lineasParaModal.forEach(function(lineaFresca) {
+            var lineaLocal = ordenesLocal[ocIdx].lineas ? ordenesLocal[ocIdx].lineas.find(function(l){ return String(l.cod) === String(lineaFresca.cod); }) : null;
+            if (lineaLocal) {
+              lineaLocal.cantUnidades = lineaFresca.cantUnidades;
+              if (lineaFresca.divisiones && lineaFresca.divisiones.length > 0) {
+                lineaLocal.divisiones = lineaFresca.divisiones;
+              }
+            }
+          });
+          saveOrdenes(ordenesLocal);
+          setTimeout(function(){ renderOrdenes(); }, 100);
+        }
       }
     }
   } catch(e) { console.warn('No se pudo leer HISTORIAL DE PALETS, usando datos locales:', e); }
@@ -5272,14 +5289,23 @@ async function abrirModalReposicion(ocId) {
 }
 
 var _repOperarioOcupado = false;
+var _repVerificando = false;
 
 function verificarEstadoOperarioRep(filaAlerta) {
   var estadoEl = document.getElementById('rep-operario-estado');
+  var btnEnviar = document.querySelector('#modal-reposicion .btn-success');
   if (!estadoEl) return;
-  if (!filaAlerta) { estadoEl.innerHTML = ''; _repOperarioOcupado = false; return; }
+  if (!filaAlerta) {
+    estadoEl.innerHTML = '';
+    _repOperarioOcupado = false;
+    _repVerificando = false;
+    if (btnEnviar) btnEnviar.disabled = false;
+    return;
+  }
 
   estadoEl.innerHTML = '<span style="color:var(--c-text3);">Verificando...</span>';
-  _repOperarioOcupado = false;
+  _repVerificando = true;
+  if (btnEnviar) btnEnviar.disabled = true;
 
   fetch(GAS_URL + '?accion=leerRango&rango=ALERTAS!A' + filaAlerta, { cache: 'no-store' })
     .then(function(r){ return r.json(); })
@@ -5302,6 +5328,10 @@ function verificarEstadoOperarioRep(filaAlerta) {
     .catch(function() {
       estadoEl.innerHTML = '<span style="color:var(--c-text3);">Sin conexión</span>';
       _repOperarioOcupado = false;
+    })
+    .finally(function() {
+      _repVerificando = false;
+      if (btnEnviar) btnEnviar.disabled = false;
     });
 }
 
@@ -5311,6 +5341,9 @@ function enviarReposicion() {
   var filaAlerta = sel ? parseInt(sel.value, 10) : 0;
   var operarioNombre = sel ? sel.options[sel.selectedIndex].text : '';
   if (!filaAlerta || isNaN(filaAlerta)) { showToast('⚠ Elegí un operario'); return; }
+
+  // Si todavía está verificando el estado del operario, no enviar
+  if (_repVerificando) { showToast('⏳ Esperá, verificando disponibilidad del operario...'); return; }
 
   // Si el operario está ocupado, pedir confirmación antes de pisar
   if (_repOperarioOcupado) {
