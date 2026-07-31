@@ -4291,6 +4291,8 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     var ubicacion = oc.ubicacion || (document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '') || '—';
     var proveedor = oc.proveedor || '—'; // Marca = Proveedor
     var fechaHoy = new Date().toLocaleDateString('es-AR');
+    // M=CONTROL PALET y N=CONTROL UBICACIÓN: fecha en que el operario COMENZÓ el escaneo
+    var fechaControlPalet = remitoDatos.fechaInicioEscaneo || fechaHoy;
     
     // Agrupar líneas: Cod Prod + Lote + Vencimiento + Palet = misma fila
     var filasAgrupadas = {};
@@ -4328,8 +4330,8 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
               un: linea.un || 'UND',
               ubicacion: ubicacion,
               observacion: oc.obs || '',
-              controlPalet: fechaHoy,
-              controlUbicacion: fechaHoy,
+              controlPalet: fechaControlPalet,
+              controlUbicacion: fechaControlPalet,
               operario: escaneadoPor || '—'
             };
           }
@@ -4368,8 +4370,8 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           ubicacion: ubicacion,
           vencimiento: '—',
           observacion: oc.obs || '',
-          controlPalet: fechaHoy,
-          controlUbicacion: fechaHoy,
+          controlPalet: fechaControlPalet,
+          controlUbicacion: fechaControlPalet,
           operario: escaneadoPor || '—'
         };
       }
@@ -5588,7 +5590,8 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     operario: oc.responsable, obs: oc.obs, nroProv: oc.nroProv || '',
     esReposicion: oc.esReposicion || false,
     paletOriginalId: oc.paletOriginalId || null,
-    ubicacion: oc.ubicacion || '—'
+    ubicacion: oc.ubicacion || '—',
+    fechaInicioEscaneo: new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'})
   };
   remito        = JSON.parse(JSON.stringify(oc.lineas));
   registro      = JSON.parse(JSON.stringify(oc.registro || []));
