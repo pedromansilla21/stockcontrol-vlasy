@@ -2624,7 +2624,7 @@ function renderTablaControl() {
     var r      = item.r;
     var i      = item.i;
     var uCtrl  = r.unidadesControladas || 0;
-    var uEsp   = r.cantUnidades        || 0;
+    var uEsp = _uEspBase(r);
     var diff   = uCtrl - uEsp;          // diferencia en unidades
     var completo = uCtrl > 0 && diff === 0;
     var sobra    = diff > 0;
@@ -3209,7 +3209,15 @@ function finalizarControl() {
   var escaneadoPorVal = escaneadoPorInput ? escaneadoPorInput.value.trim() : '';
   if (!escaneadoPorVal && CURRENT_USER) escaneadoPorVal = CURRENT_USER.name;
   if (escaneadoPorInput) escaneadoPorInput.value = '';
-  ocObj.escaneadoPor = escaneadoPorVal;  // se guarda para poder loguear bien si más tarde se agrega algo desde Reportes
+  ocObj.escaneadoPor = escaneadoPorVal;
+
+  // Guardar la cantidad esperada original al momento del escaneo,
+  // para que reposiciones futuras no distorsionen el estado del palet
+  (ocObj.lineas || []).forEach(function(l) {
+    if (typeof l.cantUnidadesAlEscaneo === 'undefined') {
+      l.cantUnidadesAlEscaneo = l.cantUnidades || 0;
+    }
+  });
 
   if (ocObj.esReposicion) {
     // Las OCs de reposición no se conservan en ordenes — se eliminan al finalizar
@@ -3288,7 +3296,7 @@ function finalizarControl() {
 
 function getBadge(r) {
   var uCtrl = r.unidadesControladas || 0;
-  var uEsp  = r.cantUnidades        || 0;
+  var uEsp = _uEspBase(r);
   var diff  = uCtrl - uEsp;
   if (uCtrl === 0) return { cls: 'badge-neutral', txt: 'Pendiente' };
   if (diff  === 0) return { cls: 'badge-ok',      txt: '\u2713 Completo' };
@@ -4098,7 +4106,7 @@ async function _guardarDetalleHistorial(oc, escaneadoPor) {
   try {
     var filas = oc.lineas.map(function(l) {
       var uCtrl = l.unidadesControladas || 0;
-      var uEsp  = l.cantUnidades        || 0;
+      var uEsp = _uEspBase(l);
       var diferencia = uCtrl - uEsp;
       var estadoLinea = uCtrl === 0 ? 'Sin escanear' :
                         diferencia === 0 ? 'Completo' : 'Con diferencia';
@@ -4147,7 +4155,7 @@ async function _agregarDetalleHistorial(oc, lineasNuevas, escaneadoPor) {
     var ahora = new Date().toLocaleString('es-AR');
     var filas = lineasNuevas.map(function(l) {
       var uCtrl = l.unidadesControladas || 0;
-      var uEsp  = l.cantUnidades        || 0;
+      var uEsp = _uEspBase(l);
       var diferencia = uCtrl - uEsp;
       var estadoLinea = uCtrl === 0 ? 'Sin escanear' :
                         diferencia === 0 ? 'Completo' : 'Con diferencia';
@@ -4598,7 +4606,7 @@ async function syncOrdenes() {
 
 function getEstadoOC(oc) {
   if (!oc.lineas || oc.lineas.length === 0) return 'pendiente';
-  var completadas = oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); }).length;
+  var completadas = oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length;
   if (completadas === oc.lineas.length) return 'completo';
   if (completadas > 0 || oc.lineas.some(function(l){ return (l.unidadesControladas||0) > 0; })) return 'parcial';
   return 'pendiente';
@@ -4722,6 +4730,15 @@ function filtrarOC(filtro, btn) {
   renderOrdenes();
 }
 
+// Devuelve la cantidad esperada "base" para comparar con lo escaneado.
+// Usa cantUnidadesAlEscaneo si existe (fijado al escanear), así las
+// reposiciones posteriores no alteran el estado del palet en el reporte.
+function _uEspBase(l) {
+  return typeof l.cantUnidadesAlEscaneo !== 'undefined'
+    ? (l.cantUnidadesAlEscaneo || 0)
+    : (l.cantUnidades || 0);
+}
+
 function renderOrdenes() {
   // Guardar qué cards están abiertas para restaurarlas después del re-render
   var abiertos = [];
@@ -4799,7 +4816,7 @@ function renderOrdenes() {
     var autoLabel = { pendiente: 'Sin escanear', parcial: 'En progreso', completo: '✓ Completo' }[estadoAuto];
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
     var totalLineas = oc.lineas ? oc.lineas.length : 0;
-    var completadas = oc.lineas ? oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); }).length : 0;
+    var completadas = oc.lineas ? oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length : 0;
     var fechaFmt = oc.fecha ? new Date(oc.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '—';
     var savedFmt = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
 
@@ -4885,10 +4902,10 @@ function renderResumenEscaneo(oc) {
   if (!estaControladaOFinalizada || !oc.lineas || oc.lineas.length === 0) return '';
 
   var lineas      = oc.lineas;
-  var completas   = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); });
-  var incompletas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) < (l.cantUnidades||0); });
+  var completas   = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); });
+  var incompletas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) < _uEspBase(l); });
   var sinEscanear = lineas.filter(function(l){ return (l.unidadesControladas||0) === 0; });
-  var conSueltasLines = lineas.filter(function(l){ return (l.unidadesControladas||0) > (l.cantUnidades||0); });
+  var conSueltasLines = lineas.filter(function(l){ return (l.unidadesControladas||0) > _uEspBase(l); });
   var todoCompleto = completas.length === lineas.length;
   var fechaFin = oc.finalizadoAt
     ? new Date(oc.finalizadoAt).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
@@ -4952,7 +4969,7 @@ function renderLineasOCTable(lineas, ocId) {
 
   // Resumen rápido
   var total     = lineas.length;
-  var completas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); }).length;
+  var completas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length;
   var conLote   = lineas.filter(function(l){
     return (l.lote && l.lote.trim()) ||
            (l.divisiones && l.divisiones.some(function(d){ return d.lote && String(d.lote).trim(); }));
@@ -4986,7 +5003,7 @@ function renderLineasOCTable(lineas, ocId) {
   lineas.forEach(function(l, i) {
     var badge    = getBadge(l);
     var uCtrlL  = l.unidadesControladas || 0;
-    var uEspL   = l.cantUnidades        || 0;
+    var uEspL   = _uEspBase(l);
     var diffU   = uCtrlL - uEspL;
     var ok      = uCtrlL > 0 && diffU === 0;
     var sobraL  = diffU > 0;
@@ -5223,7 +5240,13 @@ async function abrirModalReposicion(ocId) {
             }
           });
           saveOrdenes(ordenesLocal);
-          setTimeout(function(){ renderOrdenes(); }, 100);
+          // Actualizar el reporte en background, pero solo si el modal ya está cerrado
+          // para evitar el flash de -4 cajas durante la carga
+          setTimeout(function(){
+            if (!document.getElementById('modal-reposicion').classList.contains('open')) {
+              renderOrdenes();
+            }
+          }, 200);
         }
       }
     }
@@ -5425,6 +5448,7 @@ function enviarReposicion() {
   saveOrdenes(ordenes);
 
   document.getElementById('modal-reposicion').classList.remove('open');
+  renderOrdenes();
   showToast('Enviando reposición...');
 
   // Enviar alerta con el mismo mecanismo que enviarOCAlEscaneo
@@ -5661,7 +5685,7 @@ async function exportarOCExcel(ocId) {
   // Hoja 1: Líneas con estado de escaneo (en unidades)
   var lineasData = oc.lineas.map(function(r) {
     var uCtrl = r.unidadesControladas || 0;
-    var uEsp  = r.cantUnidades        || 0;
+    var uEsp = _uEspBase(r);
     var diffU = uCtrl - uEsp;
     var estado = uCtrl === 0 ? 'Sin escanear' :
                  diffU === 0 ? 'Completo'     :
@@ -5748,7 +5772,7 @@ function exportarTodasOC() {
   ordenes.forEach(function(oc) {
     var estado = getEstadoOC(oc);
     var total = oc.lineas ? oc.lineas.length : 0;
-    var comp = oc.lineas ? oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0); }).length : 0;
+    var comp = oc.lineas ? oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length : 0;
     resumen.push([oc.nro, oc.proveedor, oc.fecha, oc.responsable, estado, total, comp, oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR') : '']);
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), 'Resumen OC');
@@ -8140,7 +8164,7 @@ async function aceptarAlertaEscaneo() {
       </div>
     </div>
     <div style="display:flex; gap:10px;">
-      <button class="btn" style="flex:1;" onclick="document.getElementById('modal-reposicion').classList.remove('open')">Cancelar</button>
+      <button class="btn" style="flex:1;" onclick="document.getElementById('modal-reposicion').classList.remove('open'); renderOrdenes();">Cancelar</button>
       <button class="btn btn-success" style="flex:2;" onclick="enviarReposicion()"><i class="ti ti-send"></i> Enviar al escaneo</button>
     </div>
   </div>
