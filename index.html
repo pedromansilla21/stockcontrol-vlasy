@@ -2207,12 +2207,12 @@ setInterval(function(){
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
 // syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
 // podía saltear ciclos y el operario no recibía la notificación a tiempo.
-// Ahora corre cada 8s sin importar si syncOrdenes terminó o no.
+// Corre cada 3s: más rápido para que el operario reciba alertas sin demora
 setInterval(function(){
   if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
   if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
   if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
-}, 8000);
+}, 3000);
 
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
@@ -5451,17 +5451,18 @@ function enviarReposicion() {
     estadoManual: 'pendiente'
   };
 
-  // Guardar en ordenes (para que el operario pueda sincronizar)
+  // Guardar en ordenes y esperar que el GAS confirme antes de mandar la alerta
   var ordenes = loadOrdenes();
   ordenes.unshift(repOC);
-  saveOrdenes(ordenes);
+  _ordenesCache = ordenes;
+  try { localStorage.setItem(ORDENES_KEY, JSON.stringify(ordenes)); } catch(e) {}
 
   document.getElementById('modal-reposicion').classList.remove('open');
   renderOrdenes();
-  showToast('Enviando reposición...');
+  showToast('Guardando reposición...');
 
-  // Enviar alerta con el mismo mecanismo que enviarOCAlEscaneo
-  setTimeout(function() {
+  // Primero guardar la OC en el Sheet, LUEGO mandar la alerta al operario
+  _saveOrdenesToSheets(ordenes).then(function() {
     var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
     fetch(GAS_URL, {
       method: 'POST',
@@ -5469,7 +5470,18 @@ function enviarReposicion() {
       body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
     });
     showToast('✅ Reposición enviada a ' + operarioNombre);
-  }, 800);
+  }).catch(function() {
+    // Si falla el save, mandar la alerta igual después de un delay
+    setTimeout(function() {
+      var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
+      });
+      showToast('✅ Reposición enviada a ' + operarioNombre);
+    }, 2000);
+  });
 
   _reposicionOC = null;
 }
@@ -8098,9 +8110,10 @@ function _checkAlertaEscaneo() {
     // Verificar si la OC está en caché ANTES de marcarla como vista
     var pendiente = (_ordenesCache || []).find(function(o){ return o.id === ocId; });
     if (!pendiente) {
-      // OC no está en caché todavía — sincronizar y NO marcar como vista
-      // para que el próximo ciclo (8s) lo reintente
-      syncOrdenes().catch(function(){});
+      // OC no está en caché todavía — sincronizar y reintentar en 2s
+      syncOrdenes().then(function() {
+        setTimeout(function() { _checkAlertaEscaneo(); }, 2000);
+      }).catch(function(){});
       return;
     }
     // Recién ahora marcar como vista (OC encontrada, se va a mostrar)
