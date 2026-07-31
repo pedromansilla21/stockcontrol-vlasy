@@ -5130,24 +5130,20 @@ function confirmarEnvioEscaneo(ocId, filaAlerta) {
 // ── REPOSICIÓN DE PALET ────────────────────────────────────────
 var _reposicionOC = null; // OC del palet sobre el que se hace reposición
 
-function abrirModalReposicion(ocId) {
+async function abrirModalReposicion(ocId) {
   var ordenes = loadOrdenes();
   var oc = ordenes.find(function(o){ return o.id === ocId; });
   if (!oc) return;
   _reposicionOC = oc;
 
-  // Leer checkboxes seleccionados del reporte (si hay alguno marcado, pre-filtramos)
   var uid = String(ocId).replace(/[^a-zA-Z0-9_-]/g, '_');
-  var seleccionados = new Set();
-  document.querySelectorAll('.palet-chk-' + uid).forEach(function(chk) {
-    if (chk.checked) seleccionados.add(chk.dataset.key);
-  });
-  var haySeleccion = seleccionados.size > 0;
+
+  // Abrir modal enseguida con loading
+  document.getElementById('modal-reposicion').classList.add('open');
 
   // Subtítulo e info del palet
   document.getElementById('rep-subtitulo').textContent =
     'Palet ' + (oc.palet || '—') + ' · ' + (oc.proveedor || '—');
-
   var infoPalet = document.getElementById('rep-info-palet');
   if (infoPalet) {
     var campos = [
@@ -5162,14 +5158,69 @@ function abrirModalReposicion(ocId) {
         '<div style="color:var(--c-text1); font-weight:700; margin-top:2px;">' + escHtml(String(c.val)) + '</div></div>';
     }).join('');
   }
-
-  // Limpiar estado operario
   var estadoEl = document.getElementById('rep-operario-estado');
   if (estadoEl) estadoEl.innerHTML = '';
 
-  // Líneas del palet
+  // Mostrar spinner mientras carga
   var container = document.getElementById('rep-lineas-container');
+  container.innerHTML = '<p style="color:var(--c-text3); font-size:13px; padding:12px;">Cargando stock del palet...</p>';
+
+  // Leer HISTORIAL DE PALETS desde el Sheet para tener divisiones y stock actuales
+  var lineasParaModal = oc.lineas || [];
+  try {
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var resp = await fetch(url, { cache: 'no-store' });
+    var data = await resp.json();
+    if (data.ok && Array.isArray(data.data) && data.data.length > 0) {
+      var paletNum = String(oc.palet || '').trim();
+      // Filtrar filas del palet
+      var filas = data.data.filter(function(row){ return String(row[8]||'').trim() === paletNum; });
+      if (filas.length > 0) {
+        // Agrupar por Cod
+        var grupos = {};
+        var ordenCods = [];
+        filas.forEach(function(row) {
+          var cod = String(row[0]||'').trim();
+          if (!cod) return;
+          if (!grupos[cod]) { grupos[cod] = { cod:cod, desc:row[1]||'—', rows:[] }; ordenCods.push(cod); }
+          grupos[cod].rows.push(row);
+        });
+        // Reconstruir líneas con divisiones desde el Sheet
+        lineasParaModal = ordenCods.map(function(cod, idx) {
+          var grupo = grupos[cod];
+          var ocLinea = (oc.lineas||[]).find(function(l){ return String(l.cod)===cod; }) || {};
+          var upCaja = parseInt(ocLinea.unidadesPorCaja || ocLinea.cantCaja || 1, 10);
+          if (isNaN(upCaja)||upCaja<1) upCaja = 1;
+          var cantTotal = grupo.rows.reduce(function(s,r){ return s+(parseInt(r[4],10)||0); },0);
+          var divisiones = [];
+          if (grupo.rows.length > 1) {
+            divisiones = grupo.rows.map(function(row) {
+              var cant = parseInt(row[4],10)||0;
+              var fechaRaw = String(row[6]||'').trim(); // YYYY-MM
+              var pf = fechaRaw.split('-');
+              return { cajas: Math.ceil(cant/upCaja), lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+            }).filter(function(d){ return d.cantReal > 0; });
+          }
+          return Object.assign({}, ocLinea, {
+            cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
+            divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja
+          });
+        });
+        // Actualizar _reposicionOC con los datos frescos
+        _reposicionOC = Object.assign({}, oc, { lineas: lineasParaModal });
+      }
+    }
+  } catch(e) { console.warn('No se pudo leer HISTORIAL DE PALETS, usando datos locales:', e); }
+
+  // Leer checkboxes seleccionados del reporte
+  var seleccionados = new Set();
+  document.querySelectorAll('.palet-chk-' + uid).forEach(function(chk) {
+    if (chk.checked) seleccionados.add(chk.dataset.key);
+  });
+  var haySeleccion = seleccionados.size > 0;
   var repUid = uid;
+
+  // Renderizar tabla de artículos
   var html = '<div style="margin-bottom:10px;">' +
     '<input type="text" id="palet-search-' + repUid + '" placeholder="🔍 Buscar artículo..." oninput="filtrarFilasPalet(\'' + repUid + '\')" ' +
     'style="width:100%; padding:7px 12px; font-size:13px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); box-sizing:border-box;" /></div>' +
@@ -5181,50 +5232,43 @@ function abrirModalReposicion(ocId) {
     '<th style="text-align:center; padding:6px 8px; color:var(--c-text3); font-weight:600;">U. a retirar</th>' +
     '</tr></thead><tbody>';
 
-  (oc.lineas || []).forEach(function(linea, i) {
+  lineasParaModal.forEach(function(linea, i) {
     var upCajaM = parseInt(linea.unidadesPorCaja || linea.cantCaja || 1, 10);
-    if (isNaN(upCajaM) || upCajaM < 1) upCajaM = 1;
+    if (isNaN(upCajaM)||upCajaM<1) upCajaM = 1;
     if (linea.divisiones && linea.divisiones.length > 0) {
-      html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="4" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc || linea.cod || '—') + '</td></tr>';
+      html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="4" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc||linea.cod||'—') + '</td></tr>';
       linea.divisiones.forEach(function(div, j) {
-        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaM;
-        if (divCant === 0) return; // ocultar divisiones vacías
-        var chkKey = i + '-' + j;
-        var preseleccionado = haySeleccion && seleccionados.has(chkKey);
+        var divCant = div.cantReal || (parseInt(div.cajas,10)||0)*upCajaM;
+        if (divCant === 0) return;
+        var chkKey = i+'-'+j;
+        var presel = haySeleccion && seleccionados.has(chkKey);
         html += '<tr class="palet-row" data-desc="' + escHtml((linea.desc||linea.cod||'').toLowerCase()) + '" style="border-top:1px solid rgba(255,255,255,0.05);">' +
-          '<td style="text-align:center; padding:6px 4px; width:32px;"><input type="checkbox" class="palet-chk-' + repUid + '" data-key="' + chkKey + '"' + (preseleccionado ? ' checked' : '') + ' /></td>' +
-          '<td style="padding:6px 8px 6px 20px; color:var(--c-text2); font-size:12px;">Lote ' + escHtml(div.lote || '—') + ' &nbsp;·&nbsp; ' + escHtml((div.mes || '—') + '/' + (div.anio || '—')) + '</td>' +
+          '<td style="text-align:center; padding:6px 4px; width:32px;"><input type="checkbox" class="palet-chk-' + repUid + '" data-key="' + chkKey + '"' + (presel?' checked':'') + ' /></td>' +
+          '<td style="padding:6px 8px 6px 20px; color:var(--c-text2); font-size:12px;">Lote ' + escHtml(div.lote||'—') + ' &nbsp;·&nbsp; ' + escHtml((div.mes||'—')+'/'+(div.anio||'—')) + '</td>' +
           '<td style="text-align:center; padding:6px 8px; color:var(--c-text2);">' + divCant + ' u.</td>' +
-          '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-' + i + '-' + j + '" min="0" max="' + divCant + '" value="' + (preseleccionado ? divCant : 0) + '" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid ' + (preseleccionado ? 'var(--c-green)' : 'var(--c-border)') + '; border-radius:6px; color:var(--c-text1);" /></td>' +
+          '<td style="text-align:center; padding:6px 8px;"><input type="number" id="rep-cant-'+i+'-'+j+'" min="0" max="'+divCant+'" value="'+(presel?divCant:0)+'" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid '+(presel?'var(--c-green)':'var(--c-border)')+'; border-radius:6px; color:var(--c-text1);" /></td>' +
         '</tr>';
       });
     } else {
       var chkKey = String(i);
-      var preseleccionado = haySeleccion && seleccionados.has(chkKey);
+      var presel = haySeleccion && seleccionados.has(chkKey);
+      var cantMostrar = linea.cantUnidades || 0;
       html += '<tr class="palet-row" data-desc="' + escHtml((linea.desc||linea.cod||'').toLowerCase()) + '" style="border-top:1px solid var(--c-border);">' +
-        '<td style="text-align:center; padding:8px 4px; width:32px;"><input type="checkbox" class="palet-chk-' + repUid + '" data-key="' + chkKey + '"' + (preseleccionado ? ' checked' : '') + ' /></td>' +
-        '<td style="padding:8px;">' + escHtml(linea.desc || linea.cod || '—') + '</td>' +
-        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + (linea.cantUnidades || 0) + ' u.</td>' +
-        '<td style="text-align:center; padding:8px;">' +
-          '<input type="number" id="rep-cant-' + i + '" min="0" max="' + (linea.cantUnidades || 0) + '" value="' + (preseleccionado ? (linea.cantUnidades || 0) : 0) + '" ' +
-          'style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid ' + (preseleccionado ? 'var(--c-green)' : 'var(--c-border)') + '; border-radius:6px; color:var(--c-text1);" />' +
-        '</td>' +
+        '<td style="text-align:center; padding:8px 4px; width:32px;"><input type="checkbox" class="palet-chk-'+repUid+'" data-key="'+chkKey+'"'+(presel?' checked':'')+' /></td>' +
+        '<td style="padding:8px;">' + escHtml(linea.desc||linea.cod||'—') + '</td>' +
+        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + cantMostrar + ' u.</td>' +
+        '<td style="text-align:center; padding:8px;"><input type="number" id="rep-cant-'+i+'" min="0" max="'+cantMostrar+'" value="'+(presel?cantMostrar:0)+'" style="width:80px; text-align:center; padding:4px 8px; background:var(--c-surface2); border:1px solid '+(presel?'var(--c-green)':'var(--c-border)')+'; border-radius:6px; color:var(--c-text1);" /></td>' +
       '</tr>';
     }
   });
-
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Poblar select de operarios — igual que enviarOCAlEscaneo
+  // Poblar select de operarios
   var usuarios = loadUsers().filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
   var sel = document.getElementById('rep-operario-select');
   sel.innerHTML = '<option value="">— Seleccioná un operario —</option>';
-  usuarios.forEach(function(u) {
-    sel.innerHTML += '<option value="' + u.filaAlerta + '">' + escHtml(u.name) + '</option>';
-  });
-
-  document.getElementById('modal-reposicion').classList.add('open');
+  usuarios.forEach(function(u) { sel.innerHTML += '<option value="'+u.filaAlerta+'">'+escHtml(u.name)+'</option>'; });
 }
 
 var _repOperarioOcupado = false;
