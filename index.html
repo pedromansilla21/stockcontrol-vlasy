@@ -5144,9 +5144,28 @@ function abrirModalReposicion(ocId) {
   });
   var haySeleccion = seleccionados.size > 0;
 
-  // Subtítulo
+  // Subtítulo e info del palet
   document.getElementById('rep-subtitulo').textContent =
     'Palet ' + (oc.palet || '—') + ' · ' + (oc.proveedor || '—');
+
+  var infoPalet = document.getElementById('rep-info-palet');
+  if (infoPalet) {
+    var campos = [
+      { label: 'N° Palet',    val: oc.palet      || '—' },
+      { label: 'Contenedor',  val: oc.contenedor  || '—' },
+      { label: 'Ubicación',   val: oc.ubicacion   || '—' },
+      { label: 'Proveedor',   val: oc.proveedor   || '—' },
+      { label: 'Fecha recep.',val: oc.fecha        || '—' },
+    ];
+    infoPalet.innerHTML = campos.map(function(c){
+      return '<div><span style="color:var(--c-text3); font-weight:600;">' + c.label + '</span>' +
+        '<div style="color:var(--c-text1); font-weight:700; margin-top:2px;">' + escHtml(String(c.val)) + '</div></div>';
+    }).join('');
+  }
+
+  // Limpiar estado operario
+  var estadoEl = document.getElementById('rep-operario-estado');
+  if (estadoEl) estadoEl.innerHTML = '';
 
   // Líneas del palet
   var container = document.getElementById('rep-lineas-container');
@@ -5208,12 +5227,51 @@ function abrirModalReposicion(ocId) {
   document.getElementById('modal-reposicion').classList.add('open');
 }
 
+var _repOperarioOcupado = false;
+
+function verificarEstadoOperarioRep(filaAlerta) {
+  var estadoEl = document.getElementById('rep-operario-estado');
+  if (!estadoEl) return;
+  if (!filaAlerta) { estadoEl.innerHTML = ''; _repOperarioOcupado = false; return; }
+
+  estadoEl.innerHTML = '<span style="color:var(--c-text3);">Verificando...</span>';
+  _repOperarioOcupado = false;
+
+  fetch(GAS_URL + '?accion=leerRango&rango=ALERTAS!A' + filaAlerta, { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(resp) {
+      var val = (resp.ok && resp.data && resp.data[0] && resp.data[0][0]) ? String(resp.data[0][0]).trim() : 'VACIO';
+      if (val === 'VACIO' || val === '') {
+        estadoEl.innerHTML = '<span style="color:var(--c-green); font-weight:600;">✓ Disponible</span>';
+        _repOperarioOcupado = false;
+      } else {
+        var ocInfo = '';
+        var partes = val.split('|');
+        if (partes[0] === 'EN_ESCANEO') ocInfo = ' · escaneando OC';
+        else if (partes[0] === 'FINALIZADO') ocInfo = ' · finalizando';
+        else if (partes[0] === 'REMITO') ocInfo = ' · remito pendiente';
+        else if (partes.length >= 3) ocInfo = ' · OC ' + (partes[2] || '');
+        estadoEl.innerHTML = '<span style="color:var(--c-red); font-weight:600;">⚠ Ocupado' + escHtml(ocInfo) + '</span>';
+        _repOperarioOcupado = true;
+      }
+    })
+    .catch(function() {
+      estadoEl.innerHTML = '<span style="color:var(--c-text3);">Sin conexión</span>';
+      _repOperarioOcupado = false;
+    });
+}
+
 function enviarReposicion() {
   if (!_reposicionOC) return;
   var sel = document.getElementById('rep-operario-select');
   var filaAlerta = sel ? parseInt(sel.value, 10) : 0;
   var operarioNombre = sel ? sel.options[sel.selectedIndex].text : '';
   if (!filaAlerta || isNaN(filaAlerta)) { showToast('⚠ Elegí un operario'); return; }
+
+  // Si el operario está ocupado, pedir confirmación antes de pisar
+  if (_repOperarioOcupado) {
+    if (!confirm(operarioNombre + ' ya tiene una tarea asignada.\n¿Querés enviarle esta reposición igual y pisar la tarea actual?')) return;
+  }
 
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
@@ -7982,20 +8040,27 @@ async function aceptarAlertaEscaneo() {
 
 <!-- MODAL REPOSICIÓN DE PALET -->
 <div class="modal-overlay" id="modal-reposicion" style="z-index:9999;">
-  <div class="modal" style="max-width:560px; padding:28px;">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+  <div class="modal" style="max-width:720px; width:95%; padding:28px;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
       <i class="ti ti-arrow-back-up" style="font-size:22px; color:var(--c-teal,#0D9488);"></i>
       <div>
         <div style="font-size:16px; font-weight:700;">Reposición de Palet</div>
         <div style="font-size:12px; color:var(--c-text3);" id="rep-subtitulo">Indicá cuántas unidades retirar</div>
       </div>
     </div>
-    <div id="rep-lineas-container" style="margin-bottom:20px; max-height:300px; overflow-y:auto;"></div>
+    <!-- Info del palet -->
+    <div id="rep-info-palet" style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; padding:12px 14px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); font-size:12px;"></div>
+    <!-- Tabla de artículos -->
+    <div id="rep-lineas-container" style="margin-bottom:16px; max-height:380px; overflow-y:auto;"></div>
+    <!-- Selección de operario -->
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; font-weight:600; color:var(--c-text2); display:block; margin-bottom:6px;">Enviar al operario:</label>
-      <select id="rep-operario-select" style="width:100%; padding:8px 12px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); font-size:13px;">
-        <option value="">— Seleccioná un operario —</option>
-      </select>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <select id="rep-operario-select" onchange="verificarEstadoOperarioRep(this.value)" style="flex:1; padding:8px 12px; background:var(--c-surface2); border:1px solid var(--c-border); border-radius:var(--radius-sm); color:var(--c-text1); font-size:13px;">
+          <option value="">— Seleccioná un operario —</option>
+        </select>
+        <div id="rep-operario-estado" style="font-size:12px; min-width:120px;"></div>
+      </div>
     </div>
     <div style="display:flex; gap:10px;">
       <button class="btn" style="flex:1;" onclick="document.getElementById('modal-reposicion').classList.remove('open')">Cancelar</button>
