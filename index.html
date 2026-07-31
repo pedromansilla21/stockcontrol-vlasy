@@ -3503,6 +3503,11 @@ function processScan() {
   updateMetrics();
 
   if (!linea) {
+    // En reposición: no registrar artículos no pedidos — solo avisar y descartar
+    if (remitoDatos.esReposicion) {
+      mostrarFeedbackEscaneo('⚠ ' + (art ? (art.desc || art.cod) : raw) + ' — no se pide en esta reposición', 'warn');
+      return;
+    }
     // Producto escaneado pero NO está en esta O.C. — registrar para reporte (no se descarta)
     var horaFuera   = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     var esEANFuera  = art.cbSuelto && raw === art.cbSuelto;
@@ -5386,10 +5391,11 @@ function enviarReposicion() {
         var cant = parseInt(cantEl ? cantEl.value : '0', 10);
         if (isNaN(cant) || cant <= 0) return;
         var lineaRep = JSON.parse(JSON.stringify(linea));
-        lineaRep.cantUnidades        = cant;
-        lineaRep.cajasEsperadas      = Math.ceil(cant / upCaja);
-        lineaRep.cajasEscaneadas     = 0;
-        lineaRep.unidadesControladas = 0;
+        lineaRep.cantUnidades            = cant;
+        lineaRep.cantUnidadesAlEscaneo   = cant; // fijar base al valor pedido, no al del palet
+        lineaRep.cajasEsperadas          = Math.ceil(cant / upCaja);
+        lineaRep.cajasEscaneadas         = 0;
+        lineaRep.unidadesControladas     = 0;
         lineaRep.unidadesPorCaja     = upCaja;
         lineaRep.cantCaja            = upCaja;
         // Guardar lote/fecha de esta división específica
@@ -5406,10 +5412,11 @@ function enviarReposicion() {
       var cant = parseInt(cantEl ? cantEl.value : '0', 10);
       if (isNaN(cant) || cant <= 0) return;
       var lineaRep = JSON.parse(JSON.stringify(linea));
-      lineaRep.cantUnidades        = cant;
-      lineaRep.cajasEsperadas      = Math.ceil(cant / upCaja);
-      lineaRep.cajasEscaneadas     = 0;
-      lineaRep.unidadesControladas = 0;
+      lineaRep.cantUnidades            = cant;
+      lineaRep.cantUnidadesAlEscaneo   = cant;
+      lineaRep.cajasEsperadas          = Math.ceil(cant / upCaja);
+      lineaRep.cajasEscaneadas         = 0;
+      lineaRep.unidadesControladas     = 0;
       lineaRep.unidadesPorCaja     = upCaja;
       lineaRep.cantCaja            = upCaja;
       lineaRep.lote                = '—';
