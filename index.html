@@ -5502,6 +5502,8 @@ async function abrirModalReposicion(ocId) {
   lineasParaModal.forEach(function(linea, i) {
     var upCajaM = parseInt(linea.unidadesPorCaja || linea.cantCaja || 1, 10);
     if (isNaN(upCajaM)||upCajaM<1) upCajaM = 1;
+    // Ocultar artículos con stock 0 (totalmente retirados)
+    if ((linea.cantUnidades || 0) === 0) return;
     if (linea.divisiones && linea.divisiones.length > 0) {
       html += '<tr style="border-top:1px solid var(--c-border);"><td colspan="4" style="padding:8px 8px 4px; font-weight:600; color:var(--c-text1);">' + escHtml(linea.desc||linea.cod||'—') + '</td></tr>';
       linea.divisiones.forEach(function(div, j) {
