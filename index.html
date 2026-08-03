@@ -2474,7 +2474,11 @@ async function bpLoad() {
 
     var hoy = new Date();
     _bpDatos = data.data
-      .filter(function(row){ return row[0] && String(row[0]).trim(); }) // excluir filas vacías
+      .filter(function(row){
+        var cod = String(row[0] || '').trim();
+        // Excluir filas vacías y la fila de encabezado
+        return cod && cod.toLowerCase() !== 'cod prod' && cod.toLowerCase() !== 'código';
+      })
       .map(function(row) {
         var cant    = parseInt(row[4], 10) || 0;
         var fechaRaw = String(row[6] || '').trim(); // YYYY-MM o YYYY-MM-DDTHH...
@@ -5224,7 +5228,17 @@ function renderLineasOCTable(lineas, ocId) {
     var upCajaL = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10);
     if (isNaN(upCajaL) || upCajaL < 1) upCajaL = 1;
 
+    // Si el artículo fue totalmente retirado por reposición:
+    // - Línea con divisiones: cantUnidades llegó a 0
+    // - Línea simple: cantUnidades=0 pero cantUnidadesAlEscaneo>0 (fue escaneada y todo retirado)
+    var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
+      (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
+    if (fueRetiradoTotal) return;
+
     if (l.divisiones && l.divisiones.length > 0) {
+      // Si TODAS las divisiones están en 0, saltar el artículo completo
+      var divConStock = l.divisiones.filter(function(d){ return (parseInt(d.cajas,10)||0) > 0; });
+      if (divConStock.length === 0) return;
       html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '" style="background:rgba(255,255,255,0.03);">' +
         '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
         '<td style="font-weight:600; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + '</td>' +
@@ -5471,7 +5485,7 @@ async function abrirModalReposicion(ocId) {
     if (chk.checked) seleccionados.add(chk.dataset.key);
   });
   var haySeleccion = seleccionados.size > 0;
-  var repUid = uid;
+  var repUid = 'modal-' + uid;  // prefijo para no colisionar con IDs del reporte
 
   // Renderizar tabla de artículos
   var html = '<div style="margin-bottom:10px;">' +
