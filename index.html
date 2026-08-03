@@ -1125,6 +1125,9 @@
     <button class="nav-item" id="nav-stock-consulta" onclick="switchPanel('stock-consulta')">
       <i class="ti ti-search"></i><span>Stock Consulta</span>
     </button>
+    <button class="nav-item" id="nav-buscador-palets" onclick="switchPanel('buscador-palets')">
+      <i class="ti ti-package-search"></i><span>Buscador de Palets</span>
+    </button>
     <div class="sidebar-label">Sistema</div>
     <button class="nav-item" id="nav-usuarios" onclick="abrirModalUsuarios()">
       <i class="ti ti-users"></i><span>Usuarios</span>
@@ -1686,6 +1689,81 @@
       </div>
     </div>
 
+    <!-- ═══ PANEL BUSCADOR DE PALETS ═══ -->
+    <div id="panel-buscador-palets" class="panel">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Buscador de Palets</div>
+          <div class="page-sub">Consultá artículos en los palets del depósito</div>
+        </div>
+        <button class="btn" onclick="bpRefresh()" title="Recargar datos"><i class="ti ti-refresh"></i> Actualizar</button>
+      </div>
+
+      <!-- Contadores -->
+      <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Total artículos</div>
+          <div id="bp-total" style="font-size:28px; font-weight:700; color:var(--c-text1);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Total unidades</div>
+          <div id="bp-unidades" style="font-size:28px; font-weight:700; color:var(--c-blue);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Palets activos</div>
+          <div id="bp-palets" style="font-size:28px; font-weight:700; color:var(--c-teal,#0D9488);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">En término</div>
+          <div id="bp-ok" style="font-size:28px; font-weight:700; color:var(--c-green);">—</div>
+        </div>
+        <div class="card" style="padding:16px; text-align:center;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Vencidos</div>
+          <div id="bp-vencidos" style="font-size:28px; font-weight:700; color:var(--c-red);">—</div>
+        </div>
+      </div>
+
+      <!-- Buscador -->
+      <div class="card" style="padding:14px 16px; margin-bottom:14px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <i class="ti ti-search" style="color:var(--c-text3); font-size:18px;"></i>
+          <input id="bp-search" type="text" placeholder="Buscar por código, descripción o palet…"
+            style="flex:1; background:transparent; border:none; outline:none; font-size:14px; color:var(--c-text1);"
+            oninput="bpFiltrar()" />
+        </div>
+      </div>
+
+      <!-- Tabla resultados -->
+      <div class="card" style="padding:0; overflow:hidden;">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cod. Producto</th>
+                <th>Descripción</th>
+                <th>Marca</th>
+                <th>Palet</th>
+                <th>Contenedor</th>
+                <th>Ubicación</th>
+                <th>Lote</th>
+                <th>Fecha venc.</th>
+                <th style="text-align:center;">Cantidad</th>
+                <th style="text-align:center;">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-bp"></tbody>
+          </table>
+        </div>
+        <div id="bp-empty" style="display:none; text-align:center; padding:32px; color:var(--c-text3); font-size:13px;">
+          <i class="ti ti-package-off" style="font-size:32px; display:block; margin-bottom:8px;"></i>
+          Sin resultados
+        </div>
+        <div id="bp-loading" style="text-align:center; padding:24px; color:var(--c-text3); font-size:13px;">
+          <i class="ti ti-loader-2" style="font-size:24px;"></i> Cargando palets…
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -2186,6 +2264,9 @@ function switchPanel(name) {
   if (name === 'stock-consulta') {
     scRefresh();
   }
+  if (name === 'buscador-palets') {
+    bpLoad();
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -2364,6 +2445,131 @@ function scFiltrar() {
   });
   scRenderizar(filtrados);
   scActualizarContadores(filtrados);
+}
+
+// ── BUSCADOR DE PALETS ────────────────────────────────────────
+var _bpDatos = [];
+var _bpCargado = false;
+
+function bpRefresh() {
+  _bpCargado = false;
+  _bpDatos = [];
+  bpLoad();
+}
+
+async function bpLoad() {
+  if (_bpCargado) return;
+  var loadingEl = document.getElementById('bp-loading');
+  var emptyEl   = document.getElementById('bp-empty');
+  var tbody     = document.getElementById('tbody-bp');
+  if (loadingEl) loadingEl.style.display = '';
+  if (emptyEl)   emptyEl.style.display = 'none';
+  if (tbody)     tbody.innerHTML = '';
+
+  try {
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var resp = await fetch(url, { cache: 'no-store' });
+    var data = await resp.json();
+    if (!data.ok || !Array.isArray(data.data)) throw new Error('Sin datos');
+
+    var hoy = new Date();
+    _bpDatos = data.data
+      .filter(function(row){ return row[0] && String(row[0]).trim(); }) // excluir filas vacías
+      .map(function(row) {
+        var cant    = parseInt(row[4], 10) || 0;
+        var fechaRaw = String(row[6] || '').trim(); // YYYY-MM o YYYY-MM-DDTHH...
+        var partes  = fechaRaw.split(/[-T]/);
+        var anio    = parseInt(partes[0], 10) || 0;
+        var mes     = parseInt(partes[1], 10) || 0;
+        var vencida = anio > 0 && (anio < hoy.getFullYear() || (anio === hoy.getFullYear() && mes < (hoy.getMonth() + 1)));
+        var porVencer = !vencida && anio > 0 && (anio === hoy.getFullYear() && mes <= (hoy.getMonth() + 3));
+        var fechaMostrar = (mes && anio) ? String(mes).padStart(2,'0') + '/' + anio : '—';
+        return {
+          cod:        String(row[0] || '').trim(),
+          desc:       String(row[1] || '').trim(),
+          cat:        String(row[2] || '').trim(),
+          marca:      String(row[3] || '').trim(),
+          cant:       cant,
+          un:         String(row[5] || 'UND').trim(),
+          fecha:      fechaMostrar,
+          lote:       String(row[7] || '—').trim(),
+          palet:      String(row[8] || '—').trim(),
+          contenedor: String(row[9] || '—').trim(),
+          ubi:        String(row[10] || '—').trim(),
+          vencida:    vencida,
+          porVencer:  porVencer
+        };
+      });
+
+    _bpCargado = true;
+    bpRenderizar(_bpDatos);
+    bpActualizarContadores(_bpDatos);
+  } catch(e) {
+    console.error('Buscador de Palets error:', e);
+    if (loadingEl) loadingEl.innerHTML = '<i class="ti ti-alert-triangle" style="font-size:24px;"></i> Error al cargar datos';
+  }
+}
+
+function bpRenderizar(datos) {
+  var loadingEl = document.getElementById('bp-loading');
+  var emptyEl   = document.getElementById('bp-empty');
+  var tbody     = document.getElementById('tbody-bp');
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (!tbody) return;
+  if (!datos.length) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  tbody.innerHTML = datos.map(function(d) {
+    var estadoBadge = d.vencida
+      ? '<span style="background:var(--c-red-bg);color:var(--c-red);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Vencido</span>'
+      : d.porVencer
+        ? '<span style="background:#3a2e1a;color:var(--c-amber);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">Por vencer</span>'
+        : '<span style="background:var(--c-green-bg);color:var(--c-green);font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;">OK</span>';
+    return '<tr>' +
+      '<td class="mono" style="font-size:11px;">' + escHtml(d.cod) + '</td>' +
+      '<td>' + escHtml(d.desc) + '</td>' +
+      '<td style="color:var(--c-text2); font-size:12px;">' + escHtml(d.marca) + '</td>' +
+      '<td class="mono" style="font-size:12px;">' + escHtml(d.palet) + '</td>' +
+      '<td style="font-size:12px;">' + escHtml(d.contenedor) + '</td>' +
+      '<td style="font-size:12px; font-weight:600;">' + escHtml(d.ubi) + '</td>' +
+      '<td class="mono" style="font-size:12px;">' + escHtml(d.lote) + '</td>' +
+      '<td style="font-size:12px;">' + escHtml(d.fecha) + '</td>' +
+      '<td style="text-align:center; font-weight:700;">' + d.cant + '</td>' +
+      '<td style="text-align:center;">' + estadoBadge + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function bpActualizarContadores(datos) {
+  var totalItems   = datos.length;
+  var totalUnd     = datos.reduce(function(s, d){ return s + d.cant; }, 0);
+  var paletsUnicos = new Set(datos.map(function(d){ return d.palet; })).size;
+  var enTermino    = datos.filter(function(d){ return !d.vencida; }).length;
+  var vencidos     = datos.filter(function(d){ return d.vencida; }).length;
+  var set = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v.toLocaleString('es-AR'); };
+  set('bp-total',    totalItems);
+  set('bp-unidades', totalUnd);
+  set('bp-palets',   paletsUnicos);
+  set('bp-ok',       enTermino);
+  set('bp-vencidos', vencidos);
+}
+
+function bpFiltrar() {
+  var q = (document.getElementById('bp-search').value || '').toLowerCase().trim();
+  var filtrados = _bpDatos.filter(function(d) {
+    return !q ||
+      d.cod.toLowerCase().indexOf(q)    !== -1 ||
+      d.desc.toLowerCase().indexOf(q)   !== -1 ||
+      d.palet.toLowerCase().indexOf(q)  !== -1 ||
+      d.ubi.toLowerCase().indexOf(q)    !== -1 ||
+      d.lote.toLowerCase().indexOf(q)   !== -1 ||
+      d.marca.toLowerCase().indexOf(q)  !== -1;
+  });
+  bpRenderizar(filtrados);
+  bpActualizarContadores(filtrados);
 }
 
 // REMITO
@@ -6802,7 +7008,7 @@ function aplicarRol(rol) {
   // Resetear todo primero — ocultar todo
   var navScanner = document.getElementById('nav-scanner');
   if (navScanner) navScanner.style.display = 'none';
-  ['nav-remito','nav-ordenes','nav-reporte-compras','nav-registro','nav-basedatos','nav-stock-consulta','nav-usuarios'].forEach(function(id) {
+  ['nav-remito','nav-ordenes','nav-reporte-compras','nav-registro','nav-basedatos','nav-stock-consulta','nav-buscador-palets','nav-usuarios'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -6829,9 +7035,9 @@ function aplicarRol(rol) {
     updateBadgeReporteCompras();
     switchPanel('remito');
   } else {
-    // Administrativo — ve todo menos stock-consulta y reporte-compras
+    // Administrativo — ve todo incluyendo Stock Consulta y Buscador de Palets
     if (navScanner) navScanner.style.display = '';
-    ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios'].forEach(function(id) {
+    ['nav-remito','nav-ordenes','nav-registro','nav-basedatos','nav-usuarios','nav-stock-consulta','nav-buscador-palets'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.style.display = '';
     });
