@@ -5072,7 +5072,7 @@ function renderOrdenes() {
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
         renderResumenEscaneo(oc) +
         renderItemsFueraOCReporte(oc) +
-        '<div id="oc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable(oc.lineas, oc.id) + '</div>' +
+        '<div id="oc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable((_paletStockData[oc.id] || oc.lineas), oc.id) + '</div>' +
         '<div class="oc-actions">' +
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
           (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
@@ -5304,6 +5304,10 @@ function toggleOCBody(id) {
   if (body) body.classList.toggle('open');
 }
 
+// Caché en memoria de stock fresco por ocId — persiste durante la sesión
+// renderOrdenes/renderReporteCompras lo usa para evitar el flash de datos viejos
+var _paletStockData = {};
+
 // Para palets: toggle normal + carga silenciosa de stock fresco al abrir
 var _paletStockCargado = {}; // evitar recargar si ya se cargó en esta sesión
 function toggleOCBodyPalet(ocId, bodyId) {
@@ -5369,13 +5373,17 @@ async function _cargarStockFrescoPalet(ocId) {
       if (!fresca) return linea;
       var lineaDisplay = Object.assign({}, linea, {
         cantUnidades: fresca.cantUnidades,
-        divisiones: fresca.divisiones
+        divisiones: fresca.divisiones,
+        // Sincronizar unidadesControladas con el stock real para no mostrar "Sobran X"
+        unidadesControladas: fresca.cantUnidades
       });
       // Borrar cantUnidadesAlEscaneo para que _uEspBase() use cantUnidades (stock fresco del Sheet)
-      // Si lo dejamos, _uEspBase devuelve el valor original del escaneo (ej: 60) en vez del actual (ej: 12)
       delete lineaDisplay.cantUnidadesAlEscaneo;
       return lineaDisplay;
     });
+
+    // Guardar en caché para que renderOrdenes/renderReporteCompras no flashee con datos viejos
+    _paletStockData[ocId] = lineasParaMostrar;
 
     // Re-renderizar la tabla de líneas en ambos paneles (Órdenes y Reporte)
     var tablaHtml = renderLineasOCTable(lineasParaMostrar, ocId);
@@ -5692,6 +5700,8 @@ function verificarEstadoOperarioRep(filaAlerta) {
 
 function enviarReposicion() {
   if (!_reposicionOC) return;
+  // Invalidar caché de stock de este palet — la reposición cambia los valores en el Sheet
+  if (_reposicionOC.id) delete _paletStockData[_reposicionOC.id];
   var sel = document.getElementById('rep-operario-select');
   var filaAlerta = sel ? parseInt(sel.value, 10) : 0;
   var operarioNombre = sel ? sel.options[sel.selectedIndex].text : '';
@@ -7465,7 +7475,7 @@ function renderReporteCompras() {
           '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + (oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—') + '</div></div>' +
         '</div>' +
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
-        '<div id="rc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable(oc.lineas, oc.id) + '</div>' +
+        '<div id="rc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable((_paletStockData[oc.id] || oc.lineas), oc.id) + '</div>' +
         '<div class="oc-actions">' + acciones + '</div>' +
       '</div>';
     container.appendChild(card);
