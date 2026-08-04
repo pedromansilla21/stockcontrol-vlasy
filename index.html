@@ -6594,21 +6594,17 @@ function guardarClasificacion() {
   // Si es edición, conservar lineas, registro e itemsFueraOC existentes
   var registroConservado = [];
   var itemsFueraOCConservado = [];
+  var ocBase = {};
   if (clasOcIdEditar) {
     var existing = ordenes.find(function(o){ return o.id === clasOcIdEditar; });
     if (existing) {
+      ocBase = existing; // guardar ANTES del filter para conservar esPalet, esReposicion, etc.
       id = clasOcIdEditar;
       if (lineasNuevas.length === 0) lineasNuevas = existing.lineas || [];
       registroConservado     = existing.registro     || [];
       itemsFueraOCConservado = existing.itemsFueraOC || [];
     }
     ordenes = ordenes.filter(function(o){ return o.id !== clasOcIdEditar; });
-  }
-
-  var ocBase = {};
-  if (clasOcIdEditar) {
-    var existingBase = ordenes.find(function(o){ return o.id === clasOcIdEditar; });
-    if (existingBase) ocBase = existingBase; // conservar todos los campos originales
   }
 
   var ocObj = Object.assign({}, ocBase, {
