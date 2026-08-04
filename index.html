@@ -6374,9 +6374,10 @@ function cerrarModalClasificar() {
 
 function selEstado(estado) {
   clasEstadoActual = estado;
+  var mapa = { pendiente: 'opt-pendiente', controlando: 'opt-controlado', finalizado: 'opt-finalizado' };
   ['pendiente','controlando','finalizado'].forEach(function(e) {
-    var el = document.getElementById('opt-' + e);
-    el.className = 'estado-opt' + (e === estado ? ' sel-' + e : '');
+    var el = document.getElementById(mapa[e]);
+    if (el) el.className = 'estado-opt' + (e === estado ? ' sel-' + e : '');
   });
 }
 
