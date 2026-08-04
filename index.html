@@ -5377,12 +5377,13 @@ async function _cargarStockFrescoPalet(ocId) {
     });
     saveOrdenes(ordenesLocal);
 
-    // Re-renderizar la tabla de líneas de esa OC en el DOM usando el wrapper ID único
+    // Re-renderizar la tabla de líneas en ambos paneles (Órdenes y Reporte)
     var ocActualizada = ordenesLocal[ocIdx];
-    var wrap = document.getElementById('oc-lineas-wrap-' + ocId);
-    if (wrap) {
-      wrap.innerHTML = renderLineasOCTable(ocActualizada.lineas, ocId);
-    }
+    var tablaHtml = renderLineasOCTable(ocActualizada.lineas, ocId);
+    var wrapOC = document.getElementById('oc-lineas-wrap-' + ocId);
+    if (wrapOC) wrapOC.innerHTML = tablaHtml;
+    var wrapRC = document.getElementById('rc-lineas-wrap-' + ocId);
+    if (wrapRC) wrapRC.innerHTML = tablaHtml;
 
     _paletStockCargado[ocId] = true;
   } catch(e) {
@@ -7372,6 +7373,7 @@ function cambiarEstadoCompras(ocId, nuevoEstado) {
 }
 
 function renderReporteCompras() {
+  _paletStockCargado = {}; // Resetear caché para que el próximo expand traiga stock fresco
   var ordenes = loadOrdenes().filter(function(oc){ return oc.origen === 'admin_compras'; });
   var search  = (document.getElementById('rc-search') ? document.getElementById('rc-search').value : '').toLowerCase().trim();
   var container = document.getElementById('reporte-compras-list');
@@ -7447,7 +7449,7 @@ function renderReporteCompras() {
     var card = document.createElement('div');
     card.className = 'oc-card';
     card.innerHTML =
-      '<div class="oc-card-header" onclick="toggleOCBody(\'rc-body-' + i + '\')">' +
+      '<div class="oc-card-header" onclick="' + (oc.esPalet ? 'toggleOCBodyPalet(\'' + oc.id + '\',\'rc-body-' + i + '\')' : 'toggleOCBody(\'rc-body-' + i + '\')') + '">' +
         '<div class="oc-card-status" style="background:' + cfg.dot + ';"></div>' +
         '<div class="oc-card-nro">' + escHtml(oc.nro || '—') + '</div>' +
         '<div class="oc-card-proveedor">' + escHtml(oc.proveedor || '—') + '</div>' +
@@ -7464,7 +7466,7 @@ function renderReporteCompras() {
           '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + (oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—') + '</div></div>' +
         '</div>' +
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
-        renderLineasOCTable(oc.lineas, oc.id) +
+        '<div id="rc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable(oc.lineas, oc.id) + '</div>' +
         '<div class="oc-actions">' + acciones + '</div>' +
       '</div>';
     container.appendChild(card);
