@@ -919,7 +919,7 @@
 
 
   /* ── MODAL CLASIFICAR OC ── */
-  .modal-clasificar { max-width: 700px; }
+  .modal-clasificar { max-width: 700px; max-height: 90vh; overflow-y: auto; }
   .clasificar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
   .estado-selector { display: flex; gap: 8px; flex-wrap: wrap; }
   .estado-opt {
@@ -3887,6 +3887,19 @@ function guardarUbicacion(ocId) {
   showToast('Ubicación guardada');
 }
 
+function descartarItemFueraOC(ocId, idx) {
+  if (!confirm('¿Descartar este ítem? Se elimina de la lista fuera de O.C.')) return;
+  var ordenes = loadOrdenes();
+  var ocIdx = ordenes.findIndex(function(o){ return o.id === ocId; });
+  if (ocIdx < 0) return;
+  ordenes[ocIdx].itemsFueraOC.splice(idx, 1);
+  ordenes[ocIdx].savedAt = new Date().toISOString();
+  saveOrdenes(ordenes);
+  _saveOrdenesToSheets(ordenes);
+  renderOrdenes();
+  showToast('Ítem descartado');
+}
+
 function quitarItemAgregado(ocId, cod) {
   if (!confirm('¿Quitar este ítem de la O.C. y devolverlo a "fuera de OC"?')) return;
   var ordenes = loadOrdenes();
@@ -5208,7 +5221,8 @@ function renderItemsFueraOCReporte(oc) {
       '<span style="color:var(--c-amber); font-weight:700; white-space:nowrap;">' + (x.unidadesTotal||0) + ' u.</span>' +
       '<span style="color:var(--c-text3); font-size:10px; white-space:nowrap;">' + escHtml(x.operario || '—') + '</span>' +
       (puedeAgregar
-        ? '<button class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px;" onclick="agregarItemFueraOCAdmin(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-plus"></i> Agregar</button>'
+        ? '<button class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px;" onclick="agregarItemFueraOCAdmin(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-plus"></i> Agregar</button>' +
+          '<button class="btn btn-sm btn-danger" style="padding:4px 10px; font-size:11px; margin-left:4px;" onclick="descartarItemFueraOC(\\\'\' + oc.id + \'\\\',\' + idx + \')"><i class="ti ti-x"></i> Quitar</button>'
         : '') +
     '</div>';
   });
