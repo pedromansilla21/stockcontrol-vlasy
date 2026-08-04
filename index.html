@@ -6315,7 +6315,8 @@ function _clasRenderLineas() {
     '<thead><tr style="color:var(--c-text3); font-size:11px;">' +
     '<th style="padding:5px; text-align:left;">Código</th>' +
     '<th style="padding:5px; text-align:left;">Artículo</th>' +
-    '<th style="padding:5px; text-align:center; width:90px;">Cantidad</th>' +
+    '<th style="padding:5px; text-align:center; width:90px;">ESP. (u.)</th>' +
+    '<th style="padding:5px; text-align:center; width:90px;">ESC. (u.)</th>' +
     '<th style="padding:5px; width:36px;"></th>' +
     '</tr></thead><tbody>';
   _clasLineas.forEach(function(l, idx) {
@@ -6324,8 +6325,13 @@ function _clasRenderLineas() {
       '<td style="padding:5px;">' + escHtml(l.desc) + '</td>' +
       '<td style="padding:5px; text-align:center;">' +
         '<input type="number" min="0" value="' + (l.cantUnidades||0) + '" ' +
-        'onchange="_clasLineas[' + idx + '].cantUnidades=parseInt(this.value)||0" ' +
-        'style="width:70px; height:26px; font-size:12px; text-align:center;" />' +
+        'onchange="_clasLineas[' + idx + '].cantUnidades=parseInt(this.value)||0; _clasLineas[' + idx + '].cantUnidadesAlEscaneo=parseInt(this.value)||0;" ' +
+        'style="width:75px; height:26px; font-size:12px; text-align:center;" />' +
+      '</td>' +
+      '<td style="padding:5px; text-align:center;">' +
+        '<input type="number" min="0" value="' + (l.unidadesControladas||0) + '" ' +
+        'onchange="_clasLineas[' + idx + '].unidadesControladas=parseInt(this.value)||0; _clasLineas[' + idx + '].cajasEscaneadas=Math.floor((parseInt(this.value)||0)/(_clasLineas[' + idx + '].cantCaja||1));" ' +
+        'style="width:75px; height:26px; font-size:12px; text-align:center;" />' +
       '</td>' +
       '<td style="padding:5px;">' +
         '<button class="btn btn-sm btn-danger" style="padding:2px 6px;" onclick="clasQuitarLinea(' + idx + ')"><i class="ti ti-trash"></i></button>' +
@@ -6498,18 +6504,24 @@ function guardarClasificacion() {
     ordenes = ordenes.filter(function(o){ return o.id !== clasOcIdEditar; });
   }
 
-  var ocObj = {
+  var ocBase = {};
+  if (clasOcIdEditar) {
+    var existingBase = ordenes.find(function(o){ return o.id === clasOcIdEditar; });
+    if (existingBase) ocBase = existingBase; // conservar todos los campos originales
+  }
+
+  var ocObj = Object.assign({}, ocBase, {
     id: id, nro: nroOC || '(sin número)', nroProv: nroProv,
     proveedor: proveedor || '—', fecha: fecha,
     responsable: responsable || '—', palet: palet || '—',
     ubicacion: ubicacion || '',
-    contenedor: '—', obs: obs,
+    contenedor: ocBase.contenedor || '—', obs: obs,
     estadoManual: clasEstadoActual,
     lineas: clasOcIdEditar && _clasLineas.length > 0 ? _clasLineas : lineasNuevas,
     registro: registroConservado,
     itemsFueraOC: itemsFueraOCConservado,
     savedAt: new Date().toISOString()
-  };
+  });
 
   ordenes.unshift(ocObj);
   saveOrdenes(ordenes);
