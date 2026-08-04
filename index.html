@@ -5362,24 +5362,23 @@ async function _cargarStockFrescoPalet(ocId) {
       });
     });
 
-    // Actualizar OC local con stock fresco
-    var ordenesLocal = loadOrdenes();
-    var ocIdx = ordenesLocal.findIndex(function(o){ return o.id === ocId; });
-    if (ocIdx < 0) return;
-    lineasFrescas.forEach(function(lineaFresca) {
-      var li = ordenesLocal[ocIdx].lineas.findIndex(function(l){ return String(l.cod)===String(lineaFresca.cod); });
-      if (li >= 0) {
-        ordenesLocal[ocIdx].lineas[li] = Object.assign({}, ordenesLocal[ocIdx].lineas[li], {
-          cantUnidades: lineaFresca.cantUnidades,
-          divisiones: lineaFresca.divisiones
-        });
-      }
+    // NO guardar en localStorage — syncOrdenes() pisaría los valores
+    // Solo actualizar el DOM directamente con los datos frescos del Sheet
+    var lineasParaMostrar = (oc.lineas || []).map(function(linea) {
+      var fresca = lineasFrescas.find(function(lf){ return String(lf.cod) === String(linea.cod); });
+      if (!fresca) return linea;
+      var lineaDisplay = Object.assign({}, linea, {
+        cantUnidades: fresca.cantUnidades,
+        divisiones: fresca.divisiones
+      });
+      // Borrar cantUnidadesAlEscaneo para que _uEspBase() use cantUnidades (stock fresco del Sheet)
+      // Si lo dejamos, _uEspBase devuelve el valor original del escaneo (ej: 60) en vez del actual (ej: 12)
+      delete lineaDisplay.cantUnidadesAlEscaneo;
+      return lineaDisplay;
     });
-    saveOrdenes(ordenesLocal);
 
     // Re-renderizar la tabla de líneas en ambos paneles (Órdenes y Reporte)
-    var ocActualizada = ordenesLocal[ocIdx];
-    var tablaHtml = renderLineasOCTable(ocActualizada.lineas, ocId);
+    var tablaHtml = renderLineasOCTable(lineasParaMostrar, ocId);
     var wrapOC = document.getElementById('oc-lineas-wrap-' + ocId);
     if (wrapOC) wrapOC.innerHTML = tablaHtml;
     var wrapRC = document.getElementById('rc-lineas-wrap-' + ocId);
