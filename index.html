@@ -4960,6 +4960,9 @@ function renderOrdenes() {
   // Guardar qué cards están abiertas para restaurarlas después del re-render
   var abiertos = [];
   document.querySelectorAll('.oc-card-body.open').forEach(function(el){ abiertos.push(el.id); });
+  // Resetear caché de stock de palets — el re-render reconstruye el DOM con datos del localStorage,
+  // así el próximo expand vuelve a leer del Sheet para tener datos frescos
+  _paletStockCargado = {};
 
   var ordenes = loadOrdenes();
   // Supervisor NO ve OCs de admin_compras hasta que sean enviadas
@@ -5046,7 +5049,7 @@ function renderOrdenes() {
     var card = document.createElement('div');
     card.className = 'oc-card';
     card.innerHTML =
-      '<div class="oc-card-header" onclick="toggleOCBody(' + "'oc-body-" + i + "'" + ')">' +
+      '<div class="oc-card-header" onclick="' + (oc.esPalet ? 'toggleOCBodyPalet(\'' + oc.id + '\',\'oc-body-' + i + '\')' : 'toggleOCBody(\'oc-body-' + i + '\')') + '">' +
         '<div class="oc-card-status" style="background:' +
           ({pendiente:'var(--c-amber)',controlando:'var(--c-blue)',finalizado_escaneo:'var(--c-orange, #f97316)',finalizado:'var(--c-green)'}[estadoM]) +
         ';"></div>' +
@@ -5069,7 +5072,7 @@ function renderOrdenes() {
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
         renderResumenEscaneo(oc) +
         renderItemsFueraOCReporte(oc) +
-        renderLineasOCTable(oc.lineas, oc.id) +
+        '<div id="oc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable(oc.lineas, oc.id) + '</div>' +
         '<div class="oc-actions">' +
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
           (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
@@ -5084,6 +5087,19 @@ function renderOrdenes() {
   abiertos.forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.classList.add('open');
+  });
+  // Recargar stock fresco para palets cuyos cards quedaron abiertos
+  var ordenesParaRestore = loadOrdenes();
+  ordenesParaRestore.forEach(function(oc) {
+    if (!oc.esPalet) return;
+    // Buscar el body de este palet — está abierto si estaba en la lista de abiertos
+    // El wrapper de líneas vive dentro del body, buscar el primer body abierto que lo contenga
+    var allBodies = document.querySelectorAll('.oc-card-body.open');
+    allBodies.forEach(function(bodyEl) {
+      if (bodyEl.querySelector('#oc-lineas-wrap-' + oc.id)) {
+        _cargarStockFrescoPalet(oc.id);
+      }
+    });
   });
 }
 
@@ -5286,6 +5302,92 @@ function renderLineasOCTable(lineas, ocId) {
 function toggleOCBody(id) {
   var body = document.getElementById(id);
   if (body) body.classList.toggle('open');
+}
+
+// Para palets: toggle normal + carga silenciosa de stock fresco al abrir
+var _paletStockCargado = {}; // evitar recargar si ya se cargó en esta sesión
+function toggleOCBodyPalet(ocId, bodyId) {
+  var body = document.getElementById(bodyId);
+  if (!body) return;
+  var estabaAbierto = body.classList.contains('open');
+  body.classList.toggle('open');
+  // Solo cargar cuando se abre (no cuando se cierra) y si no cargó ya
+  if (!estabaAbierto && !_paletStockCargado[ocId]) {
+    _cargarStockFrescoPalet(ocId);
+  }
+}
+
+async function _cargarStockFrescoPalet(ocId) {
+  try {
+    var ordenes = loadOrdenes();
+    var oc = ordenes.find(function(o){ return o.id === ocId; });
+    if (!oc || !oc.esPalet || !oc.palet) return;
+
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var resp = await fetch(url, { cache: 'no-store' });
+    var data = await resp.json();
+    if (!data.ok || !Array.isArray(data.data) || data.data.length === 0) return;
+
+    var paletNum = String(oc.palet || '').trim();
+    var filas = data.data.filter(function(row){ return String(row[8]||'').trim() === paletNum; });
+    if (filas.length === 0) return;
+
+    // Agrupar por Cod (misma lógica que abrirModalReposicion)
+    var grupos = {}, ordenCods = [];
+    filas.forEach(function(row) {
+      var cod = String(row[0]||'').trim();
+      if (!cod) return;
+      if (!grupos[cod]) { grupos[cod] = { cod:cod, desc:row[1]||'—', rows:[] }; ordenCods.push(cod); }
+      grupos[cod].rows.push(row);
+    });
+
+    var lineasFrescas = ordenCods.map(function(cod) {
+      var grupo = grupos[cod];
+      var ocLinea = (oc.lineas||[]).find(function(l){ return String(l.cod)===cod; }) || {};
+      var upCaja = parseInt(ocLinea.unidadesPorCaja || ocLinea.cantCaja || 1, 10);
+      if (isNaN(upCaja)||upCaja<1) upCaja = 1;
+      var cantTotal = grupo.rows.reduce(function(s,r){ return s+(parseInt(r[4],10)||0); }, 0);
+      var divisiones = [];
+      if (grupo.rows.length > 1) {
+        divisiones = grupo.rows.map(function(row) {
+          var cant = parseInt(row[4],10)||0;
+          var fechaRaw = String(row[6]||'').trim();
+          var pf = fechaRaw.split('-');
+          return { cajas: Math.ceil(cant/upCaja), lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+        }).filter(function(d){ return d.cantReal > 0; });
+      }
+      return Object.assign({}, ocLinea, {
+        cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
+        divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja
+      });
+    });
+
+    // Actualizar OC local con stock fresco
+    var ordenesLocal = loadOrdenes();
+    var ocIdx = ordenesLocal.findIndex(function(o){ return o.id === ocId; });
+    if (ocIdx < 0) return;
+    lineasFrescas.forEach(function(lineaFresca) {
+      var li = ordenesLocal[ocIdx].lineas.findIndex(function(l){ return String(l.cod)===String(lineaFresca.cod); });
+      if (li >= 0) {
+        ordenesLocal[ocIdx].lineas[li] = Object.assign({}, ordenesLocal[ocIdx].lineas[li], {
+          cantUnidades: lineaFresca.cantUnidades,
+          divisiones: lineaFresca.divisiones
+        });
+      }
+    });
+    saveOrdenes(ordenesLocal);
+
+    // Re-renderizar la tabla de líneas de esa OC en el DOM usando el wrapper ID único
+    var ocActualizada = ordenesLocal[ocIdx];
+    var wrap = document.getElementById('oc-lineas-wrap-' + ocId);
+    if (wrap) {
+      wrap.innerHTML = renderLineasOCTable(ocActualizada.lineas, ocId);
+    }
+
+    _paletStockCargado[ocId] = true;
+  } catch(e) {
+    // Falla silenciosa — no interrumpir la experiencia
+  }
 }
 
 function filtrarFilasPalet(uid) {
@@ -7037,6 +7139,10 @@ function aplicarRol(rol) {
     _revisarSesionGuardada();
     // Iniciar sincronización de alertas
     iniciarSincAlertasOperario();
+    // Check inmediato al login — no esperar el próximo tick del setInterval (3s)
+    // Cubre el caso en que se envió una OC mientras el operario no estaba logueado
+    setTimeout(function(){ if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(); }, 400);
+    setTimeout(function(){ if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(); }, 2000);
   } else if (esBuscador) {
     // Buscador solo ve Stock Consulta
     var elSC = document.getElementById('nav-stock-consulta');
