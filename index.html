@@ -6365,6 +6365,69 @@ function clasQuitarLinea(idx) {
   _clasRenderLineas();
 }
 
+async function _actualizarHistorialPaletsDesdeEdicion(oc) {
+  var filas = [];
+  (oc.lineas || []).forEach(function(l) {
+    var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
+    var palet      = oc.palet      || '—';
+    var contenedor = oc.contenedor || '—';
+    var ubicacion  = oc.ubicacion  || '—';
+    var operario   = l.operario    || oc.responsable || '—';
+    var ctrlPalet  = l.controlPalet     || '—';
+    var ctrlUbi    = l.controlUbicacion || '—';
+
+    if (l.divisiones && l.divisiones.length > 0) {
+      // Líneas con múltiples lotes: conservar cada division con su cantReal original
+      l.divisiones.forEach(function(div) {
+        var anio = div.anio || '';
+        var mes  = (div.mes  || '').toString().padStart(2,'0');
+        var fecha = (anio && mes) ? anio + '-' + mes : (div.fecha || '—');
+        filas.push({
+          cod: l.cod, desc: l.desc,
+          categoria: artDb.categoria || '—',
+          marca:     artDb.marca     || '—',
+          cant:      div.cantReal    || 0,
+          un: 'UND', fecha: fecha,
+          lote:      div.lote        || '—',
+          palet: palet, contenedor: contenedor,
+          ubicacion: ubicacion, observacion: l.obs || '',
+          controlPalet: ctrlPalet, controlUbicacion: ctrlUbi,
+          operario: operario
+        });
+      });
+    } else {
+      // Línea simple — usar unidadesControladas editado por el usuario
+      var anio = l.anio || '';
+      var mes  = (l.mes || '').toString().padStart(2,'0');
+      var fecha = l.fechaVenc || ((anio && mes) ? anio + '-' + mes : '—');
+      filas.push({
+        cod: l.cod, desc: l.desc,
+        categoria: artDb.categoria || '—',
+        marca:     artDb.marca     || '—',
+        cant:      l.unidadesControladas || 0,
+        un: 'UND', fecha: fecha,
+        lote:      l.lote          || '—',
+        palet: palet, contenedor: contenedor,
+        ubicacion: ubicacion, observacion: l.obs || '',
+        controlPalet: ctrlPalet, controlUbicacion: ctrlUbi,
+        operario: operario
+      });
+    }
+  });
+
+  if (filas.length === 0) return;
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: filas })
+    });
+    // Invalidar caché para que el próximo expand traiga datos frescos
+    if (_paletStockData) delete _paletStockData[oc.id];
+    if (_paletStockCargado) delete _paletStockCargado[oc.id];
+  } catch(e) {}
+}
+
 function cerrarModalClasificar() {
   document.getElementById('modal-clasificar').classList.remove('open');
   document.getElementById('clas-col-map').style.display = 'none';
@@ -6527,6 +6590,10 @@ function guardarClasificacion() {
   ordenes.unshift(ocObj);
   saveOrdenes(ordenes);
   _saveOrdenesToSheets(ordenes);
+  // Si es palet finalizado, reflejar cambios también en HISTORIAL DE PALETS
+  if (ocObj.esPalet && ocObj.estadoManual === 'finalizado' && _clasLineas.length > 0) {
+    _actualizarHistorialPaletsDesdeEdicion(ocObj);
+  }
   updateBadgeOrdenes();
   renderOrdenes();
   cerrarModalClasificar();
