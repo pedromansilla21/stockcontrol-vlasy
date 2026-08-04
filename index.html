@@ -919,7 +919,7 @@
 
 
   /* ── MODAL CLASIFICAR OC ── */
-  .modal-clasificar { max-width: 560px; }
+  .modal-clasificar { max-width: 700px; }
   .clasificar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
   .estado-selector { display: flex; gap: 8px; flex-wrap: wrap; }
   .estado-opt {
@@ -1821,10 +1821,23 @@
         <label>N° Palet</label>
         <input type="text" id="clas-palet" class="mono" placeholder="Ej: 45" />
       </div>
+      <div class="field">
+        <label>Ubicación</label>
+        <input type="text" id="clas-ubicacion" class="mono" placeholder="Ej: Estante A3" />
+      </div>
     </div>
     <div class="field" style="margin-bottom:16px;">
       <label>Observaciones</label>
       <input type="text" id="clas-obs" placeholder="Opcional" />
+    </div>
+
+    <!-- Líneas editables (solo en modo edición) -->
+    <div id="clas-lineas-zona" style="display:none; margin-bottom:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="font-size:12px; font-weight:700; color:var(--c-text2); text-transform:uppercase; letter-spacing:0.06em;">Líneas de la O.C.</div>
+        <button class="btn btn-sm" onclick="clasAgregarLinea()" style="font-size:11px; padding:3px 10px;"><i class="ti ti-plus"></i> Agregar ítem</button>
+      </div>
+      <div id="clas-lineas-tabla" style="max-height:260px; overflow-y:auto; border:1px solid var(--c-border); border-radius:var(--radius-sm); padding:6px;"></div>
     </div>
 
     <!-- Zona archivo (solo cuando viene de importar) -->
@@ -3842,6 +3855,69 @@ function renderItemsFueraOC() {
 // Estado temporal mientras se completa el modal de "agregar producto fuera de la O.C."
 var _agregarFueraOcPendiente = null;
 
+function editarUbicacion(ocId) {
+  var disp = document.getElementById('ubi-display-' + ocId);
+  var edit = document.getElementById('ubi-edit-' + ocId);
+  if (disp) disp.style.display = 'none';
+  if (edit) { edit.style.display = 'flex'; var inp = document.getElementById('ubi-input-' + ocId); if (inp) { inp.focus(); inp.select(); } }
+}
+
+function cancelarUbicacion(ocId) {
+  var disp = document.getElementById('ubi-display-' + ocId);
+  var edit = document.getElementById('ubi-edit-' + ocId);
+  if (disp) disp.style.display = 'flex';
+  if (edit) edit.style.display = 'none';
+}
+
+function guardarUbicacion(ocId) {
+  var inp = document.getElementById('ubi-input-' + ocId);
+  if (!inp) return;
+  var nuevaUbi = inp.value.trim();
+  var ordenes = loadOrdenes();
+  var ocIdx = ordenes.findIndex(function(o){ return o.id === ocId; });
+  if (ocIdx < 0) return;
+  ordenes[ocIdx].ubicacion = nuevaUbi;
+  ordenes[ocIdx].savedAt = new Date().toISOString();
+  saveOrdenes(ordenes);
+  _saveOrdenesToSheets(ordenes);
+  // Actualizar display sin re-renderizar todo
+  var valEl = document.getElementById('ubi-val-' + ocId);
+  if (valEl) valEl.textContent = nuevaUbi || '—';
+  cancelarUbicacion(ocId);
+  showToast('Ubicación guardada');
+}
+
+function quitarItemAgregado(ocId, cod) {
+  if (!confirm('¿Quitar este ítem de la O.C. y devolverlo a "fuera de OC"?')) return;
+  var ordenes = loadOrdenes();
+  var ocIdx = ordenes.findIndex(function(o){ return o.id === ocId; });
+  if (ocIdx < 0) return;
+  var oc = ordenes[ocIdx];
+  var liIdx = (oc.lineas || []).findIndex(function(l){ return String(l.cod) === String(cod) && l.agregadaEnEscaneo; });
+  if (liIdx < 0) { showToast('Ítem no encontrado'); return; }
+  var linea = oc.lineas[liIdx];
+  // Devolver a itemsFueraOC
+  oc.itemsFueraOC = oc.itemsFueraOC || [];
+  oc.itemsFueraOC.push({
+    cod: linea.cod, desc: linea.desc,
+    unidadesTotal: linea.cantUnidades || linea.unidadesControladas || 0,
+    cantCaja: linea.cantCaja || 1,
+    cajasEscaneadas: linea.cajasEscaneadas || 0,
+    unidadesSueltas: linea.unidadesSueltas || 0,
+    fechaLote: linea.fechaLote || '',
+    lote: linea.lote || '',
+    operario: linea.operario || '',
+    ultimaVez: ''
+  });
+  oc.lineas.splice(liIdx, 1);
+  oc.savedAt = new Date().toISOString();
+  saveOrdenes(ordenes);
+  _saveOrdenesToSheets(ordenes);
+  renderOrdenes();
+  showToast('Ítem devuelto a fuera de O.C.');
+}
+
+
 function agregarItemFueraOCAdmin(ocId, idx) {
   var ordenes = loadOrdenes();
   var ocIdx = ordenes.findIndex(function(o){ return o.id === ocId; });
@@ -5068,6 +5144,18 @@ function renderOrdenes() {
           '<div class="oc-meta-item"><div class="oc-meta-label">N° Palet</div><div class="oc-meta-val">' + escHtml(oc.palet || '—') + '</div></div>' +
           '<div class="oc-meta-item"><div class="oc-meta-label">Fecha recepción</div><div class="oc-meta-val">' + fechaFmt + '</div></div>' +
           '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + savedFmt + '</div></div>' +
+          '<div class="oc-meta-item" style="grid-column:1/-1;">' +
+            '<div class="oc-meta-label">Ubicación</div>' +
+            '<div style="display:flex; align-items:center; gap:6px;" id="ubi-display-' + oc.id + '">' +
+              '<div class="oc-meta-val" id="ubi-val-' + oc.id + '">' + escHtml(oc.ubicacion || '—') + '</div>' +
+              '<button class="btn btn-sm" style="padding:2px 7px; font-size:11px;" onclick="editarUbicacion(\'' + oc.id + '\'); event.stopPropagation();"><i class="ti ti-pencil"></i></button>' +
+            '</div>' +
+            '<div style="display:none; align-items:center; gap:6px;" id="ubi-edit-' + oc.id + '">' +
+              '<input type="text" id="ubi-input-' + oc.id + '" class="mono" style="height:30px; font-size:12px; flex:1;" placeholder="Ej: Estante A3" value="' + escHtml(oc.ubicacion || '') + '" onclick="event.stopPropagation();" />' +
+              '<button class="btn btn-sm btn-primary" style="padding:2px 8px; font-size:11px;" onclick="guardarUbicacion(\'' + oc.id + '\'); event.stopPropagation();"><i class="ti ti-check"></i> Guardar</button>' +
+              '<button class="btn btn-sm" style="padding:2px 7px; font-size:11px;" onclick="cancelarUbicacion(\'' + oc.id + '\'); event.stopPropagation();"><i class="ti ti-x"></i></button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         (oc.obs ? '<div style="font-size:12px; color:var(--c-text2); margin-bottom:12px; padding:8px 10px; background:var(--c-surface2); border-radius:var(--radius-sm);">📝 ' + escHtml(oc.obs) + '</div>' : '') +
         renderResumenEscaneo(oc) +
@@ -5262,7 +5350,10 @@ function renderLineasOCTable(lineas, ocId) {
         '<td style="text-align:center; padding:8px; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' ⚠' : ok ? ' ✓' : '') + '</td>' +
         (tieneFecha ? '<td style="padding:8px;"></td>' : '') +
         (tieneLote  ? '<td style="padding:8px;"></td>' : '') +
-        '<td style="padding:8px;"><span class="badge ' + badge.cls + '">' + badge.txt + '</span></td>' +
+        '<td style="padding:8px;">'+
+          '<span class="badge ' + badge.cls + '">' + badge.txt + '</span>' +
+          (l.agregadaEnEscaneo && ocId ? ' <button class="btn btn-sm btn-danger" style="padding:2px 7px; font-size:10px; margin-left:4px;" onclick="quitarItemAgregado(\'' + escHtml(ocId) + '\',\'' + escHtml(l.cod) + '\')"><i class="ti ti-minus"></i> Quitar</button>' : '') +
+        '</td>' +
       '</tr>';
       l.divisiones.forEach(function(div, j) {
         var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
@@ -6163,14 +6254,21 @@ function abrirModalClasificar(ocId) {
       document.getElementById('clas-fecha').value        = oc.fecha || '';
       document.getElementById('clas-responsable').value  = oc.responsable !== '—' ? oc.responsable : '';
       document.getElementById('clas-palet').value        = oc.palet !== '—' ? oc.palet : '';
+      document.getElementById('clas-ubicacion').value    = oc.ubicacion || '';
       document.getElementById('clas-obs').value          = oc.obs || '';
       selEstado(oc.estadoManual || 'pendiente');
+      // Mostrar sección de líneas en modo edición
+      document.getElementById('clas-lineas-zona').style.display = 'block';
+      _clasLineas = (oc.lineas || []).map(function(l){ return Object.assign({}, l); });
+      _clasRenderLineas();
     }
   } else {
     // Limpiar
-    ['clas-nro-prov','clas-proveedor','clas-nro-oc','clas-responsable','clas-palet','clas-obs'].forEach(function(id){
+    ['clas-nro-prov','clas-proveedor','clas-nro-oc','clas-responsable','clas-palet','clas-ubicacion','clas-obs'].forEach(function(id){
       document.getElementById(id).value = '';
     });
+    document.getElementById('clas-lineas-zona').style.display = 'none';
+    _clasLineas = [];
     document.getElementById('clas-fecha').valueAsDate = new Date();
     // Prellenar proveedor y responsable del usuario activo
     if (CURRENT_USER) {
@@ -6187,6 +6285,63 @@ function abrirModalClasificar(ocId) {
 function abrirModalClasificarConArchivo() {
   abrirModalClasificar(null);
   document.getElementById('clas-archivo-zona').style.display = 'block';
+}
+
+var _clasLineas = [];
+
+function _clasRenderLineas() {
+  var cont = document.getElementById('clas-lineas-tabla');
+  if (!cont) return;
+  if (_clasLineas.length === 0) {
+    cont.innerHTML = '<div style="font-size:12px; color:var(--c-text3); padding:8px; text-align:center;">Sin líneas</div>';
+    return;
+  }
+  var html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">' +
+    '<thead><tr style="color:var(--c-text3); font-size:11px;">' +
+    '<th style="padding:5px; text-align:left;">Código</th>' +
+    '<th style="padding:5px; text-align:left;">Artículo</th>' +
+    '<th style="padding:5px; text-align:center; width:90px;">Cantidad</th>' +
+    '<th style="padding:5px; width:36px;"></th>' +
+    '</tr></thead><tbody>';
+  _clasLineas.forEach(function(l, idx) {
+    html += '<tr style="border-top:1px solid var(--c-border);">' +
+      '<td class="mono" style="padding:5px; font-size:11px; color:var(--c-text3);">' + escHtml(l.cod) + '</td>' +
+      '<td style="padding:5px;">' + escHtml(l.desc) + '</td>' +
+      '<td style="padding:5px; text-align:center;">' +
+        '<input type="number" min="0" value="' + (l.cantUnidades||0) + '" ' +
+        'onchange="_clasLineas[' + idx + '].cantUnidades=parseInt(this.value)||0" ' +
+        'style="width:70px; height:26px; font-size:12px; text-align:center;" />' +
+      '</td>' +
+      '<td style="padding:5px;">' +
+        '<button class="btn btn-sm btn-danger" style="padding:2px 6px;" onclick="clasQuitarLinea(' + idx + ')"><i class="ti ti-trash"></i></button>' +
+      '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+function clasAgregarLinea() {
+  var cod = prompt('Ingresá el código del artículo:');
+  if (!cod) return;
+  cod = cod.trim();
+  var art = db.find(function(a){ return String(a.cod).trim() === cod || a.cbCaja === cod || a.cbSuelto === cod; });
+  if (!art) { showToast('Código no encontrado en la base de datos'); return; }
+  var cant = parseInt(prompt('Cantidad de unidades para ' + art.desc + ':') || '0', 10);
+  if (!cant || cant <= 0) return;
+  _clasLineas.push({
+    cod: art.cod, desc: art.desc,
+    cantUnidades: cant, cantCaja: art.cantCaja || 1,
+    cajasEsperadas: Math.ceil(cant / (art.cantCaja || 1)),
+    cajasEscaneadas: 0, unidadesSueltas: 0, unidadesControladas: 0
+  });
+  _clasRenderLineas();
+}
+
+function clasQuitarLinea(idx) {
+  if (!confirm('¿Quitar esta línea de la O.C.?')) return;
+  _clasLineas.splice(idx, 1);
+  _clasRenderLineas();
 }
 
 function cerrarModalClasificar() {
@@ -6271,6 +6426,7 @@ function guardarClasificacion() {
   var fecha      = document.getElementById('clas-fecha').value;
   var responsable= document.getElementById('clas-responsable').value.trim();
   var palet      = document.getElementById('clas-palet').value.trim();
+  var ubicacion  = document.getElementById('clas-ubicacion').value.trim();
   var obs        = document.getElementById('clas-obs').value.trim();
 
   if (!nroOC && !proveedor) {
@@ -6331,9 +6487,10 @@ function guardarClasificacion() {
     id: id, nro: nroOC || '(sin número)', nroProv: nroProv,
     proveedor: proveedor || '—', fecha: fecha,
     responsable: responsable || '—', palet: palet || '—',
+    ubicacion: ubicacion || '',
     contenedor: '—', obs: obs,
     estadoManual: clasEstadoActual,
-    lineas: lineasNuevas,
+    lineas: clasOcIdEditar && _clasLineas.length > 0 ? _clasLineas : lineasNuevas,
     registro: registroConservado,
     itemsFueraOC: itemsFueraOCConservado,
     savedAt: new Date().toISOString()
@@ -6341,6 +6498,7 @@ function guardarClasificacion() {
 
   ordenes.unshift(ocObj);
   saveOrdenes(ordenes);
+  _saveOrdenesToSheets(ordenes);
   updateBadgeOrdenes();
   renderOrdenes();
   cerrarModalClasificar();
