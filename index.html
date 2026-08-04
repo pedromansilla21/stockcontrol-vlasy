@@ -5430,7 +5430,8 @@ async function _cargarStockFrescoPalet(ocId) {
   try {
     var ordenes = loadOrdenes();
     var oc = ordenes.find(function(o){ return o.id === ocId; });
-    if (!oc || !oc.esPalet || !oc.palet) return;
+    // Solo aplica a palets finalizados — los pendientes/en proceso no tienen stock en HISTORIAL DE PALETS
+    if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
 
     var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
     var resp = await fetch(url, { cache: 'no-store' });
