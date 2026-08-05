@@ -3072,6 +3072,7 @@ function abrirPanelCompletarControl() {
             'style="width:64px; text-align:center; padding:5px 4px;" />' +
           '</td>' +
           '<td><input type="text" id="cc-lote-' + i + '" value="' + escHtml(r.lote || '') + '" placeholder="Ej: L-2024" autocomplete="off" /></td>' +
+          '<td><select id="cc-tipofecha-' + i + '" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (r.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (r.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
           '<td><input type="text" id="cc-palet-' + i + '" value="' + escHtml(r.palet || '') + '" placeholder="Ej: P-01" autocomplete="off" /></td>' +
           '<td><input type="text" id="cc-contenedor-' + i + '" value="' + escHtml(r.contenedor || '') + '" placeholder="Ej: CTR-01" autocomplete="off" /></td>' +
           '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleDividirLinea(' + i + ')" title="Dividir en varios lotes/fechas/palets" style="font-size:11px; padding:4px 8px;"><i class="ti ti-git-branch"></i> Dividir</button></td>' +
@@ -3097,6 +3098,7 @@ function abrirPanelCompletarControl() {
               '<input type="number" id="cc-div-' + i + '-' + j + '-anio" min="2020" max="2040" placeholder="AAAA" value="' + (d.anio || '') + '" style="width:64px; text-align:center; padding:5px 4px;" />' +
             '</td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-lote" value="' + escHtml(d.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
+            '<td><select id="cc-div-' + i + '-' + j + '-tipofecha" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (d.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (d.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-palet" value="' + escHtml(d.palet || '') + '" placeholder="Ej: P-01" /></td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-contenedor" value="' + escHtml(d.contenedor || '') + '" placeholder="Ej: CTR-01" /></td>' +
           '</tr>';
@@ -3119,7 +3121,7 @@ function abrirPanelCompletarControl() {
         '<table class="completar-table">' +
           '<thead><tr>' +
             '<th>Código</th><th>Descripción</th><th style="text-align:center;">Cajas</th>' +
-            '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Palet</th><th>Contenedor</th><th></th>' +
+            '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Tipo Fecha</th><th>Palet</th><th>Contenedor</th><th></th>' +
           '</tr></thead>' +
           '<tbody>' + tbody + '</tbody>' +
         '</table>' +
@@ -3284,12 +3286,14 @@ function _commitCompletarControlValues() {
         var mesEl   = document.getElementById('cc-div-' + i + '-' + j + '-mes');
         var anioEl  = document.getElementById('cc-div-' + i + '-' + j + '-anio');
         var loteEl  = document.getElementById('cc-div-' + i + '-' + j + '-lote');
+        var tipoFechaEl = document.getElementById('cc-div-' + i + '-' + j + '-tipofecha');
         var paletEl = document.getElementById('cc-div-' + i + '-' + j + '-palet');
         var contenedorEl = document.getElementById('cc-div-' + i + '-' + j + '-contenedor');
         if (cajasEl) d.cajas = cajasEl.value.trim();
         if (mesEl)   d.mes   = mesEl.value.trim();
         if (anioEl)  d.anio  = anioEl.value.trim();
         if (loteEl)  d.lote  = loteEl.value.trim();
+        if (tipoFechaEl) d.tipoFecha = tipoFechaEl.value;
         if (paletEl) d.palet = paletEl.value.trim();
         if (contenedorEl) d.contenedor = contenedorEl.value.trim();
       });
@@ -3298,6 +3302,7 @@ function _commitCompletarControlValues() {
     var mesEl  = document.getElementById('cc-mes-'  + i);
     var anioEl = document.getElementById('cc-anio-' + i);
     var loteEl  = document.getElementById('cc-lote-'  + i);
+    var tipoFechaEl = document.getElementById('cc-tipofecha-' + i);
     var paletEl = document.getElementById('cc-palet-' + i);
     var contenedorEl = document.getElementById('cc-contenedor-' + i);
     if (mesEl && anioEl && mesEl.value && anioEl.value) {
@@ -3305,6 +3310,7 @@ function _commitCompletarControlValues() {
       r.fechaLote = anioEl.value + '-' + mes;
     }
     if (loteEl)  r.lote  = loteEl.value.trim();
+    if (tipoFechaEl) r.tipoFecha = tipoFechaEl.value;
     if (paletEl) r.palet = paletEl.value.trim();
     if (contenedorEl) r.contenedor = contenedorEl.value.trim();
   });
@@ -3375,10 +3381,12 @@ function finalizarControl() {
         r.divisiones.forEach(function(d, j) {
           if (!d.mes || !d.anio) errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta la fecha.');
           if (!d.lote)           errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el lote.');
+          if (!d.tipoFecha)      errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el tipo de fecha (Troquelado/Impreso).');
         });
       } else {
-        if (!r.fechaLote) errores.push('• ' + desc + ': falta la fecha.');
-        if (!r.lote)      errores.push('• ' + desc + ': falta el lote.');
+        if (!r.fechaLote)  errores.push('• ' + desc + ': falta la fecha.');
+        if (!r.lote)       errores.push('• ' + desc + ': falta el lote.');
+        if (!r.tipoFecha)  errores.push('• ' + desc + ': falta el tipo de fecha (Troquelado/Impreso).');
       }
     }
   });
@@ -4615,6 +4623,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           var anio = d.anio || (anioEl && anioEl.value ? anioEl.value : '');
           if (mes && anio) fecha = anio + '-' + String(mes).padStart(2, '0');
 
+          var tipoFechaDiv = d.tipoFecha || '';
           var clave = (linea.cod || '—') + '|' + lote + '|' + fecha + '|' + palet + '|div' + j;
           if (!filasAgrupadas[clave]) {
             filasAgrupadas[clave] = {
@@ -4632,7 +4641,8 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
               observacion: oc.obs || '',
               controlPalet: fechaControlPalet,
               controlUbicacion: fechaControlPalet,
-              operario: escaneadoPor || '—'
+              operario: escaneadoPor || '—',
+              tipoFecha: tipoFechaDiv
             };
           }
           filasAgrupadas[clave].cant += unidades;
@@ -4672,7 +4682,8 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           observacion: oc.obs || '',
           controlPalet: fechaControlPalet,
           controlUbicacion: fechaControlPalet,
-          operario: escaneadoPor || '—'
+          operario: escaneadoPor || '—',
+          tipoFecha: linea.tipoFecha || ''
         };
       }
       filasAgrupadas[clave].cant += (typeof linea.unidadesControladas !== 'undefined' ? linea.unidadesControladas : (linea.cantUnidades || 0));
