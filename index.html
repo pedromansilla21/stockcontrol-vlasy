@@ -4600,18 +4600,19 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
       // Si la línea tiene DIVISIONES → una fila por cada división
       if (linea.divisiones && linea.divisiones.length > 0) {
         linea.divisiones.forEach(function(d, j) {
-          // Leer del DOM primero (más confiable)
+          // Prioridad: objeto d (ya committeado por _commitCompletarControlValues)
+          // DOM como fallback por si la función se llamó antes del commit
           var cajasEl = document.getElementById('cc-div-' + i + '-' + j + '-cajas');
           var mesEl   = document.getElementById('cc-div-' + i + '-' + j + '-mes');
           var anioEl  = document.getElementById('cc-div-' + i + '-' + j + '-anio');
           var loteEl  = document.getElementById('cc-div-' + i + '-' + j + '-lote');
 
-          var cajas = (cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : (parseInt(d.cajas, 10) || 0);
+          var cajas = (parseInt(d.cajas, 10) || 0) || ((cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : 0);
           var unidades = cajas * (linea.unidadesPorCaja || linea.cantCaja || 1);
-          var lote = (loteEl && loteEl.value.trim()) || d.lote || '—';
+          var lote = d.lote || (loteEl && loteEl.value.trim()) || '—';
           var fecha = '—';
-          var mes = (mesEl && mesEl.value) ? mesEl.value : d.mes;
-          var anio = (anioEl && anioEl.value) ? anioEl.value : d.anio;
+          var mes = d.mes || (mesEl && mesEl.value ? mesEl.value : '');
+          var anio = d.anio || (anioEl && anioEl.value ? anioEl.value : '');
           if (mes && anio) fecha = anio + '-' + String(mes).padStart(2, '0');
 
           var clave = (linea.cod || '—') + '|' + lote + '|' + fecha + '|' + palet + '|div' + j;
@@ -4639,18 +4640,18 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
         return; // No procesar la línea entera si tiene divisiones
       }
 
-      // Leer del DOM directamente (más confiable que oc.lineas para fecha/lote)
+      // Prioridad: linea object (ya committeado por _commitCompletarControlValues)
+      // DOM como fallback por si la función se llamó antes del commit
       var loteEl = document.getElementById('cc-lote-' + i);
       var mesEl  = document.getElementById('cc-mes-'  + i);
       var anioEl = document.getElementById('cc-anio-' + i);
 
-      // Prioridad: DOM > linea object
-      var loteOperario = (loteEl && loteEl.value.trim()) || linea.lote || '—';
+      var loteOperario = linea.lote || (loteEl && loteEl.value.trim()) || '—';
       var vencimientoOperario = '—';
-      if (mesEl && anioEl && mesEl.value && anioEl.value) {
-        vencimientoOperario = anioEl.value + '-' + String(mesEl.value).padStart(2, '0');
-      } else if (linea.fechaLote) {
+      if (linea.fechaLote) {
         vencimientoOperario = linea.fechaLote;
+      } else if (mesEl && anioEl && mesEl.value && anioEl.value) {
+        vencimientoOperario = anioEl.value + '-' + String(mesEl.value).padStart(2, '0');
       }
       
       var clave = (linea.cod || '—') + '|' + loteOperario + '|' + vencimientoOperario + '|' + palet;
@@ -6607,6 +6608,28 @@ function guardarClasificacion() {
       itemsFueraOCConservado = existing.itemsFueraOC || [];
     }
     ordenes = ordenes.filter(function(o){ return o.id !== clasOcIdEditar; });
+
+    // Preservar el progreso de escaneo del operario en las líneas editadas.
+    // _clasLineas se cargó cuando el admin abrió el modal — si el operario
+    // escaneó mientras el modal estaba abierto, ocBase.lineas tiene el estado
+    // real (más reciente). Mergeamos campo a campo: el admin puede cambiar
+    // cantidades esperadas, descripción, etc.; el operario conserva lo escaneado.
+    if (_clasLineas.length > 0 && ocBase.lineas && ocBase.lineas.length > 0) {
+      _clasLineas = _clasLineas.map(function(linea) {
+        var actual = ocBase.lineas.find(function(l){ return String(l.cod) === String(linea.cod); });
+        if (!actual) return linea;
+        return Object.assign({}, linea, {
+          unidadesControladas:  actual.unidadesControladas  !== undefined ? actual.unidadesControladas  : linea.unidadesControladas,
+          cajasEscaneadas:      actual.cajasEscaneadas      !== undefined ? actual.cajasEscaneadas      : linea.cajasEscaneadas,
+          unidadesSueltas:      actual.unidadesSueltas      !== undefined ? actual.unidadesSueltas      : linea.unidadesSueltas,
+          divisiones:           actual.divisiones           || linea.divisiones,
+          cantUnidadesAlEscaneo:actual.cantUnidadesAlEscaneo!== undefined ? actual.cantUnidadesAlEscaneo: linea.cantUnidadesAlEscaneo,
+          fechaInicioEscaneo:   actual.fechaInicioEscaneo   || linea.fechaInicioEscaneo,
+          lote:                 actual.lote                 || linea.lote,
+          fechaLote:            actual.fechaLote            || linea.fechaLote,
+        });
+      });
+    }
   }
 
   var ocObj = Object.assign({}, ocBase, {
