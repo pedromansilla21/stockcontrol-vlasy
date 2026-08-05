@@ -4541,17 +4541,27 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
     if (!oc.lineas || oc.lineas.length === 0) return;
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     var filas = oc.lineas.map(function(linea) {
+      // Prioridad: unidadesControladas (lo que el operario efectivamente escaneó)
+      // Fallback: cantUnidades (lo que se pedía reponer) — por si unidadesControladas
+      // quedó en 0 por algún problema de sincronización
+      var escaneadas = (typeof linea.unidadesControladas !== 'undefined' && linea.unidadesControladas > 0)
+        ? linea.unidadesControladas
+        : (linea.cantUnidades || 0);
       return {
-        cod:            linea.cod   || '—',
-        palet:          oc.palet    || '—',
-        lote:           linea.lote  || '—',
-        cantRestar: typeof linea.unidadesControladas !== 'undefined'
-          ? linea.unidadesControladas
-          : (linea.cantUnidades || 0),
-        operario:       escaneadoPor || '—',
+        cod:             linea.cod   || '—',
+        palet:           oc.palet    || '—',
+        lote:            linea.lote  || '—',
+        cantRestar:      escaneadas,
+        operario:        escaneadoPor || '—',
         fechaReposicion: fechaHoy
       };
-    });
+    }).filter(function(f) { return f.cantRestar > 0; });
+
+    if (filas.length === 0) {
+      console.warn('[restarCantPalet] Todas las líneas tienen cantRestar=0 — no se envió nada al GAS. OC:', oc.id);
+      return;
+    }
+    console.log('[restarCantPalet] Enviando al GAS:', JSON.stringify(filas));
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
