@@ -4784,10 +4784,12 @@ async function _escribirOrdenesEnFilas(ordenes) {
     for (var k in oc) { if (oc.hasOwnProperty(k) && k !== 'registro') ocSinRegistro[k] = oc[k]; }
     return [oc.id, JSON.stringify(ocSinRegistro)];
   });
-  await sheetsClear('ORDENES!A2:B5000');
-  if (filas.length > 0) {
-    await sheetsWrite('ORDENES!A2:B' + (filas.length + 1), filas);
-  }
+  // Una sola llamada al GAS que hace clear+write atómicamente,
+  // evitando race conditions entre múltiples PCs.
+  return fetch(GAS_URL, {
+    method: 'POST', mode: 'no-cors',
+    body: JSON.stringify({ accion: 'guardarOrdenesFilas', filas: filas })
+  });
 }
 
 async function _saveOrdenesToSheets(ordenes) {
