@@ -2787,7 +2787,11 @@ function renderTablaRemito() {
     var tr = document.createElement('tr');
     tr.innerHTML =
       '<td class="mono">' + r.cod + '</td>' +
-      '<td>' + r.desc + '</td>' +
+      '<td>' + r.desc +
+        (remitoDatos.esReposicion && r.lote && r.lote !== '—'
+          ? '<br><small style="color:var(--c-text3); font-size:11px;">&#128269; Lote ' + r.lote + (r.fechaLote ? ' · ' + r.fechaLote : '') + '</small>'
+          : '') +
+      '</td>' +
       '<td style="text-align:center; color:var(--c-text2);">' + r.cantUnidades + ' u.</td>' +
       '<td style="text-align:center; font-weight:500;">' + r.cajasEsperadas + ' cajas</td>' +
       '<td style="text-align:center; font-weight:700; font-size:16px;">' + r.cajasEscaneadas + '</td>' +
