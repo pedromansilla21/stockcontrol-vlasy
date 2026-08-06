@@ -6682,6 +6682,42 @@ function guardarClasificacion() {
   if (ocObj.esPalet && ocObj.estadoManual === 'finalizado' && _clasLineas.length > 0) {
     _actualizarHistorialPaletsDesdeEdicion(ocObj);
   }
+  // Si es edición de palet (cualquier estado), agregar al HISTORIAL DE PALETS
+  // solo las líneas que son nuevas (no estaban en la OC original)
+  if (clasOcIdEditar && ocObj.esPalet) {
+    var codsExistentes = (ocBase.lineas || []).map(function(l){ return String(l.cod).trim(); });
+    var lineasNuevasEnPalet = (ocObj.lineas || []).filter(function(l){
+      return codsExistentes.indexOf(String(l.cod).trim()) < 0;
+    });
+    if (lineasNuevasEnPalet.length > 0) {
+      var fechaHoy = new Date().toLocaleDateString('es-AR');
+      var filasPaletNuevas = lineasNuevasEnPalet.map(function(l) {
+        var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
+        return {
+          cod:          l.cod        || '—',
+          desc:         l.desc       || '—',
+          categoria:    artDb.categoria || '—',
+          marca:        ocObj.proveedor || '—',
+          cant:         l.unidadesControladas || l.cantUnidades || 0,
+          un:           'UND',
+          fecha:        l.fechaLote  || '—',
+          lote:         l.lote       || '—',
+          palet:        ocObj.palet  || '—',
+          contenedor:   ocObj.contenedor || '—',
+          ubicacion:    ocObj.ubicacion  || '—',
+          observacion:  ocObj.obs    || '',
+          controlPalet:     fechaHoy,
+          controlUbicacion: fechaHoy,
+          operario:     ocObj.responsable || '—'
+        };
+      });
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: filasPaletNuevas })
+      });
+    }
+  }
   // Limpiar caché de stock para que la vista refleje los datos nuevos inmediatamente
   if (ocObj.id) {
     delete _paletStockData[ocObj.id];
