@@ -4647,6 +4647,12 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
           var lineaOrig = ocOriginal.lineas.find(function(l){ return l.cod === lineaRep.cod; });
           if (lineaOrig && cantRestada > 0) {
             lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
+            // Actualizar unidadesControladas y cajasEscaneadas para que el panel muestre valores correctos
+            lineaOrig.unidadesControladas = Math.max(0, (lineaOrig.unidadesControladas || 0) - cantRestada);
+            var _artDbOrig = (db || []).find(function(a){ return String(a.cod).trim() === String(lineaOrig.cod).trim(); }) || {};
+            var _upCaja = parseInt(_artDbOrig.cantCaja || lineaOrig.cantCaja || lineaOrig.unidadesPorCaja || 1, 10);
+            if (isNaN(_upCaja) || _upCaja < 1) _upCaja = 1;
+            lineaOrig.cajasEscaneadas = Math.floor(lineaOrig.unidadesControladas / _upCaja);
             // Si la reposición viene de una división específica (tiene lote), actualizar esa división
             if (lineaRep.lote && lineaRep.lote !== '—' && lineaOrig.divisiones && lineaOrig.divisiones.length > 0) {
               var upCajaOrig = parseInt(lineaOrig.unidadesPorCaja || lineaOrig.cantCaja || 1, 10);
@@ -5916,7 +5922,8 @@ function enviarReposicion() {
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
   (_reposicionOC.lineas || []).forEach(function(linea, i) {
-    var upCaja = parseInt(linea.unidadesPorCaja || linea.cantCaja || linea.un_x_caja || 1, 10);
+    var _artDbRep = (db || []).find(function(a){ return String(a.cod).trim() === String(linea.cod).trim(); }) || {};
+    var upCaja = parseInt(_artDbRep.cantCaja || linea.cantCaja || linea.unidadesPorCaja || linea.un_x_caja || 1, 10);
     if (isNaN(upCaja) || upCaja < 1) upCaja = 1;
 
     if (linea.divisiones && linea.divisiones.length > 0) {
