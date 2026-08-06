@@ -6679,11 +6679,50 @@ function guardarClasificacion() {
   saveOrdenes(ordenes);
   _saveOrdenesToSheets(ordenes);
   // Si es edición de palet (cualquier estado), sincronizar HISTORIAL DE PALETS
-  // con todas las líneas — actualiza existentes y agrega las nuevas
-  console.log('[EDIT-PALET] clasOcIdEditar:', clasOcIdEditar, '| esPalet:', ocObj.esPalet, '| lineas:', (ocObj.lineas||[]).length, '| _clasLineas:', _clasLineas.length);
-  if (clasOcIdEditar && ocObj.esPalet && _clasLineas.length > 0) {
-    console.log('[EDIT-PALET] Llamando _actualizarHistorialPaletsDesdeEdicion con lineas:', JSON.stringify((ocObj.lineas||[]).map(function(l){return {cod:l.cod,desc:l.desc};})));
-    _actualizarHistorialPaletsDesdeEdicion(ocObj);
+  if (clasOcIdEditar && ocObj.esPalet) {
+    var _filasPaletEdit = [];
+    var _fechaHoyEdit = new Date().toLocaleDateString('es-AR');
+    (ocObj.lineas || []).forEach(function(l) {
+      var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
+      if (l.divisiones && l.divisiones.length > 0) {
+        l.divisiones.forEach(function(div) {
+          var mes  = (div.mes || '').toString().padStart(2,'0');
+          var anio = div.anio || '';
+          var fecha = (anio && mes) ? anio + '-' + mes : (div.fecha || '—');
+          _filasPaletEdit.push({
+            cod: l.cod || '—', desc: l.desc || '—',
+            categoria: artDb.categoria || '—', marca: ocObj.proveedor || '—',
+            cant: div.cantReal || 0, un: 'UND',
+            fecha: fecha, lote: div.lote || '—',
+            palet: ocObj.palet || '—', contenedor: ocObj.contenedor || '—',
+            ubicacion: ocObj.ubicacion || '—', observacion: ocObj.obs || '',
+            controlPalet: _fechaHoyEdit, controlUbicacion: _fechaHoyEdit,
+            operario: ocObj.responsable || '—'
+          });
+        });
+      } else {
+        var mesL  = (l.mes || '').toString().padStart(2,'0');
+        var anioL = l.anio || '';
+        var fechaL = l.fechaVenc || ((anioL && mesL) ? anioL + '-' + mesL : '—');
+        _filasPaletEdit.push({
+          cod: l.cod || '—', desc: l.desc || '—',
+          categoria: artDb.categoria || '—', marca: ocObj.proveedor || '—',
+          cant: l.unidadesControladas || 0, un: 'UND',
+          fecha: fechaL, lote: l.lote || '—',
+          palet: ocObj.palet || '—', contenedor: ocObj.contenedor || '—',
+          ubicacion: ocObj.ubicacion || '—', observacion: ocObj.obs || '',
+          controlPalet: _fechaHoyEdit, controlUbicacion: _fechaHoyEdit,
+          operario: ocObj.responsable || '—'
+        });
+      }
+    });
+    if (_filasPaletEdit.length > 0) {
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: _filasPaletEdit })
+      });
+    }
   }
   // Limpiar caché de stock para que la vista refleje los datos nuevos inmediatamente
   if (ocObj.id) {
