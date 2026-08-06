@@ -2780,7 +2780,6 @@ function renderTablaRemito() {
     return;
   }
   empty.style.display = 'none';
-  console.log('[renderTablaRemito] esReposicion:', remitoDatos.esReposicion, '| lineas:', remito.map(function(r){ return {cod:r.cod, lote:r.lote, fechaLote:r.fechaLote}; }));
   remito.forEach(function(r, i) {
     var pct  = r.cajasEsperadas > 0 ? Math.min(100, Math.round(r.cajasEscaneadas / r.cajasEsperadas * 100)) : 0;
     var over = r.cajasEscaneadas > r.cajasEsperadas;
@@ -3724,7 +3723,6 @@ function processScan() {
   var artCodNorm = String(art.cod).trim();
   var linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm; });
   // debug: loguear si no encuentra
-  if (!linea) console.log('no match — art.cod:', JSON.stringify(artCodNorm), '| remito cods:', remito.map(function(r){ return JSON.stringify(String(r.cod).trim()); }));
 
   var hora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   registro.push({
@@ -4570,7 +4568,6 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
       console.warn('[restarCantPalet] Todas las líneas tienen cantRestar=0 — no se envió nada al GAS. OC:', oc.id);
       return;
     }
-    console.log('[restarCantPalet] Enviando al GAS:', JSON.stringify(filas));
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -5895,10 +5892,10 @@ function enviarReposicion() {
       lineaRep.unidadesControladas     = 0;
       lineaRep.unidadesPorCaja     = upCaja;
       lineaRep.cantCaja            = upCaja;
-      lineaRep.lote                = '—';
-      lineaRep.mes                 = '';
-      lineaRep.anio                = '';
-      lineaRep.fechaLote           = '';
+      lineaRep.lote                = linea.lote     || '—';
+      lineaRep.mes                 = linea.mes      || '';
+      lineaRep.anio                = linea.anio     || '';
+      lineaRep.fechaLote           = linea.fechaLote || '';
       lineaRep.divisiones          = [];
       lineasReposicion.push(lineaRep);
     }
