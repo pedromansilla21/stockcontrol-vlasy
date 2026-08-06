@@ -6680,7 +6680,9 @@ function guardarClasificacion() {
   _saveOrdenesToSheets(ordenes);
   // Si es edición de palet (cualquier estado), sincronizar HISTORIAL DE PALETS
   // con todas las líneas — actualiza existentes y agrega las nuevas
+  console.log('[EDIT-PALET] clasOcIdEditar:', clasOcIdEditar, '| esPalet:', ocObj.esPalet, '| lineas:', (ocObj.lineas||[]).length, '| _clasLineas:', _clasLineas.length);
   if (clasOcIdEditar && ocObj.esPalet && _clasLineas.length > 0) {
+    console.log('[EDIT-PALET] Llamando _actualizarHistorialPaletsDesdeEdicion con lineas:', JSON.stringify((ocObj.lineas||[]).map(function(l){return {cod:l.cod,desc:l.desc};})));
     _actualizarHistorialPaletsDesdeEdicion(ocObj);
   }
   // Limpiar caché de stock para que la vista refleje los datos nuevos inmediatamente
