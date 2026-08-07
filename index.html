@@ -5218,7 +5218,7 @@ async function mostrarPanelReposiciones(btn) {
   panel.style.display = 'block';
   panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">Cargando reposiciones...</p>';
   try {
-    var rows = await sheetsRead("'HISTORIAL COMPLETO'!A2:N5000");
+    var rows = await sheetsRead("'HISTORIAL COMPLETO'!A2:P5000");
     var repos = (rows || []).filter(function(r){ return r[0] === 'REPOSICIÓN'; });
     if (repos.length === 0) {
       panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">No hay reposiciones registradas aún.</p>';
