@@ -4423,35 +4423,55 @@ function _actualizarIndicadorConexion(online) {
 window.addEventListener('online',  function(){ _actualizarIndicadorConexion(true); });
 window.addEventListener('offline', function(){ _actualizarIndicadorConexion(false); });
 
-async function _guardarDetalleReposicion(oc, escaneadoPor) {
-  // Guarda una fila por artículo en HISTORIAL COMPLETO con tipo REPOSICIÓN
+function _buildFilasReposicion(oc, escaneadoPor, estado) {
+  // Construye las filas para HISTORIAL COMPLETO de una reposición
+  var ahora = new Date().toLocaleString('es-AR');
+  return (oc.lineas || []).map(function(l) {
+    var uCtrl = estado === 'En proceso' ? 0 : (l.unidadesControladas || 0);
+    var uEsp  = l.cantUnidades || l.cantUnidadesAlEscaneo || 0;
+    var estadoFila = estado === 'En proceso' ? 'En proceso'
+                   : (uCtrl >= uEsp ? 'Completo' : 'Con diferencia');
+    return [
+      'REPOSICIÓN',                           // [0]  Tipo
+      oc.paletOriginalId || oc.nro || '',     // [1]  Palet origen
+      oc.proveedor || '',                     // [2]  Proveedor
+      oc.fecha || '',                         // [3]  Fecha
+      l.cod || '',                            // [4]  Código
+      l.desc || '',                           // [5]  Artículo
+      uEsp,                                   // [6]  Unidades esperadas
+      uCtrl,                                  // [7]  Unidades repuestas
+      uCtrl - uEsp,                           // [8]  Diferencia
+      estadoFila,                             // [9]  Estado
+      oc.responsable || '',                   // [10] Cargado por (admin)
+      escaneadoPor || '',                     // [11] Escaneado por (operario)
+      ahora,                                  // [12] Fecha
+      oc.id || '',                            // [13] ID OC
+      l.lote || '—',                          // [14] Lote
+      l.fechaLote || '—'                      // [15] Fecha vto
+    ];
+  });
+}
+
+async function _iniciarDetalleReposicion(oc) {
+  // Guarda estado "En proceso" cuando el admin envía la reposición al operario
   if (!oc || !oc.lineas || oc.lineas.length === 0) return;
   try {
-    var ahora = new Date().toLocaleString('es-AR');
-    var filas = oc.lineas.map(function(l) {
-      var uCtrl = l.unidadesControladas || 0;
-      var uEsp  = l.cantUnidades || l.cantUnidadesAlEscaneo || 0;
-      return [
-        'REPOSICIÓN',                                          // Tipo de operación
-        oc.paletOriginalId || oc.nro || '',                    // Palet origen
-        oc.proveedor || '',                                    // Proveedor
-        oc.fecha || '',                                        // Fecha
-        l.cod || '',                                           // Código
-        l.desc || '',                                          // Artículo
-        uEsp,                                                  // Unidades esperadas
-        uCtrl,                                                 // Unidades repuestas
-        uCtrl - uEsp,                                          // Diferencia
-        uCtrl >= uEsp ? 'Completo' : 'Con diferencia',         // Estado
-        oc.responsable || '',                                  // Cargado por (admin)
-        escaneadoPor || '',                                    // Escaneado por (operario)
-        ahora,                                                 // Fecha finalizado
-        oc.id || ''                                            // ID OC
-      ];
-    });
+    var filas = _buildFilasReposicion(oc, '', 'En proceso');
     fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ accion: 'agregarDetalleHistorial', filas: filas })
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ accion: 'guardarDetalleHistorial', filas: filas, ocId: oc.id })
+    });
+  } catch(e) {}
+}
+
+async function _guardarDetalleReposicion(oc, escaneadoPor) {
+  // Actualiza filas en HISTORIAL COMPLETO con estado final al completar la reposición
+  if (!oc || !oc.lineas || oc.lineas.length === 0) return;
+  try {
+    var filas = _buildFilasReposicion(oc, escaneadoPor, 'Finalizado');
+    fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ accion: 'guardarDetalleHistorial', filas: filas, ocId: oc.id })
     });
   } catch(e) {}
 }
@@ -5168,6 +5188,19 @@ function updateBadgeOrdenes() {
   if (badge) badge.textContent = ordenes.length;
 }
 
+async function eliminarReposicionHistorial(ocId) {
+  if (!confirm('¿Eliminás este registro de reposición del historial?')) return;
+  try {
+    fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ accion: 'eliminarReposicionHistorial', ocId: ocId })
+    });
+    // Refrescar panel después de 1.5s para que el GAS procese
+    setTimeout(function() { mostrarPanelReposiciones(null); }, 1500);
+    showToast('Reposición eliminada del historial');
+  } catch(e) {}
+}
+
 async function mostrarPanelReposiciones(btn) {
   var panel = document.getElementById('panel-reposiciones-hist');
   var lista = document.getElementById('ordenes-list');
@@ -5196,7 +5229,7 @@ async function mostrarPanelReposiciones(btn) {
     repos.forEach(function(r) {
       var id = r[13] || r[1] || 'sin-id';
       if (!grupos[id]) grupos[id] = { palet: r[1], proveedor: r[2], fecha: r[12], operario: r[11], admin: r[10], lineas: [] };
-      grupos[id].lineas.push({ cod: r[4], desc: r[5], esp: r[6], ctrl: r[7], estado: r[9] });
+      grupos[id].lineas.push({ cod: r[4], desc: r[5], esp: r[6], ctrl: r[7], estado: r[9], lote: r[14], fecha: r[15] });
     });
     var html = '<div style="display:flex; flex-direction:column; gap:12px; padding:4px 0;">';
     Object.keys(grupos).reverse().forEach(function(id) {
@@ -5207,20 +5240,31 @@ async function mostrarPanelReposiciones(btn) {
       html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(g.fecha || '—') + '</span>';
       html += '<span style="color:var(--c-text2); font-size:12px;">Operario: <b>' + escHtml(g.operario || '—') + '</b></span>';
       html += '<span style="color:var(--c-text2); font-size:12px;">Admin: <b>' + escHtml(g.admin || '—') + '</b></span>';
+      // Badge estado del grupo
+      var estadoGrupo = g.lineas.every(function(l){ return l.estado === 'Completo'; }) ? 'Completo'
+                      : g.lineas.every(function(l){ return l.estado === 'En proceso'; }) ? 'En proceso'
+                      : g.lineas.some(function(l){ return l.estado === 'Completo'; }) ? 'Parcial'
+                      : 'En proceso';
+      var badgeColor = estadoGrupo === 'Completo' ? 'var(--c-green)' : estadoGrupo === 'En proceso' ? 'var(--c-accent)' : 'var(--c-orange)';
+      html += '<span style="margin-left:auto; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:700; background:' + badgeColor + '22; color:' + badgeColor + '; border:1px solid ' + badgeColor + '55;">' + escHtml(estadoGrupo) + '</span>';
+      html += '<button onclick="eliminarReposicionHistorial(\'' + escHtml(id) + '\')" style="margin-left:10px; padding:3px 10px; border-radius:6px; border:1px solid var(--c-red); background:transparent; color:var(--c-red); font-size:11px; cursor:pointer;">🗑 Eliminar</button>';
       html += '</div>';
       html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
       html += '<tr style="color:var(--c-text3); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--c-border);">';
       html += '<th style="text-align:left; padding:4px 8px;">Código</th><th style="text-align:left; padding:4px 8px;">Artículo</th>';
+      html += '<th style="text-align:center; padding:4px 8px;">Lote</th><th style="text-align:center; padding:4px 8px;">Fecha Vto</th>';
       html += '<th style="text-align:center; padding:4px 8px;">Esperado</th><th style="text-align:center; padding:4px 8px;">Repuesto</th>';
       html += '<th style="text-align:center; padding:4px 8px;">Estado</th></tr>';
       g.lineas.forEach(function(l) {
-        var color = l.estado === 'Completo' ? 'var(--c-green)' : 'var(--c-red)';
+        var eColor = l.estado === 'Completo' ? 'var(--c-green)' : l.estado === 'En proceso' ? 'var(--c-accent)' : 'var(--c-red)';
         html += '<tr style="border-bottom:1px solid var(--c-border2);">';
         html += '<td style="padding:5px 8px; color:var(--c-text3);" class="mono">' + escHtml(String(l.cod)) + '</td>';
         html += '<td style="padding:5px 8px;">' + escHtml(l.desc) + '</td>';
+        html += '<td style="padding:5px 8px; text-align:center; color:var(--c-text3);">' + escHtml(l.lote || '—') + '</td>';
+        html += '<td style="padding:5px 8px; text-align:center; color:var(--c-text3);">' + escHtml(l.fecha || '—') + '</td>';
         html += '<td style="padding:5px 8px; text-align:center;">' + escHtml(String(l.esp)) + ' u.</td>';
         html += '<td style="padding:5px 8px; text-align:center; font-weight:600;">' + escHtml(String(l.ctrl)) + ' u.</td>';
-        html += '<td style="padding:5px 8px; text-align:center; color:' + color + '; font-weight:600;">' + escHtml(l.estado) + '</td>';
+        html += '<td style="padding:5px 8px; text-align:center; color:' + eColor + '; font-weight:600;">' + escHtml(l.estado) + '</td>';
         html += '</tr>';
       });
       html += '</table></div>';
@@ -6101,6 +6145,9 @@ function enviarReposicion() {
   ordenes.unshift(repOC);
   _ordenesCache = ordenes;
   try { localStorage.setItem(ORDENES_KEY, JSON.stringify(ordenes)); } catch(e) {}
+
+  // Guardar estado "En proceso" en HISTORIAL COMPLETO
+  _iniciarDetalleReposicion(repOC);
 
   document.getElementById('modal-reposicion').classList.remove('open');
   renderOrdenes();
