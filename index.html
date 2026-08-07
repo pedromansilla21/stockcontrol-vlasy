@@ -1287,11 +1287,15 @@
         <button class="oc-filter-btn" onclick="filtrarOC('finalizado_escaneo', this)">🟠 Controlada</button>
         <button class="oc-filter-btn" onclick="filtrarOC('finalizado', this)">✅ Finalizado</button>
 
+        <span class="oc-filter-sep"></span>
+        <button class="oc-filter-btn" onclick="mostrarPanelReposiciones(this)" id="btn-filtro-reposiciones" style="background:var(--c-surface2); border:1px solid var(--c-border); color:var(--c-text2);">🔄 Reposiciones</button>
+
         <div style="flex:1;"></div>
         <input type="text" id="oc-search" placeholder="Buscar N° O.C. o proveedor..." style="max-width:260px; margin:0;" oninput="renderOrdenes()" />
       </div>
 
       <div id="ordenes-list"></div>
+      <div id="panel-reposiciones-hist" style="display:none; margin-top:12px;"></div>
     </div>
 
     <!-- ═══ PANEL REPORTE COMPRAS (solo admin_compras) ═══ -->
@@ -3474,6 +3478,10 @@ function finalizarControl() {
   if (!ocObj.esPalet) {
     _guardarDetalleHistorial(ocObj, escaneadoPorVal);
   }
+  // Si es reposición, guardar detalle en HISTORIAL COMPLETO con tipo REPOSICIÓN
+  if (ocObj.esReposicion) {
+    _guardarDetalleReposicion(ocObj, escaneadoPorVal);
+  }
 
   // Limpiar panel de escaneo (para todos los roles)
   remito = [];
@@ -4415,6 +4423,39 @@ function _actualizarIndicadorConexion(online) {
 window.addEventListener('online',  function(){ _actualizarIndicadorConexion(true); });
 window.addEventListener('offline', function(){ _actualizarIndicadorConexion(false); });
 
+async function _guardarDetalleReposicion(oc, escaneadoPor) {
+  // Guarda una fila por artículo en HISTORIAL COMPLETO con tipo REPOSICIÓN
+  if (!oc || !oc.lineas || oc.lineas.length === 0) return;
+  try {
+    var ahora = new Date().toLocaleString('es-AR');
+    var filas = oc.lineas.map(function(l) {
+      var uCtrl = l.unidadesControladas || 0;
+      var uEsp  = l.cantUnidades || l.cantUnidadesAlEscaneo || 0;
+      return [
+        'REPOSICIÓN',                                          // Tipo de operación
+        oc.paletOriginalId || oc.nro || '',                    // Palet origen
+        oc.proveedor || '',                                    // Proveedor
+        oc.fecha || '',                                        // Fecha
+        l.cod || '',                                           // Código
+        l.desc || '',                                          // Artículo
+        uEsp,                                                  // Unidades esperadas
+        uCtrl,                                                 // Unidades repuestas
+        uCtrl - uEsp,                                          // Diferencia
+        uCtrl >= uEsp ? 'Completo' : 'Con diferencia',         // Estado
+        oc.responsable || '',                                  // Cargado por (admin)
+        escaneadoPor || '',                                    // Escaneado por (operario)
+        ahora,                                                 // Fecha finalizado
+        oc.id || ''                                            // ID OC
+      ];
+    });
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ accion: 'agregarDetalleHistorial', filas: filas })
+    });
+  } catch(e) {}
+}
+
 async function _guardarDetalleHistorial(oc, escaneadoPor) {
   // Guarda una fila por artículo en HISTORIAL COMPLETO
   // IMPORTANTE: se mantiene el mismo orden/cantidad de columnas que ya existen en el
@@ -5125,6 +5166,70 @@ function updateBadgeOrdenes() {
   });
   var badge = document.getElementById('badge-ordenes');
   if (badge) badge.textContent = ordenes.length;
+}
+
+async function mostrarPanelReposiciones(btn) {
+  var panel = document.getElementById('panel-reposiciones-hist');
+  var lista = document.getElementById('ordenes-list');
+  // Toggle
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    lista.style.display = '';
+    if (btn) btn.classList.remove('active');
+    return;
+  }
+  // Desactivar otros filtros
+  document.querySelectorAll('.oc-filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  lista.style.display = 'none';
+  panel.style.display = 'block';
+  panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">Cargando reposiciones...</p>';
+  try {
+    var rows = await sheetsRead("'HISTORIAL COMPLETO'!A2:N5000");
+    var repos = (rows || []).filter(function(r){ return r[0] === 'REPOSICIÓN'; });
+    if (repos.length === 0) {
+      panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">No hay reposiciones registradas aún.</p>';
+      return;
+    }
+    // Agrupar por ID de OC (columna N = índice 13)
+    var grupos = {};
+    repos.forEach(function(r) {
+      var id = r[13] || r[1] || 'sin-id';
+      if (!grupos[id]) grupos[id] = { palet: r[1], proveedor: r[2], fecha: r[12], operario: r[11], admin: r[10], lineas: [] };
+      grupos[id].lineas.push({ cod: r[4], desc: r[5], esp: r[6], ctrl: r[7], estado: r[9] });
+    });
+    var html = '<div style="display:flex; flex-direction:column; gap:12px; padding:4px 0;">';
+    Object.keys(grupos).reverse().forEach(function(id) {
+      var g = grupos[id];
+      html += '<div style="background:var(--c-surface1); border:1px solid var(--c-border); border-radius:8px; padding:14px 18px;">';
+      html += '<div style="display:flex; gap:20px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">';
+      html += '<span style="font-weight:700; color:var(--c-accent);">🔄 ' + escHtml(g.palet || '—') + '</span>';
+      html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(g.fecha || '—') + '</span>';
+      html += '<span style="color:var(--c-text2); font-size:12px;">Operario: <b>' + escHtml(g.operario || '—') + '</b></span>';
+      html += '<span style="color:var(--c-text2); font-size:12px;">Admin: <b>' + escHtml(g.admin || '—') + '</b></span>';
+      html += '</div>';
+      html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += '<tr style="color:var(--c-text3); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--c-border);">';
+      html += '<th style="text-align:left; padding:4px 8px;">Código</th><th style="text-align:left; padding:4px 8px;">Artículo</th>';
+      html += '<th style="text-align:center; padding:4px 8px;">Esperado</th><th style="text-align:center; padding:4px 8px;">Repuesto</th>';
+      html += '<th style="text-align:center; padding:4px 8px;">Estado</th></tr>';
+      g.lineas.forEach(function(l) {
+        var color = l.estado === 'Completo' ? 'var(--c-green)' : 'var(--c-red)';
+        html += '<tr style="border-bottom:1px solid var(--c-border2);">';
+        html += '<td style="padding:5px 8px; color:var(--c-text3);" class="mono">' + escHtml(String(l.cod)) + '</td>';
+        html += '<td style="padding:5px 8px;">' + escHtml(l.desc) + '</td>';
+        html += '<td style="padding:5px 8px; text-align:center;">' + escHtml(String(l.esp)) + ' u.</td>';
+        html += '<td style="padding:5px 8px; text-align:center; font-weight:600;">' + escHtml(String(l.ctrl)) + ' u.</td>';
+        html += '<td style="padding:5px 8px; text-align:center; color:' + color + '; font-weight:600;">' + escHtml(l.estado) + '</td>';
+        html += '</tr>';
+      });
+      html += '</table></div>';
+    });
+    html += '</div>';
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = '<p style="color:var(--c-red); padding:16px;">Error al cargar reposiciones: ' + e.message + '</p>';
+  }
 }
 
 function filtrarOC(filtro, btn) {
