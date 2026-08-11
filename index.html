@@ -4649,6 +4649,10 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
           var lineaOrig = ocOriginal.lineas.find(function(l){ return l.cod === lineaRep.cod; });
           if (lineaOrig && cantRestada > 0) {
             lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
+            // Actualizar cantUnidadesAlEscaneo para que _uEspBase() no genere falsos positivos de diferencia
+            if (typeof lineaOrig.cantUnidadesAlEscaneo !== 'undefined') {
+              lineaOrig.cantUnidadesAlEscaneo = lineaOrig.cantUnidades;
+            }
             // Actualizar unidadesControladas y cajasEscaneadas para que el panel muestre valores correctos
             lineaOrig.unidadesControladas = Math.max(0, (lineaOrig.unidadesControladas || 0) - cantRestada);
             var _artDbOrig = (db || []).find(function(a){ return String(a.cod).trim() === String(lineaOrig.cod).trim(); }) || {};
