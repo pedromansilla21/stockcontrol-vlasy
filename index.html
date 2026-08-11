@@ -5430,7 +5430,12 @@ function renderResumenEscaneo(oc) {
 
   var lineas      = oc.lineas;
   var completas   = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); });
-  var incompletas = lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) < _uEspBase(l); });
+  var incompletas = lineas.filter(function(l){
+    // Excluir líneas donde unidadesControladas === cantUnidades: el stock actual y lo escaneado
+    // coinciden — es resultado de una reposición legítima, no un faltante real.
+    if ((l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0)) return false;
+    return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) < _uEspBase(l);
+  });
   var sinEscanear = lineas.filter(function(l){ return (l.unidadesControladas||0) === 0; });
   var conSueltasLines = lineas.filter(function(l){ return (l.unidadesControladas||0) > _uEspBase(l); });
   var todoCompleto = completas.length === lineas.length;
