@@ -3721,7 +3721,9 @@ function processScan() {
 
   // Normalizar cod para comparación segura
   var artCodNorm = String(art.cod).trim();
-  var linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm; });
+  // Buscar primero línea con ese cod que no esté completa; si todas completas, overflow a la primera
+  var linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm && (r.unidadesControladas||0) < (r.cantUnidades||0); });
+  if (!linea) linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm; });
   // debug: loguear si no encuentra
 
   var hora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
