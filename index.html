@@ -4671,6 +4671,8 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
             }
           }
         });
+        // Actualizar savedAt para que el merge de syncOrdenes elija la versión local (más reciente)
+        ocOriginal.savedAt = new Date().toISOString();
         saveOrdenes(ordenes);
         renderOrdenes();
       }
