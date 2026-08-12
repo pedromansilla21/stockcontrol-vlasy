@@ -4603,8 +4603,9 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     var fila = [oc.nro||'', oc.proveedor||'', fecha, lineas, cajasEsp, cajasEsc, estado, guardada, oc.id||''];
     
     // Detectar si es control de palet — usar objeto OC + checkbox como doble verificación
+    // esReposicion también activa esPalet: las reposiciones siempre vienen de un palet aunque el checkbox no esté marcado
     var checkPalet = document.getElementById('rem-es-palet');
-    var esPalet = (oc.esPalet === true) || (checkPalet && checkPalet.checked === true);
+    var esPalet = (oc.esPalet === true) || (oc.esReposicion === true) || (checkPalet && checkPalet.checked === true);
     var paletValue = (oc.palet && oc.palet !== '—') || 
                      (document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '');
     
@@ -5102,7 +5103,12 @@ async function syncOrdenes() {
 
 function getEstadoOC(oc) {
   if (!oc.lineas || oc.lineas.length === 0) return 'pendiente';
-  var completadas = oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length;
+  var completadas = oc.lineas.filter(function(l){
+    var uCtrl = l.unidadesControladas||0;
+    // Línea ajustada por reposición: unidadesControladas === cantUnidades → completa
+    if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
+    return uCtrl > 0 && uCtrl === _uEspBase(l);
+  }).length;
   if (completadas === oc.lineas.length) return 'completo';
   if (completadas > 0 || oc.lineas.some(function(l){ return (l.unidadesControladas||0) > 0; })) return 'parcial';
   return 'pendiente';
@@ -5398,7 +5404,11 @@ function renderOrdenes() {
     var autoLabel = { pendiente: 'Sin escanear', parcial: 'En progreso', completo: '✓ Completo' }[estadoAuto];
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
     var totalLineas = oc.lineas ? oc.lineas.length : 0;
-    var completadas = oc.lineas ? oc.lineas.filter(function(l){ return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === _uEspBase(l); }).length : 0;
+    var completadas = oc.lineas ? oc.lineas.filter(function(l){
+      var uCtrl = l.unidadesControladas||0;
+      if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
+      return uCtrl > 0 && uCtrl === _uEspBase(l);
+    }).length : 0;
     var fechaFmt = oc.fecha ? new Date(oc.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '—';
     var savedFmt = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
 
