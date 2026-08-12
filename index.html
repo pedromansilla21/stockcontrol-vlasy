@@ -5568,10 +5568,13 @@ function renderResumenEscaneo(oc) {
   var estaControladaOFinalizada = oc.estadoManual === 'finalizado_escaneo' || oc.estadoManual === 'finalizado';
   if (!estaControladaOFinalizada || !oc.lineas || oc.lineas.length === 0) return '';
 
+  // Usar datos frescos del Sheet si están disponibles (cargados al abrir el card)
+  // De lo contrario usar oc.lineas (datos locales)
+  var _lineasBase = (_paletStockData && _paletStockData[oc.id]) ? _paletStockData[oc.id] : oc.lineas;
   // Excluir líneas que fueron 100% retiradas por reposición:
   // cantUnidades=0 + (tenía divisiones O tenía cantUnidadesAlEscaneo > 0)
   // Estas no son faltantes — el operario las tenía y se repusieron.
-  var lineas = oc.lineas.filter(function(l) {
+  var lineas = _lineasBase.filter(function(l) {
     var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
       (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
     return !fueRetiradoTotal;
@@ -5596,7 +5599,7 @@ function renderResumenEscaneo(oc) {
   var borderColor = todoCompleto ? 'var(--c-green)' : (incompletas.length > 0 || sinEscanear.length > 0) ? 'var(--c-amber)' : 'var(--c-border)';
   var bgColor     = todoCompleto ? 'var(--c-green-bg)' : 'var(--c-amber-bg)';
 
-  var html = '<div style="border:1px solid ' + borderColor + '; background:' + bgColor + '; border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:14px;">' +
+  var html = '<div id="resumen-scan-' + oc.id + '" style="border:1px solid ' + borderColor + '; background:' + bgColor + '; border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:14px;">' +
     '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
       '<div style="display:flex; align-items:center; gap:8px;">' +
         '<i class="ti ' + (todoCompleto ? 'ti-circle-check' : 'ti-alert-triangle') + '" style="color:' + (todoCompleto ? 'var(--c-green)' : 'var(--c-amber)') + '; font-size:16px;"></i>' +
@@ -5839,6 +5842,12 @@ async function _cargarStockFrescoPalet(ocId) {
 
     // Guardar en caché para que renderOrdenes/renderReporteCompras no flashee con datos viejos
     _paletStockData[ocId] = lineasParaMostrar;
+
+    // Re-renderizar el resumen (badges completas/diferencias/pendientes) con datos frescos
+    var resumenEl = document.getElementById('resumen-scan-' + ocId);
+    if (resumenEl) {
+      resumenEl.outerHTML = renderResumenEscaneo(oc);
+    }
 
     // Re-renderizar la tabla de líneas en ambos paneles (Órdenes y Reporte)
     var tablaHtml = renderLineasOCTable(lineasParaMostrar, ocId);
