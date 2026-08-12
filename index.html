@@ -5142,14 +5142,20 @@ async function syncOrdenes() {
 
 function getEstadoOC(oc) {
   if (!oc.lineas || oc.lineas.length === 0) return 'pendiente';
-  var completadas = oc.lineas.filter(function(l){
+  // Excluir líneas 100% retiradas por reposición — no son faltantes
+  var lineasActivas = oc.lineas.filter(function(l) {
+    var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
+      (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
+    return !fueRetiradoTotal;
+  });
+  if (lineasActivas.length === 0) return 'completo';
+  var completadas = lineasActivas.filter(function(l){
     var uCtrl = l.unidadesControladas||0;
-    // Línea ajustada por reposición: unidadesControladas === cantUnidades → completa
     if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
     return uCtrl > 0 && uCtrl === _uEspBase(l);
   }).length;
-  if (completadas === oc.lineas.length) return 'completo';
-  if (completadas > 0 || oc.lineas.some(function(l){ return (l.unidadesControladas||0) > 0; })) return 'parcial';
+  if (completadas === lineasActivas.length) return 'completo';
+  if (completadas > 0 || lineasActivas.some(function(l){ return (l.unidadesControladas||0) > 0; })) return 'parcial';
   return 'pendiente';
 }
 
@@ -5442,12 +5448,16 @@ function renderOrdenes() {
     // Badge escaneo auto
     var autoLabel = { pendiente: 'Sin escanear', parcial: 'En progreso', completo: '✓ Completo' }[estadoAuto];
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
-    var totalLineas = oc.lineas ? oc.lineas.length : 0;
-    var completadas = oc.lineas ? oc.lineas.filter(function(l){
+    var _lineasActivasRender = oc.lineas ? oc.lineas.filter(function(l){
+      var fueRetiradoTotal = (l.cantUnidades||0)===0 && (typeof l.divisiones!=='undefined'||(l.cantUnidadesAlEscaneo||0)>0);
+      return !fueRetiradoTotal;
+    }) : [];
+    var completadas = _lineasActivasRender.filter(function(l){
       var uCtrl = l.unidadesControladas||0;
       if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
       return uCtrl > 0 && uCtrl === _uEspBase(l);
-    }).length : 0;
+    }).length;
+    var totalLineas = _lineasActivasRender.length;
     var fechaFmt = oc.fecha ? new Date(oc.fecha + 'T12:00:00').toLocaleDateString('es-AR') : '—';
     var savedFmt = oc.savedAt ? new Date(oc.savedAt).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
 
@@ -5558,7 +5568,14 @@ function renderResumenEscaneo(oc) {
   var estaControladaOFinalizada = oc.estadoManual === 'finalizado_escaneo' || oc.estadoManual === 'finalizado';
   if (!estaControladaOFinalizada || !oc.lineas || oc.lineas.length === 0) return '';
 
-  var lineas      = oc.lineas;
+  // Excluir líneas que fueron 100% retiradas por reposición:
+  // cantUnidades=0 + (tenía divisiones O tenía cantUnidadesAlEscaneo > 0)
+  // Estas no son faltantes — el operario las tenía y se repusieron.
+  var lineas = oc.lineas.filter(function(l) {
+    var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
+      (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
+    return !fueRetiradoTotal;
+  });
   var completas   = lineas.filter(function(l){
     var uCtrl = l.unidadesControladas||0;
     // Si unidadesControladas === cantUnidades, la reposición ajustó el stock y está correcto
@@ -5566,8 +5583,6 @@ function renderResumenEscaneo(oc) {
     return uCtrl > 0 && uCtrl === _uEspBase(l);
   });
   var incompletas = lineas.filter(function(l){
-    // Excluir líneas donde unidadesControladas === cantUnidades: el stock actual y lo escaneado
-    // coinciden — es resultado de una reposición legítima, no un faltante real.
     if ((l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) === (l.cantUnidades||0)) return false;
     return (l.unidadesControladas||0) > 0 && (l.unidadesControladas||0) < _uEspBase(l);
   });
