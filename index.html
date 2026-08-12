@@ -3305,7 +3305,10 @@ function agregarDivisionFuera(j) {
   _commitCompletarControlValues();
   var x = itemsFueraOC[j];
   if (!x || !x.divisiones) return;
-  x.divisiones.push({ unidades: 0, mes: '', anio: '', lote: '', palet: '' });
+  // Calcular unidades restantes para sugerirlas en la nueva parte
+  var totalAsignado = x.divisiones.reduce(function(s, d){ return s + (parseInt(d.unidades,10)||0); }, 0);
+  var restantes = Math.max(0, (x.unidadesTotal || 0) - totalAsignado);
+  x.divisiones.push({ unidades: restantes, mes: '', anio: '', lote: '', palet: '' });
   abrirPanelCompletarControl();
 }
 
@@ -4078,45 +4081,70 @@ function confirmarAgregarItemFueraOC() {
   // Salvaguarda: confirmar el estado actual de la O.C. antes de tocar nada
   var lineasAntes = oc.lineas ? oc.lineas.length : 0;
   // Calcular lineasNuevas ANTES del confirm para mostrar el número correcto
-  var lineasNuevas = [];
   var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
+  var lineasNuevas = [];
   if (x.divisiones && x.divisiones.length > 0) {
     x.divisiones.forEach(function(d) {
-      var uDiv = (parseInt(d.unidades, 10) || 0) ||
-                 ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
-      if (uDiv > 0) lineasNuevas.push(d); // placeholder para contar
+      var uDiv = (parseInt(d.unidades, 10) || 0) || ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
+      // Contar también divisiones con datos (lote/fecha) aunque tengan uDiv=0
+      if (uDiv > 0 || d.lote || d.mes || d.anio) lineasNuevas.push(d);
     });
   }
   var nLineasAAgregar = Math.max(1, lineasNuevas.length);
-  lineasNuevas = []; // resetear — se reconstruye abajo
-  var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
+  lineasNuevas = []; // resetear — se reconstruye abajo con datos completos
   if (!confirm('La O.C. ' + (oc.nro || '') + ' tiene ' + lineasAntes + ' línea' + (lineasAntes !== 1 ? 's' : '') + ' en este momento. ¿Confirmás agregar "' + x.desc + '" (quedaría con ' + (lineasAntes + nLineasAAgregar) + ')?')) {
     return;
   }
 
   // Reconstruir lineasNuevas completas (una por división o una simple)
-  lineasNuevas = [];
-  var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
   if (x.divisiones && x.divisiones.length > 0) {
+    // Calcular unidades ya asignadas para distribuir el restante a divisiones con datos pero sin units
+    var _unitsAsignadas = 0;
+    var _divsSinUnits = [];
     x.divisiones.forEach(function(d) {
-      var uDiv = (parseInt(d.unidades, 10) || 0) ||
-                 ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
-      if (uDiv <= 0) return;
-      var fechaDiv = (d.mes && d.anio) ? (d.anio + '-' + String(d.mes).padStart(2,'0')) : (x.fechaLote || '');
-      lineasNuevas.push({
-        cod: x.cod, desc: x.desc,
-        cantUnidades: uDiv, cantCaja: upCajaFuera,
-        cajasEsperadas: Math.ceil(uDiv / upCajaFuera),
-        cajasEscaneadas: Math.ceil(uDiv / upCajaFuera),
-        unidadesControladas: uDiv,
-        fechaLote: fechaDiv,
-        lote: d.lote || '',
-        palet: d.palet || x.palet || '',
-        agregadaEnEscaneo: true,
-        horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
-        horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
-      });
+      var uDiv = (parseInt(d.unidades, 10) || 0) || ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
+      if (uDiv > 0) {
+        _unitsAsignadas += uDiv;
+        var fechaDiv = (d.mes && d.anio) ? (d.anio + '-' + String(d.mes).padStart(2,'0')) : (x.fechaLote || '');
+        lineasNuevas.push({
+          cod: x.cod, desc: x.desc,
+          cantUnidades: uDiv, cantCaja: upCajaFuera,
+          cajasEsperadas: Math.ceil(uDiv / upCajaFuera),
+          cajasEscaneadas: Math.ceil(uDiv / upCajaFuera),
+          unidadesControladas: uDiv,
+          fechaLote: fechaDiv,
+          lote: d.lote || '',
+          palet: d.palet || x.palet || '',
+          agregadaEnEscaneo: true,
+          horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+          horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
+        });
+      } else if (d.lote || d.mes || d.anio) {
+        // División con datos (lote/fecha) pero sin unidades explícitas — se resuelve después
+        _divsSinUnits.push(d);
+      }
     });
+    // Distribuir unidades restantes entre divisiones que tienen datos pero units=0
+    if (_divsSinUnits.length > 0) {
+      var _restantes = Math.max(0, (x.unidadesTotal || 0) - _unitsAsignadas);
+      var _porDiv = Math.floor(_restantes / _divsSinUnits.length) || 1;
+      _divsSinUnits.forEach(function(d) {
+        var fechaDiv = (d.mes && d.anio) ? (d.anio + '-' + String(d.mes).padStart(2,'0')) : (x.fechaLote || '');
+        lineasNuevas.push({
+          cod: x.cod, desc: x.desc,
+          cantUnidades: _porDiv, cantCaja: upCajaFuera,
+          cajasEsperadas: Math.ceil(_porDiv / upCajaFuera),
+          cajasEscaneadas: Math.ceil(_porDiv / upCajaFuera),
+          unidadesControladas: _porDiv,
+          fechaLote: fechaDiv,
+          lote: d.lote || '',
+          palet: d.palet || x.palet || '',
+          agregadaEnEscaneo: true,
+          horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+          horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
+        });
+      });
+    }
   }
   // Si no había divisiones (o todas vacías), crear la linea simple original
   if (lineasNuevas.length === 0) {
