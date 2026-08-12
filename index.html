@@ -3151,23 +3151,56 @@ function abrirPanelCompletarControl() {
       var tbodyFuera = '';
       itemsFueraOC.forEach(function(x, j) {
         if (_filtroCodCompletarControl && String(x.cod).trim() !== _filtroCodCompletarControl) return;
-        tbodyFuera +=
-          '<tr>' +
-            '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(x.cod) + '</span></td>' +
-            '<td style="max-width:200px;">' + escHtml(x.desc) + '</td>' +
-            '<td style="text-align:center;"><span style="font-weight:700;color:var(--c-amber);">' + (x.unidadesTotal||0) + ' u.</span></td>' +
-            '<td style="white-space:nowrap;">' +
-              '<input type="number" id="cc-fuera-mes-' + j + '" min="1" max="12" placeholder="MM" ' +
-              'value="' + (x.fechaLote ? x.fechaLote.split('-')[1] : '') + '" ' +
-              'style="width:52px; text-align:center; padding:5px 4px;" />' +
-              '<span style="margin:0 3px; color:var(--c-text3);">/</span>' +
-              '<input type="number" id="cc-fuera-anio-' + j + '" min="2020" max="2040" placeholder="AAAA" ' +
-              'value="' + (x.fechaLote ? x.fechaLote.split('-')[0] : '') + '" ' +
-              'style="width:64px; text-align:center; padding:5px 4px;" />' +
-            '</td>' +
-            '<td><input type="text" id="cc-fuera-lote-' + j + '" value="' + escHtml(x.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
-            '<td><input type="text" id="cc-fuera-palet-' + j + '" value="' + escHtml(x.palet || '') + '" placeholder="Ej: P-01" /></td>' +
-          '</tr>';
+        var divididoFuera = x.divisiones && x.divisiones.length > 0;
+        if (!divididoFuera) {
+          tbodyFuera +=
+            '<tr>' +
+              '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(x.cod) + '</span></td>' +
+              '<td style="max-width:200px;">' + escHtml(x.desc) + '</td>' +
+              '<td style="text-align:center;"><span style="font-weight:700;color:var(--c-amber);">' + (x.unidadesTotal||0) + ' u.</span></td>' +
+              '<td style="white-space:nowrap;">' +
+                '<input type="number" id="cc-fuera-mes-' + j + '" min="1" max="12" placeholder="MM" ' +
+                'value="' + (x.fechaLote ? x.fechaLote.split('-')[1] : '') + '" ' +
+                'style="width:52px; text-align:center; padding:5px 4px;" />' +
+                '<span style="margin:0 3px; color:var(--c-text3);">/</span>' +
+                '<input type="number" id="cc-fuera-anio-' + j + '" min="2020" max="2040" placeholder="AAAA" ' +
+                'value="' + (x.fechaLote ? x.fechaLote.split('-')[0] : '') + '" ' +
+                'style="width:64px; text-align:center; padding:5px 4px;" />' +
+              '</td>' +
+              '<td><input type="text" id="cc-fuera-lote-' + j + '" value="' + escHtml(x.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
+              '<td><input type="text" id="cc-fuera-palet-' + j + '" value="' + escHtml(x.palet || '') + '" placeholder="Ej: P-01" /></td>' +
+              '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleDividirFuera(' + j + ')" style="font-size:11px; padding:4px 8px;"><i class="ti ti-git-branch"></i> Dividir</button></td>' +
+            '</tr>';
+        } else {
+          // Encabezado dividido
+          tbodyFuera +=
+            '<tr style="background:var(--c-bg2);">' +
+              '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(x.cod) + '</span></td>' +
+              '<td colspan="3">' + escHtml(x.desc) + ' <span style="font-size:10px;color:var(--c-text3);">— dividido en ' + x.divisiones.length + ' parte(s) · ' + (x.unidadesTotal||0) + ' u. total</span></td>' +
+              '<td colspan="1"></td>' +
+              '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="cerrarDivisionFuera(' + j + ')" style="font-size:11px; padding:4px 8px; color:var(--c-red);"><i class="ti ti-x"></i> Cerrar división</button></td>' +
+            '</tr>';
+          // Sub-filas por división
+          x.divisiones.forEach(function(d, k) {
+            tbodyFuera +=
+              '<tr>' +
+                '<td></td>' +
+                '<td style="padding-left:20px;font-size:11px;color:var(--c-text3);">Parte ' + (k+1) + ':</td>' +
+                '<td style="text-align:center;"><input type="number" id="cc-fuera-div-' + j + '-' + k + '-unidades" min="0" placeholder="u." value="' + (d.unidades||'') + '" style="width:64px;text-align:center;padding:5px 4px;" /></td>' +
+                '<td style="white-space:nowrap;">' +
+                  '<input type="number" id="cc-fuera-div-' + j + '-' + k + '-mes" min="1" max="12" placeholder="MM" value="' + (d.mes||'') + '" style="width:52px;text-align:center;padding:5px 4px;" />' +
+                  '<span style="margin:0 3px;color:var(--c-text3);">/</span>' +
+                  '<input type="number" id="cc-fuera-div-' + j + '-' + k + '-anio" min="2020" max="2040" placeholder="AAAA" value="' + (d.anio||'') + '" style="width:64px;text-align:center;padding:5px 4px;" />' +
+                '</td>' +
+                '<td><input type="text" id="cc-fuera-div-' + j + '-' + k + '-lote" value="' + escHtml(d.lote||'') + '" placeholder="Ej: L-2024" /></td>' +
+                '<td><input type="text" id="cc-fuera-div-' + j + '-' + k + '-palet" value="' + escHtml(d.palet||'') + '" placeholder="Ej: P-01" /></td>' +
+              '</tr>';
+          });
+          tbodyFuera +=
+            '<tr><td colspan="6" style="padding:6px 8px 12px;">' +
+              '<button type="button" class="btn btn-sm" onclick="agregarDivisionFuera(' + j + ')" style="font-size:11px;padding:4px 8px;"><i class="ti ti-plus"></i> Agregar otra parte</button>' +
+            '</td></tr>';
+        }
       });
       fueraContainer.innerHTML =
         '<div style="font-size:11px; font-weight:700; color:var(--c-amber); text-transform:uppercase; letter-spacing:0.06em; margin:16px 0 8px;">' +
@@ -3177,7 +3210,7 @@ function abrirPanelCompletarControl() {
           '<table class="completar-table">' +
             '<thead><tr>' +
               '<th>Código</th><th>Descripción</th><th style="text-align:center;">Cant.</th>' +
-              '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Palet</th>' +
+              '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Palet</th><th></th>' +
             '</tr></thead>' +
             '<tbody>' + tbodyFuera + '</tbody>' +
           '</table>' +
@@ -3252,6 +3285,38 @@ function limpiarFiltroCompletarControl() {
 
 // Activa el modo "dividido" para una línea — le crea una primera parte
 // vacía y la muestra desglosada en vez de un solo lote/fecha/palet.
+
+// ── Dividir productos fuera de OC ────────────────────────────────────────
+function toggleDividirFuera(j) {
+  _commitCompletarControlValues();
+  var x = itemsFueraOC[j];
+  if (!x) return;
+  x.divisiones = [{
+    unidades: x.unidadesTotal || 0,
+    mes:  x.fechaLote ? x.fechaLote.split('-')[1] : '',
+    anio: x.fechaLote ? x.fechaLote.split('-')[0] : '',
+    lote: x.lote  || '',
+    palet: x.palet || ''
+  }];
+  abrirPanelCompletarControl();
+}
+
+function agregarDivisionFuera(j) {
+  _commitCompletarControlValues();
+  var x = itemsFueraOC[j];
+  if (!x || !x.divisiones) return;
+  x.divisiones.push({ unidades: 0, mes: '', anio: '', lote: '', palet: '' });
+  abrirPanelCompletarControl();
+}
+
+function cerrarDivisionFuera(j) {
+  if (!confirm('¿Volver a un solo lote/fecha para este producto? Se van a perder las partes cargadas.')) return;
+  var x = itemsFueraOC[j];
+  if (!x) return;
+  delete x.divisiones;
+  abrirPanelCompletarControl();
+}
+
 function toggleDividirLinea(i) {
   _commitCompletarControlValues(); // no perder lo ya tipeado en otras líneas
   var r = remito[i];
@@ -3327,6 +3392,22 @@ function _commitCompletarControlValues() {
   // Lo mismo para los productos fuera de esta O.C. — el operario los completa
   // en el momento porque es quien tiene la caja físicamente.
   (itemsFueraOC || []).forEach(function(x, j) {
+    if (x.divisiones && x.divisiones.length > 0) {
+      // Item dividido: leer cada parte por separado
+      x.divisiones.forEach(function(d, k) {
+        var uEl    = document.getElementById('cc-fuera-div-' + j + '-' + k + '-unidades');
+        var mesEl  = document.getElementById('cc-fuera-div-' + j + '-' + k + '-mes');
+        var anioEl = document.getElementById('cc-fuera-div-' + j + '-' + k + '-anio');
+        var loteEl = document.getElementById('cc-fuera-div-' + j + '-' + k + '-lote');
+        var paletEl= document.getElementById('cc-fuera-div-' + j + '-' + k + '-palet');
+        if (uEl)    d.unidades = parseInt(uEl.value, 10) || 0;
+        if (mesEl)  d.mes  = mesEl.value.trim();
+        if (anioEl) d.anio = anioEl.value.trim();
+        if (loteEl) d.lote = loteEl.value.trim();
+        if (paletEl)d.palet= paletEl.value.trim();
+      });
+      return;
+    }
     var mesEl  = document.getElementById('cc-fuera-mes-'  + j);
     var anioEl = document.getElementById('cc-fuera-anio-' + j);
     var loteEl  = document.getElementById('cc-fuera-lote-'  + j);
