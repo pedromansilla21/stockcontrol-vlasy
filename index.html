@@ -4077,36 +4077,72 @@ function confirmarAgregarItemFueraOC() {
 
   // Salvaguarda: confirmar el estado actual de la O.C. antes de tocar nada
   var lineasAntes = oc.lineas ? oc.lineas.length : 0;
-  if (!confirm('La O.C. ' + (oc.nro || '') + ' tiene ' + lineasAntes + ' línea' + (lineasAntes !== 1 ? 's' : '') + ' en este momento. ¿Confirmás agregar "' + x.desc + '" (quedaría con ' + (lineasAntes + 1) + ')?')) {
+  // Calcular lineasNuevas ANTES del confirm para mostrar el número correcto
+  var lineasNuevas = [];
+  var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
+  if (x.divisiones && x.divisiones.length > 0) {
+    x.divisiones.forEach(function(d) {
+      var uDiv = (parseInt(d.unidades, 10) || 0) ||
+                 ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
+      if (uDiv > 0) lineasNuevas.push(d); // placeholder para contar
+    });
+  }
+  var nLineasAAgregar = Math.max(1, lineasNuevas.length);
+  lineasNuevas = []; // resetear — se reconstruye abajo
+  var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
+  if (!confirm('La O.C. ' + (oc.nro || '') + ' tiene ' + lineasAntes + ' línea' + (lineasAntes !== 1 ? 's' : '') + ' en este momento. ¿Confirmás agregar "' + x.desc + '" (quedaría con ' + (lineasAntes + nLineasAAgregar) + ')?')) {
     return;
   }
 
-  var nuevaLinea = {
-    cod: x.cod,
-    desc: x.desc,
-    cantUnidades: x.unidadesTotal,
-    cantCaja: x.cantCaja,
-    cajasEsperadas: x.cajasEscaneadas,
-    sueltasEsperadas: x.unidadesSueltas,
-    cajasEscaneadas: x.cajasEscaneadas,
-    unidadesSueltas: x.unidadesSueltas,
-    unidadesControladas: x.unidadesTotal,
-    fechaLote: x.fechaLote || '',
-    lote: x.lote || '',
-    agregadaEnEscaneo: true,
-    horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
-    horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
-  };
+  // Reconstruir lineasNuevas completas (una por división o una simple)
+  lineasNuevas = [];
+  var upCajaFuera = parseInt(x.cantCaja || 1, 10) || 1;
+  if (x.divisiones && x.divisiones.length > 0) {
+    x.divisiones.forEach(function(d) {
+      var uDiv = (parseInt(d.unidades, 10) || 0) ||
+                 ((parseInt(d.cajas, 10) || 0) * upCajaFuera);
+      if (uDiv <= 0) return;
+      var fechaDiv = (d.mes && d.anio) ? (d.anio + '-' + String(d.mes).padStart(2,'0')) : (x.fechaLote || '');
+      lineasNuevas.push({
+        cod: x.cod, desc: x.desc,
+        cantUnidades: uDiv, cantCaja: upCajaFuera,
+        cajasEsperadas: Math.ceil(uDiv / upCajaFuera),
+        cajasEscaneadas: Math.ceil(uDiv / upCajaFuera),
+        unidadesControladas: uDiv,
+        fechaLote: fechaDiv,
+        lote: d.lote || '',
+        palet: d.palet || x.palet || '',
+        agregadaEnEscaneo: true,
+        horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+        horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
+      });
+    });
+  }
+  // Si no había divisiones (o todas vacías), crear la linea simple original
+  if (lineasNuevas.length === 0) {
+    lineasNuevas.push({
+      cod: x.cod, desc: x.desc,
+      cantUnidades: x.unidadesTotal, cantCaja: x.cantCaja,
+      cajasEsperadas: x.cajasEscaneadas, sueltasEsperadas: x.unidadesSueltas,
+      cajasEscaneadas: x.cajasEscaneadas, unidadesSueltas: x.unidadesSueltas,
+      unidadesControladas: x.unidadesTotal,
+      fechaLote: x.fechaLote || '', lote: x.lote || '',
+      agregadaEnEscaneo: true,
+      horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
+      horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
+    });
+  }
+  var nuevaLinea = lineasNuevas[0]; // para el confirm y validaciones que siguen
 
   oc.lineas = oc.lineas || [];
-  oc.lineas.push(nuevaLinea);
+  lineasNuevas.forEach(function(l){ oc.lineas.push(l); });
   oc.itemsFueraOC.splice(idx, 1);
   oc.savedAt = new Date().toISOString();  // clave para que la sincronización no pise este cambio
 
-  // Verificación: la línea recién agregada tiene que estar, y nada más debería haber cambiado
+  // Verificación: deben haberse agregado exactamente lineasNuevas.length líneas
   var lineasDespues = oc.lineas.length;
-  if (lineasDespues !== lineasAntes + 1) {
-    alert('⚠ Algo no está bien: se esperaban ' + (lineasAntes + 1) + ' líneas y hay ' + lineasDespues + '. Se cancela la operación, nada se guardó.');
+  if (lineasDespues !== lineasAntes + lineasNuevas.length) {
+    alert('⚠ Algo no está bien: se esperaban ' + (lineasAntes + lineasNuevas.length) + ' líneas y hay ' + lineasDespues + '. Se cancela la operación, nada se guardó.');
     cerrarModalAgregarFueraOC();
     return;
   }
@@ -4114,40 +4150,43 @@ function confirmarAgregarItemFueraOC() {
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
 
-  // Si es palet → actualizar HISTORIAL DE PALETS con la nueva línea
-  // Si es OC normal → registrar en HISTORIAL COMPLETO
+  // Si es palet → actualizar HISTORIAL DE PALETS con cada nueva línea
+  // Si es OC normal → registrar en HISTORIAL COMPLETO (una fila por división)
   if (oc.esPalet) {
     var fechaHoy = new Date().toLocaleDateString('es-AR');
-    var filasPalet = [{
-      cod:          nuevaLinea.cod || '—',
-      desc:         nuevaLinea.desc || '—',
-      categoria:    nuevaLinea.categoria || '—',
-      marca:        oc.proveedor || '—',
-      cant:         nuevaLinea.unidadesControladas || nuevaLinea.cantUnidades || 0,
-      un:           nuevaLinea.un || 'UND',
-      fecha:        nuevaLinea.fechaLote || '—',
-      lote:         nuevaLinea.lote || '—',
-      palet:        oc.palet || '—',
-      contenedor:   oc.contenedor || '—',
-      ubicacion:    oc.ubicacion || '—',
-      observacion:  oc.obs || '',
-      controlPalet:     fechaHoy,
-      controlUbicacion: fechaHoy,
-      operario:     oc.escaneadoPor || oc.responsable || '—'
-    }];
+    var filasPalet = lineasNuevas.map(function(nl) {
+      return {
+        cod:          nl.cod || '—',
+        desc:         nl.desc || '—',
+        categoria:    nl.categoria || '—',
+        marca:        oc.proveedor || '—',
+        cant:         nl.unidadesControladas || nl.cantUnidades || 0,
+        un:           nl.un || 'UND',
+        fecha:        nl.fechaLote || '—',
+        lote:         nl.lote || '—',
+        palet:        oc.palet || '—',
+        contenedor:   oc.contenedor || '—',
+        ubicacion:    oc.ubicacion || '—',
+        observacion:  oc.obs || '',
+        controlPalet:     fechaHoy,
+        controlUbicacion: fechaHoy,
+        operario:     oc.escaneadoPor || oc.responsable || '—'
+      };
+    });
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
       body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: filasPalet })
     });
   } else {
-    // Registrar SOLO la línea nueva en HISTORIAL COMPLETO
-    _agregarDetalleHistorial(oc, [nuevaLinea], oc.escaneadoPor || oc.responsable || '');
+    // Registrar cada nueva línea por separado en HISTORIAL COMPLETO
+    _agregarDetalleHistorial(oc, lineasNuevas, oc.escaneadoPor || oc.responsable || '');
   }
 
+  var totalU = lineasNuevas.reduce(function(s,l){ return s+(l.unidadesControladas||0); },0);
   cerrarModalAgregarFueraOC();
   renderOrdenes();
-  showToast('✓ "' + x.desc + '" agregado a la O.C. ' + (oc.nro || '') + ' — ' + x.unidadesTotal + ' u. (' + lineasDespues + ' líneas en total)');
+  showToast('✓ "' + x.desc + '" agregado a la O.C. ' + (oc.nro || '') + ' — ' + totalU + ' u. (' + lineasDespues + ' líneas en total)');
 }
 
 function renderRegistro() {
@@ -5650,10 +5689,12 @@ function renderLineasOCTable(lineas, ocId) {
       // Si TODAS las divisiones están en 0, saltar el artículo completo
       var divConStock = l.divisiones.filter(function(d){ return (parseInt(d.cajas,10)||0) > 0; });
       if (divConStock.length === 0) return;
+      // ESP = suma de unidades de divisiones restantes (no el valor original pre-reposición)
+      var uEspLDiv = l.divisiones.reduce(function(s, d){ return s + (parseInt(d.cajas,10)||0) * upCajaL; }, 0);
       html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '" style="background:rgba(255,255,255,0.03);">' +
         '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
         '<td style="font-weight:600; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + '</td>' +
-        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspL + ' u.</td>' +
+        '<td style="text-align:center; padding:8px; color:var(--c-text2);">' + uEspLDiv + ' u.</td>' +
         '<td style="text-align:center; padding:8px; font-weight:700; color:' + cntColor + ';">' + uCtrlL + ' u.' + (sobraL ? ' ⚠' : ok ? ' ✓' : '') + '</td>' +
         (tieneFecha ? '<td style="padding:8px;"></td>' : '') +
         (tieneLote  ? '<td style="padding:8px;"></td>' : '') +
