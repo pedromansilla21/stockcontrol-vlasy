@@ -5575,16 +5575,30 @@ function renderItemsFueraOCReporte(oc) {
     '</div>' +
     '<div style="display:flex; flex-direction:column; gap:3px;">';
   oc.itemsFueraOC.forEach(function(x, idx) {
-    html += '<div style="display:flex; align-items:center; gap:8px; background:var(--c-surface); border-radius:4px; padding:5px 10px; font-size:11px;">' +
-      '<span class="mono" style="color:var(--c-text3); min-width:80px; flex-shrink:0;">' + escHtml(x.cod) + '</span>' +
-      '<span style="flex:1; color:var(--c-text);">' + escHtml(x.desc) + '</span>' +
-      '<span style="color:var(--c-amber); font-weight:700; white-space:nowrap;">' + (x.unidadesTotal||0) + ' u.</span>' +
-      '<span style="color:var(--c-text3); font-size:10px; white-space:nowrap;">' + escHtml(x.operario || '—') + '</span>' +
-      (puedeAgregar
-        ? '<button class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px;" onclick="agregarItemFueraOCAdmin(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-plus"></i> Agregar</button>' +
-          '<button class="btn btn-sm btn-danger" style="padding:4px 10px; font-size:11px; margin-left:4px;" onclick="descartarItemFueraOC(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-x"></i> Quitar</button>'
-        : '') +
-    '</div>';
+    var tieneDivisiones = x.divisiones && x.divisiones.length > 0;
+    html += '<div style="background:var(--c-surface); border-radius:4px; padding:6px 10px; font-size:11px; margin-bottom:3px;">' +
+      '<div style="display:flex; align-items:center; gap:8px;">' +
+        '<span class="mono" style="color:var(--c-text3); min-width:80px; flex-shrink:0;">' + escHtml(x.cod) + '</span>' +
+        '<span style="flex:1; color:var(--c-text); font-weight:600;">' + escHtml(x.desc) + '</span>' +
+        '<span style="color:var(--c-amber); font-weight:700; white-space:nowrap;">' + (x.unidadesTotal||0) + ' u.</span>' +
+        '<span style="color:var(--c-text3); font-size:10px; white-space:nowrap;">' + escHtml(x.operario || '\u2014') + '</span>' +
+        (puedeAgregar
+          ? '<button class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px;" onclick="agregarItemFueraOCAdmin(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-plus"></i> Agregar' + (tieneDivisiones ? ' (' + x.divisiones.length + ' partes)' : '') + '</button>' +
+            '<button class="btn btn-sm btn-danger" style="padding:4px 10px; font-size:11px; margin-left:4px;" onclick="descartarItemFueraOC(\'' + oc.id + '\',' + idx + ')"><i class="ti ti-x"></i> Quitar</button>'
+          : '') +
+      '</div>';
+    if (tieneDivisiones) {
+      x.divisiones.forEach(function(d, k) {
+        var uDiv = parseInt(d.unidades, 10) || 0;
+        var fechaDiv = (d.mes && d.anio) ? String(d.mes).padStart(2,'0') + '/' + d.anio : '\u2014';
+        html += '<div style="display:flex; gap:12px; padding:3px 0 2px 20px; font-size:10px; color:var(--c-text2); border-top:1px solid var(--c-border2);">' +
+          '<span>\u21b3 <b>' + uDiv + ' u.</b></span>' +
+          (d.lote ? '<span>Lote: <b>' + escHtml(d.lote) + '</b></span>' : '') +
+          '<span>Vto: <b>' + fechaDiv + '</b></span>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
   });
   html += '</div></div>';
   return html;
