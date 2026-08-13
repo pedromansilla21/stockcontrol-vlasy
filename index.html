@@ -6782,6 +6782,11 @@ function _clasRenderLineas() {
       '</tr>';
       // Una fila por cada división — cantidad editable
       l.divisiones.forEach(function(div, divIdx) {
+        // Inicializar cantReal desde cajas*upCaja si nunca fue editado
+        var upCajaL2 = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
+        if (div.cantReal === undefined || div.cantReal === null) {
+          div.cantReal = (parseInt(div.cajas, 10) || 0) * upCajaL2;
+        }
         var mes  = (div.mes  || '').toString().padStart(2,'0');
         var anio = div.anio  || '';
         var fechaDisplay = (mes && anio) ? mes + '/' + anio : (div.fecha || '—');
