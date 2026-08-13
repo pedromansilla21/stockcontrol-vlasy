@@ -2956,11 +2956,40 @@ function renderTablaControl() {
     });
 
     (function(idx) {
+      var r2 = remito[idx];
+      var editState = _getEditRequestState(idx);
+      var editBtnHtml = '';
+      if (editState === 'none') {
+        editBtnHtml = '<button class="btn btn-sm btn-editar-manual" data-idx="' + idx + '" title="Solicitar ingreso manual de cantidad" style="background:rgba(91,191,214,0.10); border:1.5px solid var(--c-blue); color:var(--c-blue); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-pencil" style="font-size:13px;"></i> Editar</button>';
+      } else if (editState === 'pending') {
+        editBtnHtml = '<span style="font-size:11px; color:var(--c-amber); font-weight:600; white-space:nowrap;"><i class="ti ti-clock" style="vertical-align:-2px;"></i> Esperando...</span>';
+      } else if (editState === 'approved') {
+        editBtnHtml = '<div style="display:flex; gap:4px; align-items:center;">' +
+          '<input type="number" min="0" data-idx="' + idx + '" class="ctrl-input-inline edit-manual-input" placeholder="Cant." style="width:64px; font-size:12px; padding:3px 6px;" />' +
+          '<button class="btn btn-sm btn-confirmar-manual" data-idx="' + idx + '" style="background:rgba(91,214,139,0.12); border:1.5px solid var(--c-green); color:var(--c-green); font-size:11px; font-weight:600; padding:4px 8px;">✓</button>' +
+        '</div>';
+      } else if (editState === 'rejected') {
+        editBtnHtml = '<span style="font-size:11px; color:var(--c-red); font-weight:600; white-space:nowrap;"><i class="ti ti-x" style="vertical-align:-2px;"></i> Rechazado</span>';
+      }
+      var manualBadge = (r2._ingresoManual) ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:2px;">MANUAL</span>' : '';
       tr.lastElementChild.innerHTML =
-        '<div style="display:flex; gap:4px; justify-content:center;">' +
+        '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
           '<button class="btn btn-sm btn-restar" title="Dar de baja unidades (corrección por escaneo de más)" style="background:rgba(251,191,36,0.08); border:1.5px solid var(--c-amber); color:var(--c-amber); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-minus" style="font-size:13px;"></i> Bajas</button>' +
+          editBtnHtml +
+          manualBadge +
         '</div>';
       tr.lastElementChild.querySelector('.btn-restar').addEventListener('click', function() { restarUnidadesControl(idx); });
+      var editBtn = tr.lastElementChild.querySelector('.btn-editar-manual');
+      if (editBtn) editBtn.addEventListener('click', function() { solicitarEdicionManual(parseInt(this.dataset.idx)); });
+      var confirmBtn = tr.lastElementChild.querySelector('.btn-confirmar-manual');
+      if (confirmBtn) confirmBtn.addEventListener('click', function() {
+        var inp = tr.lastElementChild.querySelector('.edit-manual-input');
+        var cant = inp ? parseInt(inp.value, 10) : NaN;
+        if (isNaN(cant) || cant < 0) { showToast('Ingresá una cantidad válida'); return; }
+        confirmarEdicionManual(parseInt(this.dataset.idx), cant);
+      });
+      var editInp = tr.lastElementChild.querySelector('.edit-manual-input');
+      if (editInp) editInp.addEventListener('keydown', function(e) { e.stopPropagation(); if (e.key === 'Enter') { var cant = parseInt(this.value, 10); if (!isNaN(cant) && cant >= 0) confirmarEdicionManual(parseInt(this.dataset.idx), cant); } });
     })(i);
     tb.appendChild(tr);
   });
@@ -7942,6 +7971,10 @@ function aplicarRol(rol) {
   if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
     iniciarSincAlertasRemito();
   }
+  // Iniciar poll de edición manual para aprobadores (administrativo)
+  if (typeof _iniciarPollEdicionSupervisor === 'function') {
+    setTimeout(_iniciarPollEdicionSupervisor, 1500);
+  }
 }
 
 // ── SINCRONIZACIÓN DE ALERTAS PARA OPERARIOS ──────────────────
@@ -9233,6 +9266,216 @@ function _checkAlertaEscaneo() {
 }
 
 var _alertaEscaneoFila = 1;
+
+// ── SISTEMA DE EDICIÓN MANUAL CON APROBACIÓN ──────────────────────────────────
+// ALERTAS!A2 = JSON array de solicitudes de edición activas
+// Formato: [{idx, cod, desc, cantEsp, ocId, operario, deviceId, ts, status:'pending'|'approved'|'rejected'}]
+var EDIT_FILA_ALERTAS = 2;
+var _editRequests = []; // cache local
+var _editPollInterval = null;
+var _editPollActive = false;
+var _supervisorAlmacenRoles = ['administrativo']; // roles que pueden aprobar
+
+function _esAprobadorEdicion() {
+  if (!CURRENT_USER) return false;
+  return _supervisorAlmacenRoles.indexOf(CURRENT_USER.rol) >= 0;
+}
+
+function _getEditRequestState(idx) {
+  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return 'none';
+  var ocId = remitoDatos.ocId;
+  var deviceId = _getDeviceId();
+  var req = _editRequests.find(function(r) { return r.idx === idx && r.ocId === ocId && r.deviceId === deviceId; });
+  if (!req) return 'none';
+  return req.status; // 'pending', 'approved', 'rejected'
+}
+
+async function _writeEditRequests(arr) {
+  var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
+  fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: val, fila: EDIT_FILA_ALERTAS }) });
+}
+
+async function _readEditRequests() {
+  try {
+    var rows = await sheetsRead('ALERTAS!A' + EDIT_FILA_ALERTAS);
+    if (!rows || !rows[0] || !rows[0][0]) return [];
+    var val = String(rows[0][0]).trim();
+    if (!val || val === 'VACIO') return [];
+    return JSON.parse(val);
+  } catch(e) { return []; }
+}
+
+function solicitarEdicionManual(idx) {
+  var r = remito[idx];
+  if (!r) return;
+  var ocId = remitoDatos.ocId;
+  var deviceId = _getDeviceId();
+  // Verificar que no haya una solicitud pendiente de este operario para este artículo
+  var existing = _editRequests.find(function(req) { return req.idx === idx && req.ocId === ocId && req.deviceId === deviceId; });
+  if (existing) { showToast('Ya hay una solicitud pendiente para este artículo'); return; }
+  var newReq = { idx: idx, cod: r.cod, desc: r.desc, cantEsp: r.cantUnidades || 0, ocId: ocId, operario: CURRENT_USER.name, deviceId: deviceId, ts: Date.now(), status: 'pending' };
+  _editRequests.push(newReq);
+  _writeEditRequests(_editRequests);
+  renderTablaControl();
+  showToast('Solicitud enviada. Esperando aprobación del supervisor...');
+  _iniciarPollEdicion();
+}
+
+function confirmarEdicionManual(idx, cantidad) {
+  var r = remito[idx];
+  if (!r) return;
+  // Registrar unidades como si fueran escaneadas
+  r.unidadesControladas = cantidad;
+  var cantCaja = r.cantCaja || 1;
+  r.cajasEscaneadas = Math.floor(cantidad / cantCaja);
+  r.unidadesSueltas = cantidad % cantCaja;
+  r._ingresoManual = true;
+  // Limpiar la solicitud
+  var ocId = remitoDatos.ocId;
+  var deviceId = _getDeviceId();
+  _editRequests = _editRequests.filter(function(req) { return !(req.idx === idx && req.ocId === ocId && req.deviceId === deviceId); });
+  _writeEditRequests(_editRequests);
+  triggerAutosave();
+  renderTablaControl();
+  showToast('Cantidad registrada: ' + cantidad + ' u. (ingreso manual)');
+}
+
+function _iniciarPollEdicion() {
+  if (_editPollInterval) return;
+  _editPollInterval = setInterval(_pollEdicion, 5000);
+  setTimeout(_pollEdicion, 1000);
+}
+
+function _detenerPollEdicion() {
+  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
+}
+
+// Limpiar solicitudes expiradas (> 5 min)
+function _limpiarExpirados(arr) {
+  var now = Date.now();
+  return arr.filter(function(r) { return (now - r.ts) < 300000; });
+}
+
+async function _pollEdicion() {
+  if (_editPollActive) return;
+  _editPollActive = true;
+  try {
+    var remoto = await _readEditRequests();
+    remoto = _limpiarExpirados(remoto);
+    var ocId = remitoDatos ? remitoDatos.ocId : null;
+    var deviceId = _getDeviceId();
+    var changed = false;
+
+    if (CURRENT_USER && CURRENT_USER.rol === 'operario' && ocId) {
+      // Buscar cambios en las solicitudes propias
+      var misReqs = _editRequests.filter(function(r) { return r.ocId === ocId && r.deviceId === deviceId; });
+      misReqs.forEach(function(localReq) {
+        var remoteReq = remoto.find(function(r) { return r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId; });
+        if (remoteReq && remoteReq.status !== localReq.status) {
+          localReq.status = remoteReq.status;
+          changed = true;
+          if (remoteReq.status === 'approved') {
+            showToast('✅ Solicitud aprobada. Ingresá la cantidad manualmente.');
+          } else if (remoteReq.status === 'rejected') {
+            showToast('❌ Solicitud rechazada por el supervisor.');
+            // Auto-limpiar rejected después de 5s
+            setTimeout(function() {
+              _editRequests = _editRequests.filter(function(r) { return !(r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId); });
+              renderTablaControl();
+            }, 5000);
+          }
+        }
+        // Si ya no está en el remoto (fue procesada), limpiar local
+        if (!remoteReq && localReq.status === 'pending') {
+          // Timeout: el supervisor no respondió
+          if ((Date.now() - localReq.ts) > 300000) {
+            localReq.status = 'rejected';
+            changed = true;
+            showToast('⏱ Solicitud expirada sin respuesta del supervisor.');
+          }
+        }
+      });
+      if (changed) renderTablaControl();
+      // Si no hay solicitudes pendientes, detener poll
+      var hayPendientes = _editRequests.some(function(r) { return r.status === 'pending' || r.status === 'approved'; });
+      if (!hayPendientes) _detenerPollEdicion();
+    }
+
+    if (_esAprobadorEdicion()) {
+      // Mostrar banner supervisor si hay solicitudes pendientes
+      _renderBannerSupervisorEdicion(remoto);
+    }
+  } catch(e) {} finally { _editPollActive = false; }
+}
+
+function _renderBannerSupervisorEdicion(requests) {
+  var pendientes = requests.filter(function(r) { return r.status === 'pending'; });
+  var banner = document.getElementById('banner-edit-approval');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'banner-edit-approval';
+    banner.style.cssText = 'position:fixed; top:60px; right:16px; z-index:9999; max-width:380px; display:none;';
+    document.body.appendChild(banner);
+  }
+  if (pendientes.length === 0) { banner.style.display = 'none'; return; }
+
+  var html = '<div style="background:var(--c-surface2); border:1.5px solid var(--c-amber); border-radius:var(--radius-md); box-shadow:0 4px 20px rgba(0,0,0,.4); padding:14px 16px;">' +
+    '<div style="font-size:13px; font-weight:700; color:var(--c-amber); margin-bottom:10px;"><i class="ti ti-pencil" style="vertical-align:-2px; margin-right:6px;"></i>Solicitudes de edición manual</div>';
+  pendientes.forEach(function(req) {
+    var age = Math.round((Date.now() - req.ts) / 1000);
+    var ageStr = age < 60 ? age + 's' : Math.round(age/60) + 'min';
+    html += '<div style="border-top:1px solid var(--c-border); padding:8px 0; font-size:12px;">' +
+      '<div style="font-weight:600; color:var(--c-text1);">' + escHtml(req.desc || req.cod) + '</div>' +
+      '<div style="color:var(--c-text3);">Operario: ' + escHtml(req.operario) + ' · ' + req.cantEsp + ' u. esperadas · hace ' + ageStr + '</div>' +
+      '<div style="display:flex; gap:8px; margin-top:6px;">' +
+        '<button onclick="_aprobarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(91,214,139,0.12); border:1.5px solid var(--c-green); color:var(--c-green); border-radius:var(--radius-sm); padding:4px 12px; font-size:12px; font-weight:600; cursor:pointer;">✓ Aprobar</button>' +
+        '<button onclick="_rechazarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(239,68,68,0.10); border:1.5px solid var(--c-red); color:var(--c-red); border-radius:var(--radius-sm); padding:4px 12px; font-size:12px; font-weight:600; cursor:pointer;">✕ Rechazar</button>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  banner.innerHTML = html;
+  banner.style.display = 'block';
+}
+
+async function _aprobarEdicion(deviceId, idx, ocId) {
+  var remoto = await _readEditRequests();
+  remoto = remoto.map(function(r) {
+    if (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId) return Object.assign({}, r, { status: 'approved' });
+    return r;
+  });
+  _editRequests = remoto; // sync local (supervisor también actualiza)
+  await _writeEditRequests(remoto);
+  _renderBannerSupervisorEdicion(remoto);
+  showToast('Edición aprobada');
+}
+
+async function _rechazarEdicion(deviceId, idx, ocId) {
+  var remoto = await _readEditRequests();
+  remoto = remoto.map(function(r) {
+    if (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId) return Object.assign({}, r, { status: 'rejected' });
+    return r;
+  });
+  _editRequests = remoto;
+  await _writeEditRequests(remoto);
+  // Limpiar rejected del array remoto después de 10s para no acumular basura
+  setTimeout(async function() {
+    var arr = await _readEditRequests();
+    arr = arr.filter(function(r) { return !(r.deviceId === deviceId && r.idx === idx && r.ocId === ocId && r.status === 'rejected'); });
+    _writeEditRequests(arr);
+  }, 10000);
+  _renderBannerSupervisorEdicion(remoto);
+  showToast('Edición rechazada');
+}
+
+// Iniciar poll para supervisor al login
+function _iniciarPollEdicionSupervisor() {
+  if (!_esAprobadorEdicion()) return;
+  if (_editPollInterval) return;
+  _editPollInterval = setInterval(_pollEdicion, 5000);
+  setTimeout(_pollEdicion, 1000);
+}
+// ── FIN SISTEMA EDICIÓN MANUAL ─────────────────────────────────────────────────
 
 async function aceptarAlertaEscaneo() {
   document.getElementById('modal-alerta-escaneo').classList.remove('open');
