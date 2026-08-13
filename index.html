@@ -5196,13 +5196,30 @@ async function syncOrdenes() {
 }
 
 
+// Devuelve las unidades reales de una división: usa cantReal si está definido, sino cajas*upCaja
+function _divCantUnidades(div, upCaja) {
+  if (div.cantReal !== undefined) return parseInt(div.cantReal, 10) || 0;
+  return (parseInt(div.cajas, 10) || 0) * (upCaja || 1);
+}
+
+// Devuelve true si una línea con divisiones tiene todas sus divisiones en 0
+// (fue editada a 0 manualmente — debe ocultarse del reporte y del contador)
+function _lineaEsFantasma(l) {
+  if (!l.divisiones || l.divisiones.length === 0) return false;
+  var upCaja = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
+  return l.divisiones.every(function(d) { return _divCantUnidades(d, upCaja) === 0; });
+}
+
 function getEstadoOC(oc) {
   if (!oc.lineas || oc.lineas.length === 0) return 'pendiente';
   // Excluir líneas 100% retiradas por reposición — no son faltantes
+  // Excluir también líneas con divisiones donde todas llegaron a 0 (editadas o retiradas)
   var lineasActivas = oc.lineas.filter(function(l) {
     var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
       (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
-    return !fueRetiradoTotal;
+    if (fueRetiradoTotal) return false;
+    if (_lineaEsFantasma(l)) return false;
+    return true;
   });
   if (lineasActivas.length === 0) return 'completo';
   var completadas = lineasActivas.filter(function(l){
@@ -5506,7 +5523,9 @@ function renderOrdenes() {
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
     var _lineasActivasRender = oc.lineas ? oc.lineas.filter(function(l){
       var fueRetiradoTotal = (l.cantUnidades||0)===0 && (typeof l.divisiones!=='undefined'||(l.cantUnidadesAlEscaneo||0)>0);
-      return !fueRetiradoTotal;
+      if (fueRetiradoTotal) return false;
+      if (_lineaEsFantasma(l)) return false;
+      return true;
     }) : [];
     var completadas = _lineasActivasRender.filter(function(l){
       var uCtrl = l.unidadesControladas||0;
@@ -5775,7 +5794,7 @@ function renderLineasOCTable(lineas, ocId) {
 
     if (l.divisiones && l.divisiones.length > 0) {
       // Si TODAS las divisiones están en 0, saltar el artículo completo
-      var divConStock = l.divisiones.filter(function(d){ return (parseInt(d.cajas,10)||0) > 0; });
+      var divConStock = l.divisiones.filter(function(d){ return _divCantUnidades(d, upCajaL) > 0; });
       if (divConStock.length === 0) return;
       // ESP = suma de unidades de divisiones restantes (no el valor original pre-reposición)
       var uEspLDiv = l.divisiones.reduce(function(s, d){ return s + (parseInt(d.cajas,10)||0) * upCajaL; }, 0);
@@ -7045,9 +7064,8 @@ function guardarClasificacion() {
         var actual = ocBase.lineas.find(function(l){ return String(l.cod) === String(linea.cod); });
         if (!actual) return linea;
         return Object.assign({}, linea, {
-          unidadesControladas:  actual.unidadesControladas  !== undefined ? actual.unidadesControladas  : linea.unidadesControladas,
-          cajasEscaneadas:      actual.cajasEscaneadas      !== undefined ? actual.cajasEscaneadas      : linea.cajasEscaneadas,
-          unidadesSueltas:      actual.unidadesSueltas      !== undefined ? actual.unidadesSueltas      : linea.unidadesSueltas,
+          // Solo sincronizar campos que el operario actualiza y el admin NO edita
+          // unidadesControladas / cajasEscaneadas / unidadesSueltas los edita el admin → _clasLineas gana
           divisiones:           actual.divisiones           || linea.divisiones,
           cantUnidadesAlEscaneo:actual.cantUnidadesAlEscaneo!== undefined ? actual.cantUnidadesAlEscaneo: linea.cantUnidadesAlEscaneo,
           fechaInicioEscaneo:   actual.fechaInicioEscaneo   || linea.fechaInicioEscaneo,
