@@ -2975,8 +2975,7 @@ function renderTablaControl() {
       tr.lastElementChild.innerHTML =
         '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
           '<button class="btn btn-sm btn-restar" title="Dar de baja unidades (corrección por escaneo de más)" style="background:rgba(251,191,36,0.08); border:1.5px solid var(--c-amber); color:var(--c-amber); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-minus" style="font-size:13px;"></i> Bajas</button>' +
-          editBtnHtml +
-          manualBadge +
+          editBtnHtml + manualBadge +
         '</div>';
       tr.lastElementChild.querySelector('.btn-restar').addEventListener('click', function() { restarUnidadesControl(idx); });
       var editBtn = tr.lastElementChild.querySelector('.btn-editar-manual');
@@ -7971,9 +7970,8 @@ function aplicarRol(rol) {
   if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
     iniciarSincAlertasRemito();
   }
-  // Poll de edición manual para aprobadores (administrativo)
   if (typeof _iniciarPollEdicionSupervisor === 'function') {
-    setTimeout(_iniciarPollEdicionSupervisor, 2000);
+    setTimeout(_iniciarPollEdicionSupervisor, 1500);
   }
 }
 
@@ -9268,11 +9266,13 @@ function _checkAlertaEscaneo() {
 var _alertaEscaneoFila = 1;
 
 // ── SISTEMA DE EDICIÓN MANUAL CON APROBACIÓN ──────────────────────────────────
-// ALERTAS!A2 = JSON array de solicitudes. El supervisor ve banner FIJO hasta resolver.
-var EDIT_FILA_ALERTAS = 2;
-var _editRequests = [];          // cache local (operario y supervisor)
-var _editPollInterval = null;
-var _editPollActive = false;
+// ALERTAS!A2  — JSON array de solicitudes
+// Poll RÁPIDO (2s) mientras hay solicitudes activas; idle (8s) o detenido sin nada
+var EDIT_FILA_ALERTAS  = 2;
+var _editRequests      = [];
+var _editPollInterval  = null;
+var _editPollActive    = false;
+var _editPollFast      = false;   // true = intervalo rápido activo
 var _supervisorBannerVisible = false;
 
 function _esAprobadorEdicion() {
@@ -9282,19 +9282,21 @@ function _esAprobadorEdicion() {
 function _getEditRequestState(idx) {
   if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return 'none';
   var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var deviceId = _getDeviceId();
-  var req = _editRequests.find(function(r) {
-    return r.idx === idx && r.ocId === ocId && r.deviceId === deviceId;
-  });
+  var dev  = _getDeviceId();
+  var req  = _editRequests.find(function(r) { return r.idx === idx && r.ocId === ocId && r.deviceId === dev; });
   return req ? req.status : 'none';
 }
 
+function _limpiarExpirados(arr) {
+  var now = Date.now();
+  return arr.filter(function(r) { return (now - r.ts) < 300000; });
+}
+
 async function _writeEditRequests(arr) {
-  var limpio = _limpiarExpirados(arr);
-  var val = limpio.length > 0 ? JSON.stringify(limpio) : 'VACIO';
-  fetch(GAS_URL, { method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'setAlerta', valor: val, fila: EDIT_FILA_ALERTAS }) });
-  _editRequests = limpio;
+  arr = _limpiarExpirados(arr);
+  _editRequests = arr;
+  var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
+  fetch(GAS_URL, { method:'POST', mode:'no-cors', body: JSON.stringify({ accion:'setAlerta', valor:val, fila:EDIT_FILA_ALERTAS }) });
 }
 
 async function _readEditRequests() {
@@ -9304,34 +9306,46 @@ async function _readEditRequests() {
     var val = String(rows[0][0]).trim();
     if (!val || val === 'VACIO') return [];
     return JSON.parse(val);
-  } catch(e) { return null; } // null = error de red, no borrar cache
+  } catch(e) { return null; } // null = error red, no tocar nada
 }
 
-function _limpiarExpirados(arr) {
-  var now = Date.now();
-  return arr.filter(function(r) { return (now - r.ts) < 300000; }); // 5 min
+// Ajusta el intervalo del poll según si hay actividad
+function _ajustarVelocidadPoll(hayActivas) {
+  var intervalo = hayActivas ? 2000 : 8000;
+  var esFast = hayActivas;
+  if (esFast === _editPollFast) return; // ya en el modo correcto
+  _editPollFast = esFast;
+  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
+  _editPollInterval = setInterval(_pollEdicion, intervalo);
+}
+
+function _iniciarPollEdicion() {
+  _editPollFast = false; // forzar cambio de modo
+  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
+  _editPollInterval = setInterval(_pollEdicion, 2000);
+  _editPollFast = true;
+  // Poll inmediato para que el supervisor lo vea casi instantáneo
+  setTimeout(_pollEdicion, 300);
+}
+
+function _detenerPollEdicion() {
+  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
+  _editPollFast = false;
 }
 
 function solicitarEdicionManual(idx) {
   var r = remito[idx];
   if (!r) return;
   var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var deviceId = _getDeviceId();
-  var existing = _editRequests.find(function(req) {
-    return req.idx === idx && req.ocId === ocId && req.deviceId === deviceId;
-  });
+  var dev  = _getDeviceId();
+  var existing = _editRequests.find(function(req) { return req.idx === idx && req.ocId === ocId && req.deviceId === dev; });
   if (existing) { showToast('Ya hay una solicitud activa para este artículo'); return; }
-  var newReq = {
-    idx: idx, cod: r.cod, desc: r.desc,
-    cantEsp: r.cantUnidades || 0,
-    ocId: ocId, operario: CURRENT_USER.name,
-    deviceId: deviceId, ts: Date.now(), status: 'pending'
-  };
+  var newReq = { idx:idx, cod:r.cod, desc:r.desc, cantEsp:r.cantUnidades||0, ocId:ocId, operario:CURRENT_USER.name, deviceId:dev, ts:Date.now(), status:'pending' };
   _editRequests.push(newReq);
   _writeEditRequests(_editRequests);
   renderTablaControl();
-  showToast('Solicitud enviada. Esperando aprobación del supervisor...');
-  _iniciarPollEdicion();
+  showToast('Solicitud enviada. Esperando aprobación...');
+  _iniciarPollEdicion(); // arranca en modo rápido (2s)
 }
 
 function confirmarEdicionManual(idx, cantidad) {
@@ -9343,24 +9357,13 @@ function confirmarEdicionManual(idx, cantidad) {
   r.unidadesSueltas = cantidad % cantCaja;
   r._ingresoManual = true;
   var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var deviceId = _getDeviceId();
-  _editRequests = _editRequests.filter(function(req) {
-    return !(req.idx === idx && req.ocId === ocId && req.deviceId === deviceId);
-  });
+  var dev  = _getDeviceId();
+  _editRequests = _editRequests.filter(function(req) { return !(req.idx === idx && req.ocId === ocId && req.deviceId === dev); });
   _writeEditRequests(_editRequests);
   triggerAutosave();
   renderTablaControl();
   showToast('Cantidad registrada: ' + cantidad + ' u. (ingreso manual)');
-}
-
-function _iniciarPollEdicion() {
-  if (_editPollInterval) return; // ya está corriendo
-  _editPollInterval = setInterval(_pollEdicion, 6000); // cada 6s
-  setTimeout(_pollEdicion, 800);
-}
-
-function _detenerPollEdicion() {
-  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
+  _ajustarVelocidadPoll(false); // volver a idle
 }
 
 async function _pollEdicion() {
@@ -9368,20 +9371,18 @@ async function _pollEdicion() {
   _editPollActive = true;
   try {
     var remoto = await _readEditRequests();
-    if (remoto === null) return; // error de red: no tocar nada
+    if (remoto === null) return; // error de red, ignorar
 
     remoto = _limpiarExpirados(remoto);
     var ocId = remitoDatos ? remitoDatos.ocId : null;
-    var deviceId = _getDeviceId();
+    var dev  = _getDeviceId();
     var changed = false;
 
-    // ── OPERARIO: chequear si sus solicitudes fueron aprobadas/rechazadas ──
+    // ── OPERARIO: chequear respuesta del supervisor ──
     if (CURRENT_USER && CURRENT_USER.rol === 'operario' && ocId) {
       _editRequests.forEach(function(localReq) {
-        if (localReq.ocId !== ocId || localReq.deviceId !== deviceId) return;
-        var remoteReq = remoto.find(function(r) {
-          return r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId;
-        });
+        if (localReq.ocId !== ocId || localReq.deviceId !== dev) return;
+        var remoteReq = remoto.find(function(r) { return r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId; });
         if (remoteReq && remoteReq.status !== localReq.status) {
           localReq.status = remoteReq.status;
           changed = true;
@@ -9390,44 +9391,36 @@ async function _pollEdicion() {
           } else if (remoteReq.status === 'rejected') {
             showToast('❌ Solicitud rechazada por el supervisor.');
             setTimeout(function() {
-              _editRequests = _editRequests.filter(function(r) {
-                return !(r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId);
-              });
+              _editRequests = _editRequests.filter(function(r) { return !(r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId); });
               renderTablaControl();
+              _ajustarVelocidadPoll(false);
             }, 4000);
           }
         }
-        // Timeout si el supervisor no respondió
         if (!remoteReq && localReq.status === 'pending' && (Date.now() - localReq.ts) > 300000) {
-          localReq.status = 'rejected';
-          changed = true;
-          showToast('⏱ Solicitud expirada (supervisor no respondió).');
+          localReq.status = 'rejected'; changed = true;
+          showToast('⏱ Solicitud expirada (sin respuesta del supervisor).');
         }
       });
       if (changed) renderTablaControl();
-      // Detener poll si no quedan pendientes propias
-      var hayActivas = _editRequests.some(function(r) {
-        return (r.status === 'pending' || r.status === 'approved') && r.ocId === ocId && r.deviceId === deviceId;
-      });
-      if (!hayActivas && !_esAprobadorEdicion()) _detenerPollEdicion();
+      var hayActivas = _editRequests.some(function(r) { return (r.status === 'pending' || r.status === 'approved') && r.ocId === ocId && r.deviceId === dev; });
+      if (!_esAprobadorEdicion()) _ajustarVelocidadPoll(hayActivas);
     }
 
-    // ── SUPERVISOR: mostrar/actualizar banner con solicitudes pendientes ──
+    // ── SUPERVISOR: banner fijo, se actualiza con cada poll ──
     if (_esAprobadorEdicion()) {
-      _editRequests = remoto; // sincronizar cache del supervisor
+      _editRequests = remoto;
       var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
       if (pendientes.length > 0) {
         _mostrarBannerSupervisor(pendientes);
+        _ajustarVelocidadPoll(true); // rápido mientras hay pendientes
       } else if (_supervisorBannerVisible) {
-        // Solo ocultar si no quedan pendientes
         _ocultarBannerSupervisor();
+        _ajustarVelocidadPoll(false);
       }
     }
   } catch(e) {
-    // error silencioso — no borrar nada
-  } finally {
-    _editPollActive = false;
-  }
+  } finally { _editPollActive = false; }
 }
 
 function _mostrarBannerSupervisor(pendientes) {
@@ -9440,20 +9433,17 @@ function _mostrarBannerSupervisor(pendientes) {
     document.body.appendChild(banner);
   }
   var html = '<div style="background:var(--c-surface2); border:2px solid var(--c-amber); border-radius:var(--radius-md); box-shadow:0 6px 24px rgba(0,0,0,.5); padding:14px 16px;">' +
-    '<div style="font-size:13px; font-weight:700; color:var(--c-amber); margin-bottom:10px; display:flex; align-items:center; gap:8px;">' +
-      '<i class="ti ti-pencil"></i> Solicitudes de edición manual' +
-    '</div>';
+    '<div style="font-size:13px; font-weight:700; color:var(--c-amber); margin-bottom:10px; display:flex; align-items:center; gap:8px;"><i class="ti ti-pencil"></i> Solicitudes de edición manual</div>';
   pendientes.forEach(function(req) {
     var age = Math.round((Date.now() - req.ts) / 1000);
-    var ageStr = age < 60 ? age + 's' : Math.round(age / 60) + 'min';
+    var ageStr = age < 60 ? age + 's' : Math.round(age/60) + 'min';
     html += '<div style="border-top:1px solid var(--c-border); padding:10px 0 4px;">' +
       '<div style="font-weight:600; color:var(--c-text1); font-size:13px;">' + escHtml(req.desc || req.cod) + '</div>' +
       '<div style="color:var(--c-text3); font-size:11px; margin:2px 0 8px;">Operario: ' + escHtml(req.operario) + ' · ' + req.cantEsp + ' u. esperadas · hace ' + ageStr + '</div>' +
       '<div style="display:flex; gap:8px;">' +
         '<button onclick="_aprobarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(91,214,139,0.15); border:1.5px solid var(--c-green); color:var(--c-green); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✓ Aprobar</button>' +
         '<button onclick="_rechazarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(239,68,68,0.12); border:1.5px solid var(--c-red); color:var(--c-red); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✕ Rechazar</button>' +
-      '</div>' +
-    '</div>';
+      '</div></div>';
   });
   html += '</div>';
   banner.innerHTML = html;
@@ -9470,14 +9460,14 @@ async function _aprobarEdicion(deviceId, idx, ocId) {
   var remoto = await _readEditRequests();
   if (!remoto) return;
   remoto = remoto.map(function(r) {
-    if (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
-      return Object.assign({}, r, { status: 'approved' });
-    return r;
+    return (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
+      ? Object.assign({}, r, { status:'approved' }) : r;
   });
   await _writeEditRequests(remoto);
+  // Poll inmediato para que el operario lo vea rápido
+  setTimeout(_pollEdicion, 200);
   var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
-  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes);
-  else _ocultarBannerSupervisor();
+  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes); else _ocultarBannerSupervisor();
   showToast('✅ Edición aprobada');
 }
 
@@ -9485,33 +9475,30 @@ async function _rechazarEdicion(deviceId, idx, ocId) {
   var remoto = await _readEditRequests();
   if (!remoto) return;
   remoto = remoto.map(function(r) {
-    if (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
-      return Object.assign({}, r, { status: 'rejected' });
-    return r;
+    return (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
+      ? Object.assign({}, r, { status:'rejected' }) : r;
   });
   await _writeEditRequests(remoto);
-  // Limpiar el rejected del sheet después de 12s
+  setTimeout(_pollEdicion, 200);
+  // Limpiar rejected del sheet a los 12s
   setTimeout(function() {
     _readEditRequests().then(function(arr) {
       if (!arr) return;
-      var filtrado = arr.filter(function(r) {
-        return !(r.deviceId === deviceId && r.idx === idx && r.ocId === ocId);
-      });
-      _writeEditRequests(filtrado);
+      _writeEditRequests(arr.filter(function(r) { return !(r.deviceId === deviceId && r.idx === idx && r.ocId === ocId); }));
     });
   }, 12000);
   var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
-  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes);
-  else _ocultarBannerSupervisor();
+  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes); else _ocultarBannerSupervisor();
   showToast('❌ Edición rechazada');
 }
 
-// Arrancar poll del supervisor al login (solo si es admin)
+// Iniciar poll del supervisor al login
 function _iniciarPollEdicionSupervisor() {
   if (!_esAprobadorEdicion()) return;
   if (_editPollInterval) return;
-  _editPollInterval = setInterval(_pollEdicion, 6000);
-  setTimeout(_pollEdicion, 2000); // primer check después de 2s para no competir con el login
+  _editPollFast = true;
+  _editPollInterval = setInterval(_pollEdicion, 2000);
+  setTimeout(_pollEdicion, 1500);
 }
 // ── FIN SISTEMA EDICIÓN MANUAL ─────────────────────────────────────────────────
 
