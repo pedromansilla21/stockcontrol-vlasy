@@ -2971,9 +2971,9 @@ function renderTablaControl() {
       } else if (editState === 'rejected') {
         editBtnHtml = '<span style="font-size:11px; color:var(--c-red); font-weight:600; white-space:nowrap;"><i class="ti ti-x" style="vertical-align:-2px;"></i> Rechazado</span>';
       }
-      var manualBadge = (r2 && r2._ingresoManual) ? ' <span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:2px;">MANUAL</span>' : '';
+      var manualBadge = (r2 && r2._ingresoManual) ? '<span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:2px;">MANUAL</span>' : '';
       tr.lastElementChild.innerHTML =
-        '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
+        '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap; align-items:center;">' +
           '<button class="btn btn-sm btn-restar" title="Dar de baja unidades (corrección por escaneo de más)" style="background:rgba(251,191,36,0.08); border:1.5px solid var(--c-amber); color:var(--c-amber); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-minus" style="font-size:13px;"></i> Bajas</button>' +
           editBtnHtml + manualBadge +
         '</div>';
@@ -9266,14 +9266,15 @@ function _checkAlertaEscaneo() {
 var _alertaEscaneoFila = 1;
 
 // ── SISTEMA DE EDICIÓN MANUAL CON APROBACIÓN ──────────────────────────────────
-// ALERTAS!A2  — JSON array de solicitudes
-// Poll RÁPIDO (2s) mientras hay solicitudes activas; idle (8s) o detenido sin nada
-var EDIT_FILA_ALERTAS  = 2;
-var _editRequests      = [];
+// Cada operario escribe sus solicitudes en ALERTAS!B{filaAlerta} (columna B)
+// La columna A sigue intacta para la asignación de OCs
+// El supervisor lee ALERTAS!B1:B20 para ver todas las solicitudes
+var _editRequests      = [];   // cache local del operario (sus propias requests)
 var _editPollInterval  = null;
 var _editPollActive    = false;
-var _editPollFast      = false;   // true = intervalo rápido activo
+var _editPollFast      = false;
 var _supervisorBannerVisible = false;
+var _supervisorPendientes    = []; // cache del supervisor para el banner
 
 function _esAprobadorEdicion() {
   return !!(CURRENT_USER && CURRENT_USER.rol === 'administrativo');
@@ -9281,9 +9282,7 @@ function _esAprobadorEdicion() {
 
 function _getEditRequestState(idx) {
   if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return 'none';
-  var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var dev  = _getDeviceId();
-  var req  = _editRequests.find(function(r) { return r.idx === idx && r.ocId === ocId && r.deviceId === dev; });
+  var req = _editRequests.find(function(r) { return r.idx === idx; });
   return req ? req.status : 'none';
 }
 
@@ -9292,97 +9291,126 @@ function _limpiarExpirados(arr) {
   return arr.filter(function(r) { return (now - r.ts) < 300000; });
 }
 
-async function _writeEditRequests(arr) {
+// Escribe las solicitudes del operario en su celda B{filaAlerta}
+async function _writeMyRequests(arr) {
   arr = _limpiarExpirados(arr);
   _editRequests = arr;
+  var fila = CURRENT_USER && CURRENT_USER.filaAlerta ? CURRENT_USER.filaAlerta : 1;
   var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
-  fetch(GAS_URL, { method:'POST', mode:'no-cors', body: JSON.stringify({ accion:'setAlerta', valor:val, fila:EDIT_FILA_ALERTAS }) });
+  fetch(GAS_URL, { method: 'POST', mode: 'no-cors',
+    body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!B' + fila, values: [[val]] }) });
 }
 
-async function _readEditRequests() {
+// Lee la celda B de una fila específica (para operario que lee su propia)
+async function _readMyRequests() {
   try {
-    var rows = await sheetsRead('ALERTAS!A' + EDIT_FILA_ALERTAS);
+    var fila = CURRENT_USER && CURRENT_USER.filaAlerta ? CURRENT_USER.filaAlerta : 1;
+    var rows = await sheetsRead('ALERTAS!B' + fila);
     if (!rows || !rows[0] || !rows[0][0]) return [];
     var val = String(rows[0][0]).trim();
     if (!val || val === 'VACIO') return [];
     return JSON.parse(val);
-  } catch(e) { return null; } // null = error red, no tocar nada
+  } catch(e) { return null; }
 }
 
-// Ajusta el intervalo del poll según si hay actividad
+// Lee todas las celdas B1:B20 (supervisor)
+async function _readAllEditRequests() {
+  try {
+    var rows = await sheetsRead('ALERTAS!B1:B20');
+    var all = [];
+    (rows || []).forEach(function(row, i) {
+      if (!row || !row[0]) return;
+      var val = String(row[0]).trim();
+      if (!val || val === 'VACIO') return;
+      try {
+        var arr = JSON.parse(val);
+        arr.forEach(function(req) { req._filaAlerta = i + 1; all.push(req); });
+      } catch(e) {}
+    });
+    return all;
+  } catch(e) { return null; }
+}
+
+// Escribe de vuelta en la celda B del operario (supervisor aprueba/rechaza)
+async function _writeRequestsToFila(fila, arr) {
+  arr = _limpiarExpirados(arr);
+  var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
+  fetch(GAS_URL, { method: 'POST', mode: 'no-cors',
+    body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!B' + fila, values: [[val]] }) });
+}
+
 function _ajustarVelocidadPoll(hayActivas) {
   var intervalo = hayActivas ? 2000 : 8000;
   var esFast = hayActivas;
-  if (esFast === _editPollFast) return; // ya en el modo correcto
+  if (esFast === _editPollFast && _editPollInterval) return;
   _editPollFast = esFast;
   if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
-  _editPollInterval = setInterval(_pollEdicion, intervalo);
+  if (hayActivas || _esAprobadorEdicion()) {
+    _editPollInterval = setInterval(_pollEdicion, intervalo);
+  }
 }
 
 function _iniciarPollEdicion() {
-  _editPollFast = false; // forzar cambio de modo
+  _editPollFast = false;
   if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
   _editPollInterval = setInterval(_pollEdicion, 2000);
   _editPollFast = true;
-  // Poll inmediato para que el supervisor lo vea casi instantáneo
-  setTimeout(_pollEdicion, 300);
-}
-
-function _detenerPollEdicion() {
-  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
-  _editPollFast = false;
+  setTimeout(_pollEdicion, 500);
 }
 
 function solicitarEdicionManual(idx) {
   var r = remito[idx];
   if (!r) return;
-  var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var dev  = _getDeviceId();
-  var existing = _editRequests.find(function(req) { return req.idx === idx && req.ocId === ocId && req.deviceId === dev; });
+  var existing = _editRequests.find(function(req) { return req.idx === idx; });
   if (existing) { showToast('Ya hay una solicitud activa para este artículo'); return; }
-  var newReq = { idx:idx, cod:r.cod, desc:r.desc, cantEsp:r.cantUnidades||0, ocId:ocId, operario:CURRENT_USER.name, deviceId:dev, ts:Date.now(), status:'pending' };
+  var newReq = {
+    idx: idx, cod: r.cod, desc: r.desc, cantEsp: r.cantUnidades || 0,
+    ocId: remitoDatos ? remitoDatos.ocId : null,
+    operario: CURRENT_USER.name,
+    filaAlerta: CURRENT_USER.filaAlerta || 1,
+    ts: Date.now(), status: 'pending'
+  };
   _editRequests.push(newReq);
-  _writeEditRequests(_editRequests);
+  _writeMyRequests(_editRequests);
   renderTablaControl();
-  showToast('Solicitud enviada. Esperando aprobación...');
-  _iniciarPollEdicion(); // arranca en modo rápido (2s)
+  showToast('Solicitud enviada. Esperando aprobación del supervisor...');
+  _iniciarPollEdicion();
 }
 
 function confirmarEdicionManual(idx, cantidad) {
   var r = remito[idx];
   if (!r) return;
+  var cantCaja = r.cantCaja || r.cantUnidadesPorCaja || 1;
+  // Actualizar exactamente igual que restarUnidadesControl
   r.unidadesControladas = cantidad;
-  var cantCaja = r.cantCaja || 1;
-  r.cajasEscaneadas = Math.floor(cantidad / cantCaja);
-  r.unidadesSueltas = cantidad % cantCaja;
-  r._ingresoManual = true;
-  var ocId = remitoDatos ? remitoDatos.ocId : null;
-  var dev  = _getDeviceId();
-  _editRequests = _editRequests.filter(function(req) { return !(req.idx === idx && req.ocId === ocId && req.deviceId === dev); });
-  _writeEditRequests(_editRequests);
-  triggerAutosave();
+  r.cajasEscaneadas     = Math.floor(cantidad / cantCaja);
+  r.unidadesSueltas     = cantidad % cantCaja;
+  r._ingresoManual      = true;
+  // Limpiar la solicitud de edición
+  _editRequests = _editRequests.filter(function(req) { return req.idx !== idx; });
+  _writeMyRequests(_editRequests);
+  // Re-render completo igual que el escaneo normal
+  if (typeof renderRegistro   === 'function') renderRegistro();
+  if (typeof renderTablaRemito === 'function') renderTablaRemito();
   renderTablaControl();
-  showToast('Cantidad registrada: ' + cantidad + ' u. (ingreso manual)');
-  _ajustarVelocidadPoll(false); // volver a idle
+  if (typeof updateMetrics    === 'function') updateMetrics();
+  triggerAutosave();
+  showToast('✅ Cantidad registrada: ' + cantidad + ' u. (ingreso manual)');
+  _ajustarVelocidadPoll(false);
 }
 
 async function _pollEdicion() {
   if (_editPollActive) return;
   _editPollActive = true;
   try {
-    var remoto = await _readEditRequests();
-    if (remoto === null) return; // error de red, ignorar
-
-    remoto = _limpiarExpirados(remoto);
-    var ocId = remitoDatos ? remitoDatos.ocId : null;
-    var dev  = _getDeviceId();
-    var changed = false;
-
-    // ── OPERARIO: chequear respuesta del supervisor ──
-    if (CURRENT_USER && CURRENT_USER.rol === 'operario' && ocId) {
+    // ── OPERARIO: chequear su propia celda B ──
+    if (CURRENT_USER && CURRENT_USER.rol === 'operario' && _editRequests.length > 0) {
+      var remoto = await _readMyRequests();
+      if (remoto === null) return; // error de red
+      remoto = _limpiarExpirados(remoto);
+      var changed = false;
       _editRequests.forEach(function(localReq) {
-        if (localReq.ocId !== ocId || localReq.deviceId !== dev) return;
-        var remoteReq = remoto.find(function(r) { return r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId; });
+        var remoteReq = remoto.find(function(r) { return r.idx === localReq.idx; });
         if (remoteReq && remoteReq.status !== localReq.status) {
           localReq.status = remoteReq.status;
           changed = true;
@@ -9391,7 +9419,7 @@ async function _pollEdicion() {
           } else if (remoteReq.status === 'rejected') {
             showToast('❌ Solicitud rechazada por el supervisor.');
             setTimeout(function() {
-              _editRequests = _editRequests.filter(function(r) { return !(r.idx === localReq.idx && r.ocId === localReq.ocId && r.deviceId === localReq.deviceId); });
+              _editRequests = _editRequests.filter(function(r) { return r.idx !== localReq.idx; });
               renderTablaControl();
               _ajustarVelocidadPoll(false);
             }, 4000);
@@ -9403,20 +9431,20 @@ async function _pollEdicion() {
         }
       });
       if (changed) renderTablaControl();
-      var hayActivas = _editRequests.some(function(r) { return (r.status === 'pending' || r.status === 'approved') && r.ocId === ocId && r.deviceId === dev; });
-      if (!_esAprobadorEdicion()) _ajustarVelocidadPoll(hayActivas);
+      var hayActivas = _editRequests.some(function(r) { return r.status === 'pending' || r.status === 'approved'; });
+      _ajustarVelocidadPoll(hayActivas);
     }
 
-    // ── SUPERVISOR: banner fijo, se actualiza con cada poll ──
+    // ── SUPERVISOR: leer todas las celdas B y mostrar banner ──
     if (_esAprobadorEdicion()) {
-      _editRequests = remoto;
-      var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
+      var todas = await _readAllEditRequests();
+      if (todas === null) return;
+      var pendientes = _limpiarExpirados(todas).filter(function(r) { return r.status === 'pending'; });
+      _supervisorPendientes = pendientes;
       if (pendientes.length > 0) {
         _mostrarBannerSupervisor(pendientes);
-        _ajustarVelocidadPoll(true); // rápido mientras hay pendientes
       } else if (_supervisorBannerVisible) {
         _ocultarBannerSupervisor();
-        _ajustarVelocidadPoll(false);
       }
     }
   } catch(e) {
@@ -9437,12 +9465,13 @@ function _mostrarBannerSupervisor(pendientes) {
   pendientes.forEach(function(req) {
     var age = Math.round((Date.now() - req.ts) / 1000);
     var ageStr = age < 60 ? age + 's' : Math.round(age/60) + 'min';
+    var fa = req._filaAlerta || req.filaAlerta || 1;
     html += '<div style="border-top:1px solid var(--c-border); padding:10px 0 4px;">' +
       '<div style="font-weight:600; color:var(--c-text1); font-size:13px;">' + escHtml(req.desc || req.cod) + '</div>' +
       '<div style="color:var(--c-text3); font-size:11px; margin:2px 0 8px;">Operario: ' + escHtml(req.operario) + ' · ' + req.cantEsp + ' u. esperadas · hace ' + ageStr + '</div>' +
       '<div style="display:flex; gap:8px;">' +
-        '<button onclick="_aprobarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(91,214,139,0.15); border:1.5px solid var(--c-green); color:var(--c-green); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✓ Aprobar</button>' +
-        '<button onclick="_rechazarEdicion(\'' + escHtml(req.deviceId) + '\',' + req.idx + ',\'' + escHtml(req.ocId) + '\')" style="background:rgba(239,68,68,0.12); border:1.5px solid var(--c-red); color:var(--c-red); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✕ Rechazar</button>' +
+        '<button onclick="_aprobarEdicion(' + fa + ',' + req.idx + ')" style="background:rgba(91,214,139,0.15); border:1.5px solid var(--c-green); color:var(--c-green); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✓ Aprobar</button>' +
+        '<button onclick="_rechazarEdicion(' + fa + ',' + req.idx + ')" style="background:rgba(239,68,68,0.12); border:1.5px solid var(--c-red); color:var(--c-red); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✕ Rechazar</button>' +
       '</div></div>';
   });
   html += '</div>';
@@ -9456,43 +9485,55 @@ function _ocultarBannerSupervisor() {
   if (banner) banner.style.display = 'none';
 }
 
-async function _aprobarEdicion(deviceId, idx, ocId) {
-  var remoto = await _readEditRequests();
-  if (!remoto) return;
-  remoto = remoto.map(function(r) {
-    return (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
-      ? Object.assign({}, r, { status:'approved' }) : r;
+async function _aprobarEdicion(filaAlerta, idx) {
+  var rows = await sheetsRead('ALERTAS!B' + filaAlerta);
+  if (!rows || !rows[0] || !rows[0][0]) return;
+  var val = String(rows[0][0]).trim();
+  if (!val || val === 'VACIO') return;
+  var arr;
+  try { arr = JSON.parse(val); } catch(e) { return; }
+  arr = arr.map(function(r) {
+    return r.idx === idx ? Object.assign({}, r, { status: 'approved' }) : r;
   });
-  await _writeEditRequests(remoto);
-  // Poll inmediato para que el operario lo vea rápido
-  setTimeout(_pollEdicion, 200);
-  var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
-  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes); else _ocultarBannerSupervisor();
+  _writeRequestsToFila(filaAlerta, arr);
+  // Actualizar banner inmediatamente (optimistic)
+  _supervisorPendientes = _supervisorPendientes.filter(function(r) {
+    return !(r._filaAlerta === filaAlerta && r.idx === idx);
+  });
+  if (_supervisorPendientes.length > 0) _mostrarBannerSupervisor(_supervisorPendientes);
+  else _ocultarBannerSupervisor();
   showToast('✅ Edición aprobada');
 }
 
-async function _rechazarEdicion(deviceId, idx, ocId) {
-  var remoto = await _readEditRequests();
-  if (!remoto) return;
-  remoto = remoto.map(function(r) {
-    return (r.deviceId === deviceId && r.idx === idx && r.ocId === ocId)
-      ? Object.assign({}, r, { status:'rejected' }) : r;
+async function _rechazarEdicion(filaAlerta, idx) {
+  var rows = await sheetsRead('ALERTAS!B' + filaAlerta);
+  if (!rows || !rows[0] || !rows[0][0]) return;
+  var val = String(rows[0][0]).trim();
+  if (!val || val === 'VACIO') return;
+  var arr;
+  try { arr = JSON.parse(val); } catch(e) { return; }
+  arr = arr.map(function(r) {
+    return r.idx === idx ? Object.assign({}, r, { status: 'rejected' }) : r;
   });
-  await _writeEditRequests(remoto);
-  setTimeout(_pollEdicion, 200);
-  // Limpiar rejected del sheet a los 12s
+  _writeRequestsToFila(filaAlerta, arr);
+  // Limpiar rejected a los 12s
   setTimeout(function() {
-    _readEditRequests().then(function(arr) {
-      if (!arr) return;
-      _writeEditRequests(arr.filter(function(r) { return !(r.deviceId === deviceId && r.idx === idx && r.ocId === ocId); }));
+    sheetsRead('ALERTAS!B' + filaAlerta).then(function(rows2) {
+      if (!rows2 || !rows2[0] || !rows2[0][0]) return;
+      try {
+        var arr2 = JSON.parse(String(rows2[0][0]).trim());
+        _writeRequestsToFila(filaAlerta, arr2.filter(function(r) { return r.idx !== idx; }));
+      } catch(e) {}
     });
   }, 12000);
-  var pendientes = remoto.filter(function(r) { return r.status === 'pending'; });
-  if (pendientes.length > 0) _mostrarBannerSupervisor(pendientes); else _ocultarBannerSupervisor();
+  _supervisorPendientes = _supervisorPendientes.filter(function(r) {
+    return !(r._filaAlerta === filaAlerta && r.idx === idx);
+  });
+  if (_supervisorPendientes.length > 0) _mostrarBannerSupervisor(_supervisorPendientes);
+  else _ocultarBannerSupervisor();
   showToast('❌ Edición rechazada');
 }
 
-// Iniciar poll del supervisor al login
 function _iniciarPollEdicionSupervisor() {
   if (!_esAprobadorEdicion()) return;
   if (_editPollInterval) return;
