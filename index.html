@@ -5510,7 +5510,7 @@ function renderOrdenes() {
     var autoLabel = { pendiente: 'Sin escanear', parcial: 'En progreso', completo: '✓ Completo' }[estadoAuto];
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
     var _lineasActivasRender = oc.lineas ? oc.lineas.filter(function(l){
-      var fueRetiradoTotal = (l.cantUnidades||0)===0 && (typeof l.divisiones!=='undefined'||(l.cantUnidadesAlEscaneo||0)>0);
+      var fueRetiradoTotal = (l.cantUnidades||0) === 0;
       return !fueRetiradoTotal;
     }) : [];
     var completadas = _lineasActivasRender.filter(function(l){
