@@ -2956,39 +2956,11 @@ function renderTablaControl() {
     });
 
     (function(idx) {
-      var r2 = remito[idx];
-      var editState = _getEditRequestState(idx);
-      var editBtnHtml = '';
-      if (editState === 'none') {
-        editBtnHtml = '<button class="btn btn-sm btn-editar-manual" data-idx="' + idx + '" title="Solicitar ingreso manual de cantidad" style="background:rgba(91,191,214,0.10); border:1.5px solid var(--c-blue); color:var(--c-blue); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-pencil" style="font-size:13px;"></i> Editar</button>';
-      } else if (editState === 'pending') {
-        editBtnHtml = '<span style="font-size:11px; color:var(--c-amber); font-weight:600; white-space:nowrap;"><i class="ti ti-clock" style="vertical-align:-2px;"></i> Esperando...</span>';
-      } else if (editState === 'approved') {
-        editBtnHtml = '<div style="display:flex; gap:4px; align-items:center;">' +
-          '<input type="number" min="0" data-idx="' + idx + '" class="ctrl-input-inline edit-manual-input" placeholder="Cant." style="width:64px; font-size:12px; padding:3px 6px;" />' +
-          '<button class="btn btn-sm btn-confirmar-manual" data-idx="' + idx + '" style="background:rgba(91,214,139,0.12); border:1.5px solid var(--c-green); color:var(--c-green); font-size:11px; font-weight:600; padding:4px 8px;">✓</button>' +
-        '</div>';
-      } else if (editState === 'rejected') {
-        editBtnHtml = '<span style="font-size:11px; color:var(--c-red); font-weight:600; white-space:nowrap;"><i class="ti ti-x" style="vertical-align:-2px;"></i> Rechazado</span>';
-      }
-      var manualBadge = (r2 && r2._ingresoManual) ? '<span style="font-size:9px; font-weight:700; color:var(--c-blue); background:rgba(91,191,214,0.12); border-radius:3px; padding:1px 5px; margin-left:2px;">MANUAL</span>' : '';
       tr.lastElementChild.innerHTML =
-        '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap; align-items:center;">' +
+        '<div style="display:flex; gap:4px; justify-content:center;">' +
           '<button class="btn btn-sm btn-restar" title="Dar de baja unidades (corrección por escaneo de más)" style="background:rgba(251,191,36,0.08); border:1.5px solid var(--c-amber); color:var(--c-amber); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-minus" style="font-size:13px;"></i> Bajas</button>' +
-          editBtnHtml + manualBadge +
         '</div>';
       tr.lastElementChild.querySelector('.btn-restar').addEventListener('click', function() { restarUnidadesControl(idx); });
-      var editBtn = tr.lastElementChild.querySelector('.btn-editar-manual');
-      if (editBtn) editBtn.addEventListener('click', function() { solicitarEdicionManual(parseInt(this.dataset.idx)); });
-      var confirmBtn = tr.lastElementChild.querySelector('.btn-confirmar-manual');
-      if (confirmBtn) confirmBtn.addEventListener('click', function() {
-        var inp = tr.lastElementChild.querySelector('.edit-manual-input');
-        var cant = inp ? parseInt(inp.value, 10) : NaN;
-        if (isNaN(cant) || cant < 0) { showToast('Ingresá una cantidad válida'); return; }
-        confirmarEdicionManual(parseInt(this.dataset.idx), cant);
-      });
-      var editInp = tr.lastElementChild.querySelector('.edit-manual-input');
-      if (editInp) editInp.addEventListener('keydown', function(e) { e.stopPropagation(); if (e.key === 'Enter') { var cant = parseInt(this.value, 10); if (!isNaN(cant) && cant >= 0) confirmarEdicionManual(parseInt(this.dataset.idx), cant); } });
     })(i);
     tb.appendChild(tr);
   });
@@ -3576,10 +3548,44 @@ function finalizarControl() {
     // Las OCs de reposición no se conservan en ordenes — se eliminan al finalizar
     // para que no aparezcan en el reporte. El descuento queda en HISTORIAL DE PALETS.
     if (ocIdx >= 0) { ordenes.splice(ocIdx, 1); }
+    // ── Descuento local del palet original ANTES del saveOrdenes ──
+    // Esto evita la race condition de dos writes simultáneos al Sheet.
+    // _restarEnHistorialPalets solo hará el call al GAS (restarCantPalet),
+    // no otro saveOrdenes.
+    if (ocObj.paletOriginalId) {
+      var ocOrig = ordenes.find(function(o){ return o.id === ocObj.paletOriginalId; });
+      if (ocOrig && ocOrig.lineas) {
+        ocObj.lineas.forEach(function(lineaRep) {
+          var cantRestada = (typeof lineaRep.unidadesControladas !== 'undefined' && lineaRep.unidadesControladas > 0)
+            ? lineaRep.unidadesControladas : (lineaRep.cantUnidades || 0);
+          if (cantRestada <= 0) return;
+          // Buscar la línea por cod+lote, luego solo cod como fallback
+          var lineaOrig = ocOrig.lineas.find(function(l){ return l.cod === lineaRep.cod && l.lote === lineaRep.lote; });
+          if (!lineaOrig) lineaOrig = ocOrig.lineas.find(function(l){ return l.cod === lineaRep.cod; });
+          if (!lineaOrig) return;
+          lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
+          if (typeof lineaOrig.cantUnidadesAlEscaneo !== 'undefined') {
+            lineaOrig.cantUnidadesAlEscaneo = lineaOrig.cantUnidades;
+          }
+          lineaOrig.unidadesControladas = Math.max(0, (lineaOrig.unidadesControladas || 0) - cantRestada);
+          var _artDbOr = (db || []).find(function(a){ return String(a.cod).trim() === String(lineaOrig.cod).trim(); }) || {};
+          var _upCj = parseInt(_artDbOr.cantCaja || lineaOrig.cantCaja || lineaOrig.unidadesPorCaja || 1, 10) || 1;
+          lineaOrig.cajasEscaneadas = Math.floor(lineaOrig.unidadesControladas / _upCj);
+          lineaOrig.cajasEsperadas  = lineaOrig.cajasEscaneadas;
+          // Actualizar división específica si hay lote
+          if (lineaRep.lote && lineaRep.lote !== '—' && lineaOrig.divisiones && lineaOrig.divisiones.length > 0) {
+            var _upCjOr = parseInt(lineaOrig.unidadesPorCaja || lineaOrig.cantCaja || 1, 10) || 1;
+            var divOr = lineaOrig.divisiones.find(function(d){ return String(d.lote) === String(lineaRep.lote); });
+            if (divOr) { divOr.cajas = Math.max(0, (parseInt(divOr.cajas, 10) || 0) - Math.ceil(cantRestada / _upCjOr)); }
+          }
+        });
+        ocOrig.savedAt = new Date().toISOString();
+      }
+    }
   } else {
     if (ocIdx >= 0) { ordenes[ocIdx] = ocObj; } else { ordenes.unshift(ocObj); }
   }
-  saveOrdenes(ordenes);
+  saveOrdenes(ordenes); // Un solo write: REP eliminado + P213 ya actualizado
   updateBadgeOrdenes();
   // Guardar fila legible en HISTORIAL OC
   _guardarEnHistorial(ocObj, escaneadoPorVal);
@@ -4817,46 +4823,9 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
       console.warn('[restarCantPalet] Error de red — quedó en localStorage para reintentar');
     });
 
-    // Actualizar cantUnidades en la OC original del palet (para que el reporte muestre el stock actual)
-    if (oc.paletOriginalId) {
-      var ordenes = loadOrdenes();
-      var ocOriginal = ordenes.find(function(o){ return o.id === oc.paletOriginalId; });
-      if (ocOriginal && ocOriginal.lineas) {
-        oc.lineas.forEach(function(lineaRep) {
-          var cantRestada = typeof lineaRep.unidadesControladas !== 'undefined'
-            ? lineaRep.unidadesControladas : (lineaRep.cantUnidades || 0);
-          var lineaOrig = ocOriginal.lineas.find(function(l){ return l.cod === lineaRep.cod; });
-          if (lineaOrig && cantRestada > 0) {
-            lineaOrig.cantUnidades = Math.max(0, (lineaOrig.cantUnidades || 0) - cantRestada);
-            // Actualizar cantUnidadesAlEscaneo para que _uEspBase() no genere falsos positivos de diferencia
-            if (typeof lineaOrig.cantUnidadesAlEscaneo !== 'undefined') {
-              lineaOrig.cantUnidadesAlEscaneo = lineaOrig.cantUnidades;
-            }
-            // Actualizar unidadesControladas y cajasEscaneadas para que el panel muestre valores correctos
-            lineaOrig.unidadesControladas = Math.max(0, (lineaOrig.unidadesControladas || 0) - cantRestada);
-            var _artDbOrig = (db || []).find(function(a){ return String(a.cod).trim() === String(lineaOrig.cod).trim(); }) || {};
-            var _upCaja = parseInt(_artDbOrig.cantCaja || lineaOrig.cantCaja || lineaOrig.unidadesPorCaja || 1, 10);
-            if (isNaN(_upCaja) || _upCaja < 1) _upCaja = 1;
-            lineaOrig.cajasEscaneadas = Math.floor(lineaOrig.unidadesControladas / _upCaja);
-            lineaOrig.cajasEsperadas  = lineaOrig.cajasEscaneadas; // evitar falso "-X cajas" en CON DIFERENCIAS
-            // Si la reposición viene de una división específica (tiene lote), actualizar esa división
-            if (lineaRep.lote && lineaRep.lote !== '—' && lineaOrig.divisiones && lineaOrig.divisiones.length > 0) {
-              var upCajaOrig = parseInt(lineaOrig.unidadesPorCaja || lineaOrig.cantCaja || 1, 10);
-              if (isNaN(upCajaOrig) || upCajaOrig < 1) upCajaOrig = 1;
-              var divOrig = lineaOrig.divisiones.find(function(d){ return String(d.lote) === String(lineaRep.lote); });
-              if (divOrig) {
-                var cajasRestar = Math.ceil(cantRestada / upCajaOrig);
-                divOrig.cajas = Math.max(0, (parseInt(divOrig.cajas, 10) || 0) - cajasRestar);
-              }
-            }
-          }
-        });
-        // Actualizar savedAt para que el merge de syncOrdenes elija la versión local (más reciente)
-        ocOriginal.savedAt = new Date().toISOString();
-        saveOrdenes(ordenes);
-        renderOrdenes();
-      }
-    }
+    // El descuento local del palet original YA se hizo en finalizarControl(),
+    // antes del saveOrdenes — no se repite acá para evitar restar dos veces.
+    renderOrdenes();
   } catch(e) { console.error('Error en _restarEnHistorialPalets:', e); }
 }
 
@@ -5196,30 +5165,13 @@ async function syncOrdenes() {
 }
 
 
-// Devuelve las unidades reales de una división: usa cantReal si está definido, sino cajas*upCaja
-function _divCantUnidades(div, upCaja) {
-  if (div.cantReal !== undefined) return parseInt(div.cantReal, 10) || 0;
-  return (parseInt(div.cajas, 10) || 0) * (upCaja || 1);
-}
-
-// Devuelve true si una línea con divisiones tiene todas sus divisiones en 0
-// (fue editada a 0 manualmente — debe ocultarse del reporte y del contador)
-function _lineaEsFantasma(l) {
-  if (!l.divisiones || l.divisiones.length === 0) return false;
-  var upCaja = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
-  return l.divisiones.every(function(d) { return _divCantUnidades(d, upCaja) === 0; });
-}
-
 function getEstadoOC(oc) {
   if (!oc.lineas || oc.lineas.length === 0) return 'pendiente';
   // Excluir líneas 100% retiradas por reposición — no son faltantes
-  // Excluir también líneas con divisiones donde todas llegaron a 0 (editadas o retiradas)
   var lineasActivas = oc.lineas.filter(function(l) {
     var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
       (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
-    if (fueRetiradoTotal) return false;
-    if (_lineaEsFantasma(l)) return false;
-    return true;
+    return !fueRetiradoTotal;
   });
   if (lineasActivas.length === 0) return 'completo';
   var completadas = lineasActivas.filter(function(l){
@@ -5523,9 +5475,7 @@ function renderOrdenes() {
     var autoCls   = { pendiente: 'badge-neutral', parcial: 'badge-info', completo: 'badge-ok' }[estadoAuto];
     var _lineasActivasRender = oc.lineas ? oc.lineas.filter(function(l){
       var fueRetiradoTotal = (l.cantUnidades||0)===0 && (typeof l.divisiones!=='undefined'||(l.cantUnidadesAlEscaneo||0)>0);
-      if (fueRetiradoTotal) return false;
-      if (_lineaEsFantasma(l)) return false;
-      return true;
+      return !fueRetiradoTotal;
     }) : [];
     var completadas = _lineasActivasRender.filter(function(l){
       var uCtrl = l.unidadesControladas||0;
@@ -5794,7 +5744,7 @@ function renderLineasOCTable(lineas, ocId) {
 
     if (l.divisiones && l.divisiones.length > 0) {
       // Si TODAS las divisiones están en 0, saltar el artículo completo
-      var divConStock = l.divisiones.filter(function(d){ return _divCantUnidades(d, upCajaL) > 0; });
+      var divConStock = l.divisiones.filter(function(d){ return (parseInt(d.cajas,10)||0) > 0; });
       if (divConStock.length === 0) return;
       // ESP = suma de unidades de divisiones restantes (no el valor original pre-reposición)
       var uEspLDiv = l.divisiones.reduce(function(s, d){ return s + (parseInt(d.cajas,10)||0) * upCajaL; }, 0);
@@ -6782,11 +6732,6 @@ function _clasRenderLineas() {
       '</tr>';
       // Una fila por cada división — cantidad editable
       l.divisiones.forEach(function(div, divIdx) {
-        // Inicializar cantReal desde cajas*upCaja si nunca fue editado
-        var upCajaL2 = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
-        if (div.cantReal === undefined || div.cantReal === null) {
-          div.cantReal = (parseInt(div.cajas, 10) || 0) * upCajaL2;
-        }
         var mes  = (div.mes  || '').toString().padStart(2,'0');
         var anio = div.anio  || '';
         var fechaDisplay = (mes && anio) ? mes + '/' + anio : (div.fecha || '—');
@@ -7069,8 +7014,9 @@ function guardarClasificacion() {
         var actual = ocBase.lineas.find(function(l){ return String(l.cod) === String(linea.cod); });
         if (!actual) return linea;
         return Object.assign({}, linea, {
-          // Solo sincronizar campos que el operario actualiza y el admin NO edita
-          // unidadesControladas / cajasEscaneadas / unidadesSueltas los edita el admin → _clasLineas gana
+          unidadesControladas:  actual.unidadesControladas  !== undefined ? actual.unidadesControladas  : linea.unidadesControladas,
+          cajasEscaneadas:      actual.cajasEscaneadas      !== undefined ? actual.cajasEscaneadas      : linea.cajasEscaneadas,
+          unidadesSueltas:      actual.unidadesSueltas      !== undefined ? actual.unidadesSueltas      : linea.unidadesSueltas,
           divisiones:           actual.divisiones           || linea.divisiones,
           cantUnidadesAlEscaneo:actual.cantUnidadesAlEscaneo!== undefined ? actual.cantUnidadesAlEscaneo: linea.cantUnidadesAlEscaneo,
           fechaInicioEscaneo:   actual.fechaInicioEscaneo   || linea.fechaInicioEscaneo,
@@ -7993,9 +7939,6 @@ function aplicarRol(rol) {
   if (CURRENT_USER && CURRENT_USER.name === 'Supervisor Pedidos') {
     iniciarSincAlertasRemito();
   }
-  if (typeof _iniciarPollEdicionSupervisor === 'function') {
-    setTimeout(_iniciarPollEdicionSupervisor, 1500);
-  }
 }
 
 // ── SINCRONIZACIÓN DE ALERTAS PARA OPERARIOS ──────────────────
@@ -8585,7 +8528,7 @@ function _generarNroOC() {
 }
 
 // ── AUTOCOMPLETE PROVEEDORES ────────────────────────────────
-var PROVEEDORES_LISTA = ['ACF', 'Biferdil', 'Bellisima', 'Bless', 'Hannah Collis', 'HideHere', 'Idi', 'Katalia', 'Marchand', 'Nov', 'Sienna', 'Skala', 'Veganis', 'Vlasy', 'Watteau'];
+var PROVEEDORES_LISTA = ['Biferdil', 'Hannah Collis', 'Skala', 'Veganis', 'Watteau', 'Nov', 'Bellisima', 'Idi', 'Sienna', 'Katalia', 'Bless', 'Marchand', 'HideHere', 'Vlasy'];
 
 function mostrarSugerenciasProveedor() {
   var input = document.getElementById('rem-proveedor');
@@ -9287,284 +9230,6 @@ function _checkAlertaEscaneo() {
 }
 
 var _alertaEscaneoFila = 1;
-
-// ── SISTEMA DE EDICIÓN MANUAL CON APROBACIÓN ──────────────────────────────────
-// Cada operario escribe sus solicitudes en ALERTAS!B{filaAlerta} (columna B)
-// La columna A sigue intacta para la asignación de OCs
-// El supervisor lee ALERTAS!B1:B20 para ver todas las solicitudes
-var _editRequests      = [];   // cache local del operario (sus propias requests)
-var _editPollInterval  = null;
-var _editPollActive    = false;
-var _editPollFast      = false;
-var _supervisorBannerVisible = false;
-var _supervisorPendientes    = []; // cache del supervisor para el banner
-
-function _esAprobadorEdicion() {
-  return !!(CURRENT_USER && CURRENT_USER.rol === 'administrativo');
-}
-
-function _getEditRequestState(idx) {
-  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return 'none';
-  var req = _editRequests.find(function(r) { return r.idx === idx; });
-  return req ? req.status : 'none';
-}
-
-function _limpiarExpirados(arr) {
-  var now = Date.now();
-  return arr.filter(function(r) { return (now - r.ts) < 300000; });
-}
-
-// Escribe las solicitudes del operario en su celda B{filaAlerta}
-async function _writeMyRequests(arr) {
-  arr = _limpiarExpirados(arr);
-  _editRequests = arr;
-  var fila = CURRENT_USER && CURRENT_USER.filaAlerta ? CURRENT_USER.filaAlerta : 1;
-  var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
-  fetch(GAS_URL, { method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!B' + fila, values: [[val]] }) });
-}
-
-// Lee la celda B de una fila específica (para operario que lee su propia)
-async function _readMyRequests() {
-  try {
-    var fila = CURRENT_USER && CURRENT_USER.filaAlerta ? CURRENT_USER.filaAlerta : 1;
-    var rows = await sheetsRead('ALERTAS!B' + fila);
-    if (!rows || !rows[0] || !rows[0][0]) return [];
-    var val = String(rows[0][0]).trim();
-    if (!val || val === 'VACIO') return [];
-    return JSON.parse(val);
-  } catch(e) { return null; }
-}
-
-// Lee todas las celdas B1:B20 (supervisor)
-async function _readAllEditRequests() {
-  try {
-    var rows = await sheetsRead('ALERTAS!B1:B20');
-    var all = [];
-    (rows || []).forEach(function(row, i) {
-      if (!row || !row[0]) return;
-      var val = String(row[0]).trim();
-      if (!val || val === 'VACIO') return;
-      try {
-        var arr = JSON.parse(val);
-        arr.forEach(function(req) { req._filaAlerta = i + 1; all.push(req); });
-      } catch(e) {}
-    });
-    return all;
-  } catch(e) { return null; }
-}
-
-// Escribe de vuelta en la celda B del operario (supervisor aprueba/rechaza)
-async function _writeRequestsToFila(fila, arr) {
-  arr = _limpiarExpirados(arr);
-  var val = arr.length > 0 ? JSON.stringify(arr) : 'VACIO';
-  fetch(GAS_URL, { method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!B' + fila, values: [[val]] }) });
-}
-
-function _ajustarVelocidadPoll(hayActivas) {
-  var intervalo = hayActivas ? 2000 : 8000;
-  var esFast = hayActivas;
-  if (esFast === _editPollFast && _editPollInterval) return;
-  _editPollFast = esFast;
-  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
-  if (hayActivas || _esAprobadorEdicion()) {
-    _editPollInterval = setInterval(_pollEdicion, intervalo);
-  }
-}
-
-function _iniciarPollEdicion() {
-  _editPollFast = false;
-  if (_editPollInterval) { clearInterval(_editPollInterval); _editPollInterval = null; }
-  _editPollInterval = setInterval(_pollEdicion, 2000);
-  _editPollFast = true;
-  setTimeout(_pollEdicion, 500);
-}
-
-function solicitarEdicionManual(idx) {
-  var r = remito[idx];
-  if (!r) return;
-  var existing = _editRequests.find(function(req) { return req.idx === idx; });
-  if (existing) { showToast('Ya hay una solicitud activa para este artículo'); return; }
-  var newReq = {
-    idx: idx, cod: r.cod, desc: r.desc, cantEsp: r.cantUnidades || 0,
-    ocId: remitoDatos ? remitoDatos.ocId : null,
-    operario: CURRENT_USER.name,
-    filaAlerta: CURRENT_USER.filaAlerta || 1,
-    ts: Date.now(), status: 'pending'
-  };
-  _editRequests.push(newReq);
-  _writeMyRequests(_editRequests);
-  renderTablaControl();
-  showToast('Solicitud enviada. Esperando aprobación del supervisor...');
-  _iniciarPollEdicion();
-}
-
-function confirmarEdicionManual(idx, cantidad) {
-  var r = remito[idx];
-  if (!r) return;
-  var cantCaja = r.cantCaja || r.cantUnidadesPorCaja || 1;
-  // Actualizar exactamente igual que restarUnidadesControl
-  r.unidadesControladas = cantidad;
-  r.cajasEscaneadas     = Math.floor(cantidad / cantCaja);
-  r.unidadesSueltas     = cantidad % cantCaja;
-  r._ingresoManual      = true;
-  // Limpiar la solicitud de edición
-  _editRequests = _editRequests.filter(function(req) { return req.idx !== idx; });
-  _writeMyRequests(_editRequests);
-  // Re-render completo igual que el escaneo normal
-  if (typeof renderRegistro   === 'function') renderRegistro();
-  if (typeof renderTablaRemito === 'function') renderTablaRemito();
-  renderTablaControl();
-  if (typeof updateMetrics    === 'function') updateMetrics();
-  triggerAutosave();
-  showToast('✅ Cantidad registrada: ' + cantidad + ' u. (ingreso manual)');
-  _ajustarVelocidadPoll(false);
-}
-
-async function _pollEdicion() {
-  if (_editPollActive) return;
-  _editPollActive = true;
-  try {
-    // ── OPERARIO: chequear su propia celda B ──
-    if (CURRENT_USER && CURRENT_USER.rol === 'operario' && _editRequests.length > 0) {
-      var remoto = await _readMyRequests();
-      if (remoto === null) return; // error de red
-      remoto = _limpiarExpirados(remoto);
-      var changed = false;
-      _editRequests.forEach(function(localReq) {
-        var remoteReq = remoto.find(function(r) { return r.idx === localReq.idx; });
-        if (remoteReq && remoteReq.status !== localReq.status) {
-          localReq.status = remoteReq.status;
-          changed = true;
-          if (remoteReq.status === 'approved') {
-            showToast('✅ ¡Aprobado! Ingresá la cantidad manualmente.');
-          } else if (remoteReq.status === 'rejected') {
-            showToast('❌ Solicitud rechazada por el supervisor.');
-            setTimeout(function() {
-              _editRequests = _editRequests.filter(function(r) { return r.idx !== localReq.idx; });
-              renderTablaControl();
-              _ajustarVelocidadPoll(false);
-            }, 4000);
-          }
-        }
-        if (!remoteReq && localReq.status === 'pending' && (Date.now() - localReq.ts) > 300000) {
-          localReq.status = 'rejected'; changed = true;
-          showToast('⏱ Solicitud expirada (sin respuesta del supervisor).');
-        }
-      });
-      if (changed) renderTablaControl();
-      var hayActivas = _editRequests.some(function(r) { return r.status === 'pending' || r.status === 'approved'; });
-      _ajustarVelocidadPoll(hayActivas);
-    }
-
-    // ── SUPERVISOR: leer todas las celdas B y mostrar banner ──
-    if (_esAprobadorEdicion()) {
-      var todas = await _readAllEditRequests();
-      if (todas === null) return;
-      var pendientes = _limpiarExpirados(todas).filter(function(r) { return r.status === 'pending'; });
-      _supervisorPendientes = pendientes;
-      if (pendientes.length > 0) {
-        _mostrarBannerSupervisor(pendientes);
-      } else if (_supervisorBannerVisible) {
-        _ocultarBannerSupervisor();
-      }
-    }
-  } catch(e) {
-  } finally { _editPollActive = false; }
-}
-
-function _mostrarBannerSupervisor(pendientes) {
-  _supervisorBannerVisible = true;
-  var banner = document.getElementById('banner-edit-approval');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'banner-edit-approval';
-    banner.style.cssText = 'position:fixed; top:64px; right:16px; z-index:9999; max-width:390px;';
-    document.body.appendChild(banner);
-  }
-  var html = '<div style="background:var(--c-surface2); border:2px solid var(--c-amber); border-radius:var(--radius-md); box-shadow:0 6px 24px rgba(0,0,0,.5); padding:14px 16px;">' +
-    '<div style="font-size:13px; font-weight:700; color:var(--c-amber); margin-bottom:10px; display:flex; align-items:center; gap:8px;"><i class="ti ti-pencil"></i> Solicitudes de edición manual</div>';
-  pendientes.forEach(function(req) {
-    var age = Math.round((Date.now() - req.ts) / 1000);
-    var ageStr = age < 60 ? age + 's' : Math.round(age/60) + 'min';
-    var fa = req._filaAlerta || req.filaAlerta || 1;
-    html += '<div style="border-top:1px solid var(--c-border); padding:10px 0 4px;">' +
-      '<div style="font-weight:600; color:var(--c-text1); font-size:13px;">' + escHtml(req.desc || req.cod) + '</div>' +
-      '<div style="color:var(--c-text3); font-size:11px; margin:2px 0 8px;">Operario: ' + escHtml(req.operario) + ' · ' + req.cantEsp + ' u. esperadas · hace ' + ageStr + '</div>' +
-      '<div style="display:flex; gap:8px;">' +
-        '<button onclick="_aprobarEdicion(' + fa + ',' + req.idx + ')" style="background:rgba(91,214,139,0.15); border:1.5px solid var(--c-green); color:var(--c-green); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✓ Aprobar</button>' +
-        '<button onclick="_rechazarEdicion(' + fa + ',' + req.idx + ')" style="background:rgba(239,68,68,0.12); border:1.5px solid var(--c-red); color:var(--c-red); border-radius:var(--radius-sm); padding:5px 14px; font-size:12px; font-weight:700; cursor:pointer;">✕ Rechazar</button>' +
-      '</div></div>';
-  });
-  html += '</div>';
-  banner.innerHTML = html;
-  banner.style.display = 'block';
-}
-
-function _ocultarBannerSupervisor() {
-  _supervisorBannerVisible = false;
-  var banner = document.getElementById('banner-edit-approval');
-  if (banner) banner.style.display = 'none';
-}
-
-async function _aprobarEdicion(filaAlerta, idx) {
-  var rows = await sheetsRead('ALERTAS!B' + filaAlerta);
-  if (!rows || !rows[0] || !rows[0][0]) return;
-  var val = String(rows[0][0]).trim();
-  if (!val || val === 'VACIO') return;
-  var arr;
-  try { arr = JSON.parse(val); } catch(e) { return; }
-  arr = arr.map(function(r) {
-    return r.idx === idx ? Object.assign({}, r, { status: 'approved' }) : r;
-  });
-  _writeRequestsToFila(filaAlerta, arr);
-  // Actualizar banner inmediatamente (optimistic)
-  _supervisorPendientes = _supervisorPendientes.filter(function(r) {
-    return !(r._filaAlerta === filaAlerta && r.idx === idx);
-  });
-  if (_supervisorPendientes.length > 0) _mostrarBannerSupervisor(_supervisorPendientes);
-  else _ocultarBannerSupervisor();
-  showToast('✅ Edición aprobada');
-}
-
-async function _rechazarEdicion(filaAlerta, idx) {
-  var rows = await sheetsRead('ALERTAS!B' + filaAlerta);
-  if (!rows || !rows[0] || !rows[0][0]) return;
-  var val = String(rows[0][0]).trim();
-  if (!val || val === 'VACIO') return;
-  var arr;
-  try { arr = JSON.parse(val); } catch(e) { return; }
-  arr = arr.map(function(r) {
-    return r.idx === idx ? Object.assign({}, r, { status: 'rejected' }) : r;
-  });
-  _writeRequestsToFila(filaAlerta, arr);
-  // Limpiar rejected a los 12s
-  setTimeout(function() {
-    sheetsRead('ALERTAS!B' + filaAlerta).then(function(rows2) {
-      if (!rows2 || !rows2[0] || !rows2[0][0]) return;
-      try {
-        var arr2 = JSON.parse(String(rows2[0][0]).trim());
-        _writeRequestsToFila(filaAlerta, arr2.filter(function(r) { return r.idx !== idx; }));
-      } catch(e) {}
-    });
-  }, 12000);
-  _supervisorPendientes = _supervisorPendientes.filter(function(r) {
-    return !(r._filaAlerta === filaAlerta && r.idx === idx);
-  });
-  if (_supervisorPendientes.length > 0) _mostrarBannerSupervisor(_supervisorPendientes);
-  else _ocultarBannerSupervisor();
-  showToast('❌ Edición rechazada');
-}
-
-function _iniciarPollEdicionSupervisor() {
-  if (!_esAprobadorEdicion()) return;
-  if (_editPollInterval) return;
-  _editPollFast = true;
-  _editPollInterval = setInterval(_pollEdicion, 2000);
-  setTimeout(_pollEdicion, 1500);
-}
-// ── FIN SISTEMA EDICIÓN MANUAL ─────────────────────────────────────────────────
 
 async function aceptarAlertaEscaneo() {
   document.getElementById('modal-alerta-escaneo').classList.remove('open');
