@@ -5362,7 +5362,7 @@ async function mostrarPanelReposiciones(btn) {
       if (!grupos[id]) { grupos[id] = { palet: r[1], proveedor: r[2], fecha: r[12], operario: r[11], admin: r[10], lineas: [] }; orden.push(id); }
       grupos[id].lineas.push({ cod: r[4], desc: r[5], esp: r[6], ctrl: r[7], estado: r[9], lote: r[14], fechaVto: r[15] });
     });
-    var html = '<div style="display:flex; flex-direction:column; gap:10px; padding:4px 0;">';
+    var html = '<div style="display:flex; flex-direction:column; gap:14px; padding:4px 0;">';
     orden.reverse().forEach(function(id) {
       var g = grupos[id];
       var estadoGrupo = g.lineas.every(function(l){ return l.estado === 'Completo'; }) ? 'Completo'
@@ -5371,9 +5371,9 @@ async function mostrarPanelReposiciones(btn) {
       var badgeColor = estadoGrupo === 'Completo' ? 'var(--c-green)' : estadoGrupo === 'Parcial' ? 'var(--c-orange)' : 'var(--c-accent)';
       var nombre = nombrePalet(g.palet);
       var fecha  = fmtFechaHora(g.fecha);
-      html += '<div style="background:var(--c-surface1); border:1px solid var(--c-border); border-radius:10px; overflow:hidden;">';
+      html += '<div style="background:var(--c-surface1); border:1px solid var(--c-border); border-radius:10px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.18);">';
       // Header
-      html += '<div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--c-border); flex-wrap:wrap;">';
+      html += '<div style="display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--c-border); flex-wrap:wrap; background:var(--c-surface2);">';
       html += '<span style="font-size:13px; font-weight:700; color:var(--c-accent); letter-spacing:.3px;">🔄 ' + escHtml(nombre) + '</span>';
       html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(g.proveedor || '—') + '</span>';
       html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(fecha) + '</span>';
