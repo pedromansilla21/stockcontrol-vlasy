@@ -3593,6 +3593,8 @@ function finalizarControl() {
   // (los palets van a HISTORIAL DE PALETS, manejado dentro de _guardarEnHistorial)
   if (!ocObj.esPalet) {
     _guardarDetalleHistorial(ocObj, escaneadoPorVal);
+  } else if (ocObj.esReposicion) {
+    _guardarDetalleHistorial(ocObj, escaneadoPorVal, 'REPOSICIÓN');
   }
 
   // Limpiar panel de escaneo (para todos los roles)
@@ -4601,7 +4603,7 @@ function _actualizarIndicadorConexion(online) {
 window.addEventListener('online',  function(){ _actualizarIndicadorConexion(true); });
 window.addEventListener('offline', function(){ _actualizarIndicadorConexion(false); });
 
-async function _guardarDetalleHistorial(oc, escaneadoPor) {
+async function _guardarDetalleHistorial(oc, escaneadoPor, tipo) {
   // Guarda una fila por artículo en HISTORIAL COMPLETO
   // IMPORTANTE: se mantiene el mismo orden/cantidad de columnas que ya existen en el
   // Sheet (para no desalinear filas viejas). Los valores ahora son en UNIDADES
@@ -4624,7 +4626,7 @@ async function _guardarDetalleHistorial(oc, escaneadoPor) {
         horaEscaneo = (ultima.fecha || '') + ' ' + (ultima.hora || '');
       }
       return [
-        'INGRESO',                              // Tipo de operación
+        tipo || 'INGRESO',                      // Tipo de operación
         oc.nro || '',                           // N° OC
         oc.proveedor || '',                     // Proveedor
         oc.fecha || '',                         // Fecha recepción
