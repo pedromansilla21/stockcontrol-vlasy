@@ -3059,10 +3059,10 @@ function abrirPanelCompletarControl() {
   remito.forEach(function(r, i) {
     if (_filtroCodCompletarControl && String(r.cod).trim() !== _filtroCodCompletarControl) return;
     algunaVisible = true;
-    var escaneadas = r.cajasEscaneadas || 0;
-    var esperadas  = r.cajasEsperadas  || 0;
-    var estadoColor = escaneadas === esperadas ? 'var(--c-green)' : escaneadas > 0 ? 'var(--c-amber)' : 'var(--c-red)';
-    var estadoTxt   = escaneadas === esperadas ? '✓' : escaneadas + '/' + esperadas;
+    var uCtrl      = r.unidadesControladas || 0;
+    var uEsp       = r.cantUnidades || 0;
+    var estadoColor = uCtrl >= uEsp && uCtrl > 0 ? 'var(--c-green)' : uCtrl > 0 ? 'var(--c-amber)' : 'var(--c-red)';
+    var estadoTxt   = uCtrl >= uEsp && uCtrl > 0 ? '✓' : uCtrl + '/' + uEsp;
     var dividido = r.divisiones && r.divisiones.length > 0;
 
     if (!dividido) {
@@ -3101,7 +3101,7 @@ function abrirPanelCompletarControl() {
           '<tr>' +
             '<td></td>' +
             '<td style="padding-left:20px; font-size:11px; color:var(--c-text3);">Parte ' + (j+1) + ':</td>' +
-            '<td style="text-align:center;"><input type="number" id="cc-div-' + i + '-' + j + '-cajas" min="0" placeholder="Cajas" value="' + (d.cajas || '') + '" style="width:68px; text-align:center; padding:5px 4px;" /></td>' +
+            '<td style="text-align:center;"><input type="number" id="cc-div-' + i + '-' + j + '-cajas" min="0" placeholder="Unidades" value="' + (d.cajas || '') + '" style="width:68px; text-align:center; padding:5px 4px;" /></td>' +
             '<td style="white-space:nowrap;">' +
               '<input type="number" id="cc-div-' + i + '-' + j + '-mes" min="1" max="12" placeholder="MM" value="' + (d.mes || '') + '" style="width:52px; text-align:center; padding:5px 4px;" />' +
               '<span style="margin:0 3px; color:var(--c-text3);">/</span>' +
@@ -3325,7 +3325,7 @@ function toggleDividirLinea(i) {
   var r = remito[i];
   if (!r) return;
   r.divisiones = [{
-    cajas: r.cajasEscaneadas || '',
+    unidades: r.unidadesControladas || '',
     mes:   r.fechaLote ? r.fechaLote.split('-')[1] : '',
     anio:  r.fechaLote ? r.fechaLote.split('-')[0] : '',
     lote:  r.lote  || '',
@@ -3339,7 +3339,7 @@ function agregarDivisionLinea(i) {
   _commitCompletarControlValues();
   var r = remito[i];
   if (!r || !r.divisiones) return;
-  r.divisiones.push({ cajas: '', mes: '', anio: '', lote: '', palet: '' });
+  r.divisiones.push({ unidades: '', mes: '', anio: '', lote: '', palet: '' });
   abrirPanelCompletarControl();
 }
 
@@ -3367,7 +3367,7 @@ function _commitCompletarControlValues() {
         var tipoFechaEl = document.getElementById('cc-div-' + i + '-' + j + '-tipofecha');
         var paletEl = document.getElementById('cc-div-' + i + '-' + j + '-palet');
         var contenedorEl = document.getElementById('cc-div-' + i + '-' + j + '-contenedor');
-        if (cajasEl) d.cajas = cajasEl.value.trim();
+        if (cajasEl) d.unidades = parseInt(cajasEl.value, 10) || 0;
         if (mesEl)   d.mes   = mesEl.value.trim();
         if (anioEl)  d.anio  = anioEl.value.trim();
         if (loteEl)  d.lote  = loteEl.value.trim();
@@ -3459,13 +3459,13 @@ function finalizarControl() {
     //    igual al total escaneado — ni más ni menos.
     if (r.divisiones && r.divisiones.length > 0) {
       var sumaParts = r.divisiones.reduce(function(acc, d) {
-        return acc + (parseInt(d.cajas, 10) || 0);
+        return acc + (parseInt(d.unidades, 10) || 0);
       }, 0);
-      var escaneadas = r.cajasEscaneadas || 0;
+      var escaneadas = r.unidadesControladas || 0;
       if (sumaParts !== escaneadas) {
-        errores.push('• ' + desc + ': la suma de partes (' + sumaParts + ' cajas) ' +
+        errores.push('• ' + desc + ': la suma de partes (' + sumaParts + ' u.) ' +
           (sumaParts > escaneadas ? 'supera' : 'no llega a') +
-          ' lo escaneado (' + escaneadas + ' cajas).');
+          ' lo escaneado (' + escaneadas + ' u.).');
       }
     }
     // 2. Fecha y lote obligatorios en todas las líneas (divididas o no).
@@ -4917,8 +4917,11 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           var anioEl  = document.getElementById('cc-div-' + i + '-' + j + '-anio');
           var loteEl  = document.getElementById('cc-div-' + i + '-' + j + '-lote');
 
-          var cajas = (parseInt(d.cajas, 10) || 0) || ((cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : 0);
-          var unidades = cajas * (linea.unidadesPorCaja || linea.cantCaja || 1);
+          var cajasDOM = (cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : 0;
+          var upCaja = linea.unidadesPorCaja || linea.cantCaja || 1;
+          // Prioridad: d.unidades (nuevo). Fallback: d.cajas * upCaja (datos viejos)
+          var unidades = (parseInt(d.unidades, 10) || 0) || cajasDOM ||
+                         ((parseInt(d.cajas, 10) || 0) * upCaja);
           var lote = d.lote || (loteEl && loteEl.value.trim()) || '—';
           var fecha = '—';
           var mes = d.mes || (mesEl && mesEl.value ? mesEl.value : '');
@@ -5836,10 +5839,12 @@ function renderLineasOCTable(lineas, ocId) {
 
     if (l.divisiones && l.divisiones.length > 0) {
       // Si TODAS las divisiones están en 0, saltar el artículo completo
-      var divConStock = l.divisiones.filter(function(d){ return (parseInt(d.cajas,10)||0) > 0; });
+      var divConStock = l.divisiones.filter(function(d){ return ((parseInt(d.unidades,10)||0) || (parseInt(d.cajas,10)||0)*upCajaL) > 0; });
       if (divConStock.length === 0) return;
-      // ESP = suma de unidades de divisiones restantes (no el valor original pre-reposición)
-      var uEspLDiv = l.divisiones.reduce(function(s, d){ return s + (parseInt(d.cajas,10)||0) * upCajaL; }, 0);
+      // ESP = suma de unidades de divisiones restantes (d.unidades nuevo, d.cajas*upCaja fallback)
+      var uEspLDiv = l.divisiones.reduce(function(s, d){
+        return s + ((parseInt(d.unidades,10)||0) || (parseInt(d.cajas,10)||0) * upCajaL);
+      }, 0);
       html += '<tr class="palet-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '" style="background:rgba(255,255,255,0.03);">' +
         '<td class="mono" style="font-size:12px; padding:8px;">' + escHtml(l.cod) + '</td>' +
         '<td style="font-weight:600; padding:8px; color:' + cntColor + ';">' + escHtml(l.desc) + '</td>' +
