@@ -4715,7 +4715,17 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     if (esPalet && paletValue) {
       if (oc.esReposicion === true) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
-        _restarEnHistorialPalets(oc, escaneadoPor);
+        // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
+        var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+        _savePendingFinRep(_finRepId, oc.id, oc.palet);
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet })
+        }).then(function() {
+          _markFinRepSent(_finRepId);
+          setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
+        }).catch(function() { /* queda pending, se reintenta al próximo login */ });
       } else {
         // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
         _guardarEnHistorialPalets(oc, escaneadoPor);
@@ -4733,6 +4743,55 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
 
 // ── Pendientes de restar (resiliencia ante fallos del GAS) ──────────────────
 var PENDING_RESTARS_KEY = 'stockcontrol_pending_restars';
+var PENDING_FINREP_KEY  = 'stockcontrol_pending_finrep';
+
+function _savePendingFinRep(id, ocId, palet) {
+  try {
+    var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+    pending.push({ id: id, ocId: ocId, palet: palet, timestamp: new Date().toISOString(), status: 'pending' });
+    localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
+  } catch(e) {}
+}
+function _markFinRepSent(id) {
+  try {
+    var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+    pending = pending.map(function(p) { if (p.id === id) p.status = 'sent'; return p; });
+    localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
+  } catch(e) {}
+}
+function _clearFinRep(id) {
+  try {
+    var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+    pending = pending.filter(function(p) { return p.id !== id; });
+    localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
+  } catch(e) {}
+}
+async function _checkAndRetryPendingFinRep() {
+  try {
+    var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+    var now = Date.now();
+    pending = pending.filter(function(p) {
+      if (p.status === 'sent') return (now - new Date(p.timestamp).getTime()) < 60000;
+      return true;
+    });
+    localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
+    var toRetry = pending.filter(function(p) { return p.status === 'pending'; });
+    if (toRetry.length === 0) return;
+    showToast('⚠ Hay ' + toRetry.length + ' descuento(s) de reposición pendiente(s) — reintentando...');
+    for (var i = 0; i < toRetry.length; i++) {
+      var p = toRetry[i];
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: p.ocId, palet: p.palet })
+        });
+        _markFinRepSent(p.id);
+        (function(pid) { setTimeout(function() { _clearFinRep(pid); }, 60000); })(p.id);
+      } catch(e) { /* queda como pending */ }
+    }
+    if (toRetry.length > 0) showToast('✅ Descuentos de reposición reenviados al servidor');
+  } catch(e) {}
+}
 
 function _savePendingRestar(id, filas) {
   try {
@@ -7922,6 +7981,7 @@ function _completarLogin(selected) {
   // Solo administrativo/supervisor revisan pendientes — el operario no tiene acceso al sheet
   if (CURRENT_USER.rol !== 'operario' && CURRENT_USER.rol !== 'buscador') {
     setTimeout(_checkAndRetryPendingRestars, 3000); // esperar 3s para que cargue todo
+    setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
   }
   aplicarRol(CURRENT_USER.rol);
 }
