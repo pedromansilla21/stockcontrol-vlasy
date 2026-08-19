@@ -3070,7 +3070,7 @@ function abrirPanelCompletarControl() {
       tbody +=
         '<tr>' +
           '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(r.cod) + '</span></td>' +
-          '<td style="max-width:200px;">' + escHtml(r.desc) + '</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(r.desc) + '</td>' +
           '<td style="text-align:center;"><span style="font-weight:700;color:' + estadoColor + ';">' + estadoTxt + '</span></td>' +
           '<td style="white-space:nowrap;">' +
             '<input type="number" id="cc-mes-' + i + '" min="1" max="12" placeholder="MM" ' +
@@ -3092,7 +3092,7 @@ function abrirPanelCompletarControl() {
       tbody +=
         '<tr style="background:var(--c-bg2);">' +
           '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(r.cod) + '</span></td>' +
-          '<td colspan="3" style="max-width:200px;">' + escHtml(r.desc) + ' <span style="font-size:10px; color:var(--c-text3);">— dividido en ' + r.divisiones.length + ' parte(s)</span></td>' +
+          '<td colspan="3" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(r.desc) + ' <span style="font-size:10px; color:var(--c-text3);">— dividido en ' + r.divisiones.length + ' parte(s)</span></td>' +
           '<td colspan="1"></td>' +
           '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="cerrarDivisionLinea(' + i + ')" title="Volver a un solo lote/fecha/palet" style="font-size:11px; padding:4px 8px; color:var(--c-red);"><i class="ti ti-x"></i> Cerrar división</button></td>' +
         '</tr>';
@@ -3128,13 +3128,15 @@ function abrirPanelCompletarControl() {
   } else {
     container.innerHTML =
       '<div class="card" style="padding:0;overflow:hidden;">' +
-        '<table class="completar-table">' +
+        '<div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">' +
+        '<table class="completar-table" style="min-width:900px;">' +
           '<thead><tr>' +
-            '<th>Código</th><th>Descripción</th><th style="text-align:center;">Cajas</th>' +
-            '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Tipo Fecha</th><th>Palet</th><th>Contenedor</th><th></th>' +
+            '<th style="width:60px;">Código</th><th style="max-width:120px;min-width:100px;">Descripción</th><th style="text-align:center;width:80px;">Cajas</th>' +
+            '<th style="width:150px;">Venc. (MM/AAAA)</th><th style="width:90px;">Lote</th><th style="width:120px;">Tipo Fecha</th><th style="width:80px;">Palet</th><th style="width:90px;">Contenedor</th><th style="width:80px;"></th>' +
           '</tr></thead>' +
           '<tbody>' + tbody + '</tbody>' +
         '</table>' +
+        '</div>' +
       '</div>';
   }
 
