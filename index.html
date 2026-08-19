@@ -3101,13 +3101,13 @@ function abrirPanelCompletarControl() {
           '<tr>' +
             '<td></td>' +
             '<td style="padding-left:20px; font-size:11px; color:var(--c-text3);">Parte ' + (j+1) + ':</td>' +
-            '<td style="text-align:center;"><input type="number" id="cc-div-' + i + '-' + j + '-cajas" min="0" placeholder="Unidades" value="' + (d.cajas || '') + '" style="width:68px; text-align:center; padding:5px 4px;" /></td>' +
+            '<td style="text-align:center;"><input type="number" id="cc-div-' + i + '-' + j + '-cajas" min="0" placeholder="Unidades" value="' + (d.unidades || d.cajas || '') + '" style="width:68px; text-align:center; padding:5px 4px;" /></td>' +
             '<td style="white-space:nowrap;">' +
               '<input type="number" id="cc-div-' + i + '-' + j + '-mes" min="1" max="12" placeholder="MM" value="' + (d.mes || '') + '" style="width:52px; text-align:center; padding:5px 4px;" />' +
               '<span style="margin:0 3px; color:var(--c-text3);">/</span>' +
               '<input type="number" id="cc-div-' + i + '-' + j + '-anio" min="2020" max="2040" placeholder="AAAA" value="' + (d.anio || '') + '" style="width:64px; text-align:center; padding:5px 4px;" />' +
             '</td>' +
-            '<td><input type="text" id="cc-div-' + i + '-' + j + '-lote" value="' + escHtml(d.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
+            '<td><input type="text" id="cc-div-' + i + '-' + j + '-lote" value="' + escHtml(d.lote || '') + '" placeholder="Ej: L-2024" style="min-width:90px;" /></td>' +
             '<td><select id="cc-div-' + i + '-' + j + '-tipofecha" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (d.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (d.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-palet" value="' + escHtml(d.palet || '') + '" placeholder="Ej: P-01" /></td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-contenedor" value="' + escHtml(d.contenedor || '') + '" placeholder="Ej: CTR-01" /></td>' +
