@@ -5829,7 +5829,7 @@ function renderLineasOCTable(lineas, ocId) {
         '</td>' +
       '</tr>';
       l.divisiones.forEach(function(div, j) {
-        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
+        var divCant = (parseInt(div.unidades, 10) || 0) || ((parseInt(div.cajas, 10) || 0) * upCajaL);
         if (divCant === 0) return;
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
         html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
@@ -6123,7 +6123,7 @@ async function abrirModalReposicion(ocId) {
               var cant = parseInt(row[4],10)||0;
               var fechaRaw = String(row[6]||'').trim(); // YYYY-MM
               var pf = fechaRaw.split('-');
-              return { cajas: Math.ceil(cant/upCaja), lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+              return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
             }).filter(function(d){ return d.cantReal > 0; });
           }
           var primerRow = grupo.rows[0];
