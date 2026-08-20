@@ -4717,24 +4717,9 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     if (esPalet && paletValue) {
       if (oc.esReposicion === true) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
-        // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
-        var _finRepLineas = (oc.lineas || []).map(function(l) {
-          return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
-        });
-        var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-        _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas);
-        fetch(GAS_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet,
-            lineas: (oc.lineas || []).map(function(l) {
-              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
-            })
-          })
-        }).then(function() {
-          _markFinRepSent(_finRepId);
-          setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
-        }).catch(function() { /* queda pending, se reintenta al próximo login */ });
+        // Volvimos al flujo viejo (restarCantPalet) que funcionaba bien
+        // antes del cambio a finalizarReposicion del 19/08.
+        _restarEnHistorialPalets(oc, escaneadoPor);
       } else {
         // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
         _guardarEnHistorialPalets(oc, escaneadoPor);
@@ -5170,41 +5155,18 @@ async function syncOrdenes() {
     } catch(eElim) {}
     try { localStorage.setItem('oc_eliminadas', JSON.stringify(eliminados)); } catch(e) {}
 
-    // Merge: combinar Sheets + local, sin perder OC de ninguno
-    // Excluir OC eliminadas intencionalmente
-    var PRIORIDAD_ESTADO = { 'pendiente': 0, 'controlando': 1, 'finalizado_escaneo': 2, 'finalizado': 3 };
+    // El Sheet manda siempre. Lo local (localStorage) solo se usa para
+    // OCs que TODAVÍA no llegaron al Sheet (recién creadas offline o con
+    // el guardado en cola pendiente) — nunca para pisar lo que ya está
+    // subido, así el HTML es un espejo directo de ORDENES.
     var merged = {};
     sheetsData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) < 0) merged[oc.id] = oc;
     });
     localData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) >= 0) return; // eliminada, no restaurar
-      if (!merged[oc.id]) {
-        merged[oc.id] = oc;
-        return;
-      }
-      var existente = merged[oc.id];
-      // Para estadoManual: siempre tomar el más avanzado — nunca retrocecer
-      // de "finalizado" a "controlando" solo porque otra PC tiene un savedAt
-      // más reciente de cuando lo estaba escaneando.
-      var prioExistente = PRIORIDAD_ESTADO[existente.estadoManual] || 0;
-      var prioNuevo     = PRIORIDAD_ESTADO[oc.estadoManual] || 0;
-      if (prioNuevo > prioExistente) {
-        // El nuevo tiene estado más avanzado — ganó, pero conservamos el
-        // savedAt más reciente para el resto de los campos
-        merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
-      } else if (prioExistente > prioNuevo) {
-        // El existente tiene estado más avanzado — conservar estadoManual
-        // del existente pero actualizar otros campos si el nuevo es más reciente
-        if ((oc.savedAt || '') > (existente.savedAt || '')) {
-          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual });
-        }
-      } else {
-        // Mismo estado — tomar el más reciente como antes
-        if ((oc.savedAt || '') > (existente.savedAt || '')) {
-          merged[oc.id] = oc;
-        }
-      }
+      if (!merged[oc.id]) merged[oc.id] = oc; // no existe en Sheet todavía
+      // si ya existe en el Sheet, el Sheet gana siempre — no se toca
     });
     _ordenesCache = Object.values(merged).sort(function(a,b){
       return (b.savedAt||'') > (a.savedAt||'') ? 1 : -1;
