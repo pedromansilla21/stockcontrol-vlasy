@@ -5130,15 +5130,7 @@ async function _saveOrdenesToSheets(ordenes) {
   }
 }
 
-var _busy_syncOrdenes = false;
 async function syncOrdenes() {
-  // Guard: si ya hay un syncOrdenes en curso, no lanzar otro en paralelo —
-  // solo esperar a que termine el que está corriendo.
-  if (_busy_syncOrdenes) {
-    while (_busy_syncOrdenes) { await new Promise(function(r){ setTimeout(r, 200); }); }
-    return;
-  }
-  _busy_syncOrdenes = true;
   try {
     // Formato nuevo: una fila por O.C. (columna A = id, columna B = datos)
     var rows = await sheetsRead('ORDENES!A2:B5000');
@@ -5240,8 +5232,6 @@ async function syncOrdenes() {
     }
   } catch(e) {
     _ordenesCache = loadOrdenes();
-  } finally {
-    _busy_syncOrdenes = false;
   }
   renderOrdenes();
   updateBadgeOrdenes();
@@ -8080,10 +8070,7 @@ function iniciarSincAlertasOperario() {
   setTimeout(syncAlertasOperario, 3000);
 }
 
-var _busy_syncAlertasOperario = false;
 async function syncAlertasOperario() {
-  if (_busy_syncAlertasOperario) return;
-  _busy_syncAlertasOperario = true;
   try {
     if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
     
@@ -8104,10 +8091,7 @@ async function syncAlertasOperario() {
       _alertasOperarioVistas.push(id);
       mostrarNotificacionAlerta(valor, filaAlerta);
     }
-  } catch(e) {
-  } finally {
-    _busy_syncAlertasOperario = false;
-  }
+  } catch(e) {}
 }
 
 function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
@@ -9242,10 +9226,7 @@ function _getDeviceId() {
   return id;
 }
 
-var _busy_checkFinalizadoOC = false;
 function _checkFinalizadoOC() {
-  if (_busy_checkFinalizadoOC) return;
-  _busy_checkFinalizadoOC = true;
   sheetsRead('ALERTAS!A1:A10').then(function(rows) {
     if (!rows) return;
     rows.forEach(function(row, idx) {
@@ -9290,14 +9271,11 @@ function _checkFinalizadoOC() {
       document.getElementById('alerta-finalizado-estado').style.color = estado === 'completo' ? 'var(--c-green)' : 'var(--c-amber)';
       document.getElementById('modal-alerta-finalizado').classList.add('open');
     });
-  }).catch(function(){}).finally(function(){ _busy_checkFinalizadoOC = false; });
+  }).catch(function(){});
 }
 
-var _busy_limpiarAlertaHuerfana = false;
 function _limpiarAlertaHuerfana() {
   if (!CURRENT_USER) return;
-  if (_busy_limpiarAlertaHuerfana) return;
-  _busy_limpiarAlertaHuerfana = true;
   var fila = CURRENT_USER.filaAlerta || 1;
   sheetsRead('ALERTAS!A' + fila).then(function(rows) {
     var val = (rows && rows[0] && rows[0][0]) ? String(rows[0][0]).trim() : 'VACIO';
@@ -9320,20 +9298,11 @@ function _limpiarAlertaHuerfana() {
     // Para cualquier otra O.C., MANTENERLA (no limpiarla automáticamente)
     // Solo se limpia cuando el operario hace click en la notificación o finaliza
     localStorage.setItem('oc_en_escaneo', '1');
-  }).catch(function(){}).finally(function(){ _busy_limpiarAlertaHuerfana = false; });
+  }).catch(function(){});
 }
 
-var _busy_checkAlertaEscaneo = false;
-var _retryEnCursoAlerta = null;
-var _retryEnCursoAlertaVal = null;
-var _retryIntentos = 0;
 function _checkAlertaEscaneo() {
   if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
-  // Guard: si el pedido anterior todavía no volvió, no lanzar otro —
-  // evita que se acumulen requests pendientes con la pestaña abierta
-  // mucho tiempo (eso hacía que la alerta nunca llegara a leerse).
-  if (_busy_checkAlertaEscaneo) return;
-  _busy_checkAlertaEscaneo = true;
   // Cada operario lee SOLO su propia celda de ALERTAS (col A, fila = filaAlerta)
   // — así 3 operarios pueden recibir O.C. distintas al mismo tiempo sin pisarse.
   var fila = CURRENT_USER.filaAlerta || 1;
@@ -9352,30 +9321,12 @@ function _checkAlertaEscaneo() {
     // Verificar si la OC está en caché ANTES de marcarla como vista
     var pendiente = (_ordenesCache || []).find(function(o){ return o.id === ocId; });
     if (!pendiente) {
-      // OC no está en caché todavía — sincronizar y reintentar en 2s.
-      // Guard: si ya hay una cadena de reintento en curso para esta MISMA
-      // alerta, no arrancar otra en paralelo — el intervalo global sigue
-      // llamando a esta función cada 3s y sin esto se acumulaban decenas
-      // de syncOrdenes() simultáneos, saturando la conexión al GAS y
-      // dejando la lectura de ALERTAS sin poder completarse a tiempo.
-      if (_retryEnCursoAlerta === val) return;
-      _retryEnCursoAlerta = val;
-      _retryIntentos = (_retryEnCursoAlertaVal === val ? _retryIntentos + 1 : 1);
-      _retryEnCursoAlertaVal = val;
-      if (_retryIntentos > 8) {
-        // Se dio por vencido tras ~16s — evita loop infinito si la OC
-        // realmente nunca llega a aparecer en el Sheet.
-        _retryEnCursoAlerta = null;
-        return;
-      }
+      // OC no está en caché todavía — sincronizar y reintentar en 2s
       syncOrdenes().then(function() {
-        _retryEnCursoAlerta = null;
         setTimeout(function() { _checkAlertaEscaneo(); }, 2000);
-      }).catch(function(){ _retryEnCursoAlerta = null; });
+      }).catch(function(){});
       return;
     }
-    _retryEnCursoAlerta = null;
-    _retryIntentos = 0;
     // Recién ahora marcar como vista (OC encontrada, se va a mostrar)
     vistas.push(val);
     sessionStorage.setItem('_alv', JSON.stringify(vistas));
@@ -9389,7 +9340,7 @@ function _checkAlertaEscaneo() {
     var cajas  = pendiente.lineas ? pendiente.lineas.reduce(function(s,l){ return s+(l.cajasEsperadas||0);},0) : 0;
     document.getElementById('alerta-escaneo-detalle').textContent = lineas + ' artículo' + (lineas!==1?'s':'') + ' · ' + cajas + ' caja' + (cajas!==1?'s':'') + ' esperada' + (cajas!==1?'s':'');
     document.getElementById('modal-alerta-escaneo').classList.add('open');
-  }).catch(function(){}).finally(function(){ _busy_checkAlertaEscaneo = false; });
+  }).catch(function(){});
 }
 
 var _alertaEscaneoFila = 1;
