@@ -4716,21 +4716,16 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     
     if (esPalet && paletValue) {
       if (oc.esReposicion === true) {
-        // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
-        // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
-        var _finRepLineas = (oc.lineas || []).map(function(l) {
-          return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
+        // REPOSICIÓN → restar exactamente lo pedido (cantUnidadesAlEscaneo), no lo que escaneó el operario
+        var _finRepLineas = (oc.lineas || []).filter(function(l){ return (l.cantUnidadesAlEscaneo||l.cantUnidades||0) > 0; }).map(function(l) {
+          return { cod: l.cod, palet: oc.palet, lote: l.lote || '—', cantRestar: l.cantUnidadesAlEscaneo || l.cantUnidades || 0 };
         });
         var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
         _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas);
         fetch(GAS_URL, {
           method: 'POST',
           mode: 'no-cors',
-          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet,
-            lineas: (oc.lineas || []).map(function(l) {
-              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
-            })
-          })
+          body: JSON.stringify({ accion: 'restarCantPalet', filas: _finRepLineas, restarId: _finRepId })
         }).then(function() {
           _markFinRepSent(_finRepId);
           setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
@@ -5867,7 +5862,7 @@ function renderLineasOCTable(lineas, ocId) {
         '</td>' +
       '</tr>';
       l.divisiones.forEach(function(div, j) {
-        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
+        var divCant = (parseInt(div.unidades, 10) || 0) || (parseInt(div.cajas, 10) || 0) * upCajaL;
         if (divCant === 0) return;
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
         html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
