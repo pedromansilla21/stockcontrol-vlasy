@@ -8125,9 +8125,11 @@ function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  document.getElementById('btn-cargar-oc-alerta-' + filaAlerta).addEventListener('click', function() {
+  document.getElementById('btn-cargar-oc-alerta-' + filaAlerta).addEventListener('click', async function() {
     overlay.remove();
-    _ejecutarEnvioEscaneo(ocId, filaAlerta);
+    // Forzar sync antes de cargar — la OC puede no haber llegado al localStorage aún
+    if (typeof syncOrdenes === 'function') { try { await syncOrdenes(); } catch(e) {} }
+    if (typeof _ejecutarEnvioEscaneo === 'function') _ejecutarEnvioEscaneo(ocId, filaAlerta);
   });
 }
 
