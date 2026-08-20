@@ -8068,13 +8068,19 @@ function iniciarSincAlertasOperario() {
 async function syncAlertasOperario() {
   try {
     if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
-    
     var filaAlerta = CURRENT_USER.filaAlerta;
-    var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
-    
-    if (!filas || filas.length === 0) return;
-    
-    var valor = String(filas[0][0] || '').trim();
+    var valor = '';
+    try {
+      var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
+      if (filas && filas[0] && filas[0][0]) valor = String(filas[0][0]).trim();
+    } catch(e1) {
+      // Fallback: leer via GAS
+      try {
+        var r = await fetch(GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent('ALERTAS!A' + filaAlerta), { cache: 'no-store' });
+        var d = await r.json();
+        if (d.ok && d.data && d.data[0] && d.data[0][0]) valor = String(d.data[0][0]).trim();
+      } catch(e2) { return; }
+    }
     
     // Si la celda está vacía o dice "VACIO", no hacer nada
     if (!valor || valor === 'VACIO' || valor === '') return;
