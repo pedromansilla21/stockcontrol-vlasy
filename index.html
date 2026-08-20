@@ -9324,6 +9324,9 @@ function _limpiarAlertaHuerfana() {
 }
 
 var _busy_checkAlertaEscaneo = false;
+var _retryEnCursoAlerta = null;
+var _retryEnCursoAlertaVal = null;
+var _retryIntentos = 0;
 function _checkAlertaEscaneo() {
   if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
   // Guard: si el pedido anterior todavía no volvió, no lanzar otro —
@@ -9349,12 +9352,30 @@ function _checkAlertaEscaneo() {
     // Verificar si la OC está en caché ANTES de marcarla como vista
     var pendiente = (_ordenesCache || []).find(function(o){ return o.id === ocId; });
     if (!pendiente) {
-      // OC no está en caché todavía — sincronizar y reintentar en 2s
+      // OC no está en caché todavía — sincronizar y reintentar en 2s.
+      // Guard: si ya hay una cadena de reintento en curso para esta MISMA
+      // alerta, no arrancar otra en paralelo — el intervalo global sigue
+      // llamando a esta función cada 3s y sin esto se acumulaban decenas
+      // de syncOrdenes() simultáneos, saturando la conexión al GAS y
+      // dejando la lectura de ALERTAS sin poder completarse a tiempo.
+      if (_retryEnCursoAlerta === val) return;
+      _retryEnCursoAlerta = val;
+      _retryIntentos = (_retryEnCursoAlertaVal === val ? _retryIntentos + 1 : 1);
+      _retryEnCursoAlertaVal = val;
+      if (_retryIntentos > 8) {
+        // Se dio por vencido tras ~16s — evita loop infinito si la OC
+        // realmente nunca llega a aparecer en el Sheet.
+        _retryEnCursoAlerta = null;
+        return;
+      }
       syncOrdenes().then(function() {
+        _retryEnCursoAlerta = null;
         setTimeout(function() { _checkAlertaEscaneo(); }, 2000);
-      }).catch(function(){});
+      }).catch(function(){ _retryEnCursoAlerta = null; });
       return;
     }
+    _retryEnCursoAlerta = null;
+    _retryIntentos = 0;
     // Recién ahora marcar como vista (OC encontrada, se va a mostrar)
     vistas.push(val);
     sessionStorage.setItem('_alv', JSON.stringify(vistas));
