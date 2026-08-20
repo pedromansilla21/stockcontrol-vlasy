@@ -6368,7 +6368,7 @@ function enviarReposicion() {
     estadoManual: 'pendiente'
   };
 
-  // Guardar en ordenes y esperar que el GAS confirme antes de mandar la alerta
+  // Guardar en ordenes y guardar en el Sheet en paralelo
   var ordenes = loadOrdenes();
   ordenes.unshift(repOC);
   _ordenesCache = ordenes;
@@ -6376,31 +6376,19 @@ function enviarReposicion() {
 
   document.getElementById('modal-reposicion').classList.remove('open');
   renderOrdenes();
-  showToast('Guardando reposición...');
 
-  // Primero guardar la OC en el Sheet, LUEGO mandar la alerta al operario.
-  // Con timeout: si el guardado no contesta en 5s, se manda la alerta
-  // igual (antes se quedaba colgado esperando para siempre).
-  var _yaMandada = false;
-  function _mandarAlertaReposicion() {
-    if (_yaMandada) return;
-    _yaMandada = true;
-    var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
-    fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
-    });
-    showToast('✅ Reposición enviada a ' + operarioNombre);
-  }
-  var _timeoutAlerta = setTimeout(_mandarAlertaReposicion, 5000);
-  _saveOrdenesToSheets(ordenes).then(function() {
-    clearTimeout(_timeoutAlerta);
-    _mandarAlertaReposicion();
-  }).catch(function() {
-    clearTimeout(_timeoutAlerta);
-    _mandarAlertaReposicion();
+  // Mandar la alerta al operario YA, igual que el flujo normal de envío
+  // al escaneo — no depende de que el guardado en el Sheet termine.
+  var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+  fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
   });
+  showToast('✅ Reposición enviada a ' + operarioNombre);
+
+  // Guardar la OC en el Sheet en paralelo (no bloquea la alerta)
+  _saveOrdenesToSheets(ordenes);
 
   _reposicionOC = null;
 }
