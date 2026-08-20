@@ -4717,9 +4717,24 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
     if (esPalet && paletValue) {
       if (oc.esReposicion === true) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
-        // Volvimos al flujo viejo (restarCantPalet) que funcionaba bien
-        // antes del cambio a finalizarReposicion del 19/08.
-        _restarEnHistorialPalets(oc, escaneadoPor);
+        // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
+        var _finRepLineas = (oc.lineas || []).map(function(l) {
+          return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
+        });
+        var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+        _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas);
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet,
+            lineas: (oc.lineas || []).map(function(l) {
+              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
+            })
+          })
+        }).then(function() {
+          _markFinRepSent(_finRepId);
+          setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
+        }).catch(function() { /* queda pending, se reintenta al próximo login */ });
       } else {
         // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
         _guardarEnHistorialPalets(oc, escaneadoPor);
@@ -5155,18 +5170,41 @@ async function syncOrdenes() {
     } catch(eElim) {}
     try { localStorage.setItem('oc_eliminadas', JSON.stringify(eliminados)); } catch(e) {}
 
-    // El Sheet manda siempre. Lo local (localStorage) solo se usa para
-    // OCs que TODAVÍA no llegaron al Sheet (recién creadas offline o con
-    // el guardado en cola pendiente) — nunca para pisar lo que ya está
-    // subido, así el HTML es un espejo directo de ORDENES.
+    // Merge: combinar Sheets + local, sin perder OC de ninguno
+    // Excluir OC eliminadas intencionalmente
+    var PRIORIDAD_ESTADO = { 'pendiente': 0, 'controlando': 1, 'finalizado_escaneo': 2, 'finalizado': 3 };
     var merged = {};
     sheetsData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) < 0) merged[oc.id] = oc;
     });
     localData.forEach(function(oc){
       if (eliminados.indexOf(oc.id) >= 0) return; // eliminada, no restaurar
-      if (!merged[oc.id]) merged[oc.id] = oc; // no existe en Sheet todavía
-      // si ya existe en el Sheet, el Sheet gana siempre — no se toca
+      if (!merged[oc.id]) {
+        merged[oc.id] = oc;
+        return;
+      }
+      var existente = merged[oc.id];
+      // Para estadoManual: siempre tomar el más avanzado — nunca retrocecer
+      // de "finalizado" a "controlando" solo porque otra PC tiene un savedAt
+      // más reciente de cuando lo estaba escaneando.
+      var prioExistente = PRIORIDAD_ESTADO[existente.estadoManual] || 0;
+      var prioNuevo     = PRIORIDAD_ESTADO[oc.estadoManual] || 0;
+      if (prioNuevo > prioExistente) {
+        // El nuevo tiene estado más avanzado — ganó, pero conservamos el
+        // savedAt más reciente para el resto de los campos
+        merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
+      } else if (prioExistente > prioNuevo) {
+        // El existente tiene estado más avanzado — conservar estadoManual
+        // del existente pero actualizar otros campos si el nuevo es más reciente
+        if ((oc.savedAt || '') > (existente.savedAt || '')) {
+          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual });
+        }
+      } else {
+        // Mismo estado — tomar el más reciente como antes
+        if ((oc.savedAt || '') > (existente.savedAt || '')) {
+          merged[oc.id] = oc;
+        }
+      }
     });
     _ordenesCache = Object.values(merged).sort(function(a,b){
       return (b.savedAt||'') > (a.savedAt||'') ? 1 : -1;
@@ -5620,7 +5658,8 @@ function renderOrdenes() {
     // El wrapper de líneas vive dentro del body, buscar el primer body abierto que lo contenga
     var allBodies = document.querySelectorAll('.oc-card-body.open');
     allBodies.forEach(function(bodyEl) {
-      if (bodyEl.querySelector('#oc-lineas-wrap-' + oc.id)) {
+      var _wrapEl = document.getElementById('oc-lineas-wrap-' + oc.id);
+      if (_wrapEl && bodyEl.contains(_wrapEl)) {
         _cargarStockFrescoPalet(oc.id);
       }
     });
@@ -5829,7 +5868,7 @@ function renderLineasOCTable(lineas, ocId) {
         '</td>' +
       '</tr>';
       l.divisiones.forEach(function(div, j) {
-        var divCant = (parseInt(div.unidades, 10) || 0) || ((parseInt(div.cajas, 10) || 0) * upCajaL);
+        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
         if (divCant === 0) return;
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
         html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
@@ -5922,7 +5961,7 @@ async function _cargarStockFrescoPalet(ocId) {
           var cant = parseInt(row[4],10)||0;
           var fechaRaw = String(row[6]||'').trim();
           var pf = fechaRaw.split('-');
-          return { cajas: Math.ceil(cant/upCaja), lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+          return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
         }).filter(function(d){ return d.cantReal > 0; });
       }
       return Object.assign({}, ocLinea, {
@@ -6094,10 +6133,7 @@ async function abrirModalReposicion(ocId) {
   var lineasParaModal = oc.lineas || [];
   try {
     var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
-    var _ctrlHP = new AbortController();
-    var _toHP = setTimeout(function(){ _ctrlHP.abort(); }, 8000);
-    var resp = await fetch(url, { cache: 'no-store', signal: _ctrlHP.signal });
-    clearTimeout(_toHP);
+    var resp = await fetch(url, { cache: 'no-store' });
     var data = await resp.json();
     if (data.ok && Array.isArray(data.data) && data.data.length > 0) {
       var paletNum = String(oc.palet || '').trim();
@@ -6368,7 +6404,7 @@ function enviarReposicion() {
     estadoManual: 'pendiente'
   };
 
-  // Guardar en ordenes y guardar en el Sheet en paralelo
+  // Guardar en ordenes y esperar que el GAS confirme antes de mandar la alerta
   var ordenes = loadOrdenes();
   ordenes.unshift(repOC);
   _ordenesCache = ordenes;
@@ -6376,19 +6412,29 @@ function enviarReposicion() {
 
   document.getElementById('modal-reposicion').classList.remove('open');
   renderOrdenes();
+  showToast('Guardando reposición...');
 
-  // Mandar la alerta al operario YA, igual que el flujo normal de envío
-  // al escaneo — no depende de que el guardado en el Sheet termine.
-  var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
-  fetch(GAS_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
+  // Primero guardar la OC en el Sheet, LUEGO mandar la alerta al operario
+  _saveOrdenesToSheets(ordenes).then(function() {
+    var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
+    });
+    showToast('✅ Reposición enviada a ' + operarioNombre);
+  }).catch(function() {
+    // Si falla el save, mandar la alerta igual después de un delay
+    setTimeout(function() {
+      var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'setAlerta', valor: valorAlerta, fila: filaAlerta })
+      });
+      showToast('✅ Reposición enviada a ' + operarioNombre);
+    }, 2000);
   });
-  showToast('✅ Reposición enviada a ' + operarioNombre);
-
-  // Guardar la OC en el Sheet en paralelo (no bloquea la alerta)
-  _saveOrdenesToSheets(ordenes);
 
   _reposicionOC = null;
 }
