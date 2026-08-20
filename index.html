@@ -5502,9 +5502,8 @@ function renderOrdenes() {
   // Guardar qué cards están abiertas para restaurarlas después del re-render
   var abiertos = [];
   document.querySelectorAll('.oc-card-body.open').forEach(function(el){ abiertos.push(el.id); });
-  // Resetear caché de stock de palets — el re-render reconstruye el DOM con datos del localStorage,
-  // así el próximo expand vuelve a leer del Sheet para tener datos frescos
-  _paletStockCargado = {};
+  // Solo limpiar palets sin datos frescos — preservar los que ya cargaron para evitar ciclo de redondeo
+  Object.keys(_paletStockCargado).forEach(function(k){ if (!_paletStockData[k]) delete _paletStockCargado[k]; });
 
   var ordenes = loadOrdenes();
   // Supervisor NO ve OCs de admin_compras hasta que sean enviadas
