@@ -2300,15 +2300,12 @@ setInterval(function(){
   _actualizarIndicadorConexion(navigator.onLine);
 }, 5000);
 
-// Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
-// syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
-// podía saltear ciclos y el operario no recibía la notificación a tiempo.
-// Corre cada 3s: más rápido para que el operario reciba alertas sin demora
+// Polling de alertas INDEPENDIENTE del syncOrdenes
 setInterval(function(){
   if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
   if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
   if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
-}, 3000);
+}, 10000);
 
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
@@ -8060,9 +8057,9 @@ function iniciarSincAlertasOperario() {
   // Solo iniciar si NO es operario (para otros roles que puedan necesitarlo)
   if (!CURRENT_USER || CURRENT_USER.rol === 'operario') return;
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
+  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 10000);
   setTimeout(syncAlertasOperario, 500);
-  setTimeout(syncAlertasOperario, 3000);
+  setTimeout(syncAlertasOperario, 5000);
 }
 
 async function syncAlertasOperario() {
