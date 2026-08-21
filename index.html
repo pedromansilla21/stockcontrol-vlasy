@@ -5221,15 +5221,19 @@ async function syncOrdenes() {
     var resucitadas = sheetsData.filter(function(oc){ return eliminados.indexOf(oc.id) >= 0; });
     var hayResucitada = resucitadas.length > 0;
     if (hayResucitada) {
-      // Además de sacarlas del Sheet, anotarlas en la columna D (log de
-      // eliminados en la nube) para que TODOS los dispositivos se enteren
-      // y corten el loop — incluso los que tenían el borrado en caché local
-      // de versiones viejas y nunca llegaron a anotarlo en la nube.
       resucitadas.forEach(function(oc) {
         _appendIdEliminadoEnColumnaD(oc.id);
       });
     }
-    if (migrando || _ordenesCache.length > sheetsData.length || hayResucitada) {
+    // Solo guardar al Sheet si hay OCs locales genuinamente nuevas que no están en el Sheet todavía.
+    // Ignorar la condición hayResucitada para el guardado — _appendIdEliminadoEnColumnaD
+    // ya se encarga de registrar los eliminados. Guardar por hayResucitada causaba un loop
+    // infinito porque el Sheet no se actualizaba antes del próximo ciclo.
+    var sheetIds = sheetsData.map(function(oc){ return oc.id; });
+    var tieneNuevasLocales = localData.some(function(oc){
+      return eliminados.indexOf(oc.id) < 0 && sheetIds.indexOf(oc.id) < 0;
+    });
+    if (migrando || tieneNuevasLocales) {
       _saveOrdenesToSheets(_ordenesCache);
     }
   } catch(e) {
