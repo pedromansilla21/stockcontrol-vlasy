@@ -2293,23 +2293,21 @@ function updateClock() {
   var t = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   document.getElementById('topbar-date').textContent = d + ' · ' + t;
 }
-setInterval(updateClock, 1000);
+if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
-setInterval(function(){ syncOrdenes(); }, 15000);
-setInterval(function(){
-  _actualizarIndicadorConexion(navigator.onLine);
-}, 5000);
-
+if (!window._syncOrdenesInterval) { window._syncOrdenesInterval = 
+setInterval(function(){ syncOrdenes(); }, 15000); }
+if (!window._conexionInterval) { window._conexionInterval = setInterval(function()
+{ _actualizarIndicadorConexion(navigator.onLine); }, 5000); }
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
 // syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
 // podía saltear ciclos y el operario no recibía la notificación a tiempo.
 // Corre cada 3s: más rápido para que el operario reciba alertas sin demora
 setInterval(function(){
-  if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
-  if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
-  if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
-}, 3000);
-
+if (!window._alertasInterval) { window._alertasInterval = setInterval(function(){ 
+if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(); if (typeof 
+_checkFinalizadoOC === 'function') _checkFinalizadoOC(); if (typeof 
+_limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana(); }, 3000); }                                                             
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
 // STOCK CONSULTA
