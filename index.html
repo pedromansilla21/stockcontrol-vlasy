@@ -6647,6 +6647,8 @@ async function _marcarOCEliminadaEnNube(ocId) {
 // solo toca esa celda puntual.
 async function _appendIdEliminadoEnColumnaD(ocId) {
   var col = await sheetsRead('ORDENES!D2:D5000');
+   var existentes = col.map(function(r){ return r[0]; });
+  if (existentes.indexOf(ocId) >= 0) return;
   var fila = col.length + 2; // primera fila libre (col[] arranca en D2)
   await sheetsWrite('ORDENES!D' + fila, [[ocId]]);
 }
