@@ -8007,6 +8007,7 @@ function _completarLogin(selected) {
     setTimeout(_checkAndRetryPendingRestars, 3000); // esperar 3s para que cargue todo
     setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
   }
+  iniciarSincAlertasOperario();  
   aplicarRol(CURRENT_USER.rol);
 }
 
