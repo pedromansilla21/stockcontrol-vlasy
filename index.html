@@ -8074,7 +8074,7 @@ function iniciarSincAlertasOperario() {
   // Las alertas de O.C. para operarios las maneja _checkAlertaEscaneo() (cada 8s)
   // que ya tiene su propio modal nativo. No duplicar con otro sistema.
   // Solo iniciar si NO es operario (para otros roles que puedan necesitarlo)
-  if (!CURRENT_USER || CURRENT_USER.rol === 'operario') return;
+  if (!CURRENT_USER) return;
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
   _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
   setTimeout(syncAlertasOperario, 500);
