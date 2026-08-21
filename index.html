@@ -5131,10 +5131,7 @@ var _busy_syncOrdenes = false;
 async function syncOrdenes() {
   // Guard: si ya hay un syncOrdenes en curso, no lanzar otro en paralelo —
   // solo esperar a que termine el que está corriendo.
-  if (_busy_syncOrdenes) {
-    while (_busy_syncOrdenes) { await new Promise(function(r){ setTimeout(r, 200); }); }
-    return;
-  }
+  if (_busy_syncOrdenes) return;
   _busy_syncOrdenes = true;
   try {
     // Formato nuevo: una fila por O.C. (columna A = id, columna B = datos)
