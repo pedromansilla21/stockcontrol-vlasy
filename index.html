@@ -5218,17 +5218,6 @@ async function syncOrdenes() {
     // todavía tiene alguna fila de una O.C. ya marcada como eliminada
     // (autolimpieza — pasa si otro dispositivo la resucitó sin saber del
     // borrado antes de enterarse; este sync la vuelve a sacar solo).
-    var resucitadas = sheetsData.filter(function(oc){ return eliminados.indexOf(oc.id) >= 0; });
-    var hayResucitada = resucitadas.length > 0;
-    if (hayResucitada) {
-      resucitadas.forEach(function(oc) {
-        _appendIdEliminadoEnColumnaD(oc.id);
-      });
-    }
-    // Solo guardar al Sheet si hay OCs locales genuinamente nuevas que no están en el Sheet todavía.
-    // Ignorar la condición hayResucitada para el guardado — _appendIdEliminadoEnColumnaD
-    // ya se encarga de registrar los eliminados. Guardar por hayResucitada causaba un loop
-    // infinito porque el Sheet no se actualizaba antes del próximo ciclo.
     var sheetIds = sheetsData.map(function(oc){ return oc.id; });
     var tieneNuevasLocales = localData.some(function(oc){
       return eliminados.indexOf(oc.id) < 0 && sheetIds.indexOf(oc.id) < 0;
