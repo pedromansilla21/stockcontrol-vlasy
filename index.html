@@ -2305,15 +2305,13 @@ if (!window._conexionInterval) { window._conexionInterval = setInterval(function
 // Corre cada 3s: más rápido para que el operario reciba alertas sin demora
 if (!window._alertasInterval) { window._alertasInterval = setInterval(function(){
   if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
-  if (CURRENT_USER && CURRENT_USER.filaAlerta && typeof sheetsRead === 'function') {
-    // Una sola lectura de ALERTAS!A{fila} por ciclo, para CUALQUIER rol —
-    // antes _checkAlertaEscaneo, _limpiarAlertaHuerfana y syncAlertasOperario
-    // pedían la misma celda cada una por su cuenta (3 requests -> 1).
-    var _fila = CURRENT_USER.filaAlerta;
+  if (CURRENT_USER && CURRENT_USER.rol === 'operario' && typeof sheetsRead === 'function') {
+    // Una sola lectura de ALERTAS!A{fila} por ciclo — antes _checkAlertaEscaneo
+    // y _limpiarAlertaHuerfana pedían la misma celda cada una por su cuenta.
+    var _fila = CURRENT_USER.filaAlerta || 1;
     sheetsRead('ALERTAS!A' + _fila).then(function(rows) {
       if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(rows);
       if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana(rows);
-      if (CURRENT_USER.rol !== 'operario' && typeof syncAlertasOperario === 'function') syncAlertasOperario(rows);
     }).catch(function(){});
   } else {
     if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
@@ -8075,21 +8073,24 @@ var _alertasOperarioVistas = [];
 function iniciarSincAlertasOperario() {
   // Las alertas de O.C. para operarios las maneja _checkAlertaEscaneo() (cada 3s)
   // que ya tiene su propio modal nativo. No duplicar con otro sistema.
-  // Ya no arranca un setInterval propio — se llama desde el ciclo
-  // unificado de _alertasInterval (misma lectura de celda, sin duplicar).
+  // Solo iniciar si NO es operario (para otros roles que puedan necesitarlo)
   if (!CURRENT_USER) return;
-  return;
+  if (CURRENT_USER.rol === 'operario') return; // evita 2do polling leyendo la misma celda
+  if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
+  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
+  setTimeout(syncAlertasOperario, 500);
+  setTimeout(syncAlertasOperario, 3000);
 }
 
 var _busy_syncAlertasOperario = false;
-async function syncAlertasOperario(_rowsPreload) {
+async function syncAlertasOperario() {
   if (_busy_syncAlertasOperario) return;
   _busy_syncAlertasOperario = true;
   try {
     if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
     
     var filaAlerta = CURRENT_USER.filaAlerta;
-    var filas = _rowsPreload || await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
+    var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
     
     if (!filas || filas.length === 0) return;
     
