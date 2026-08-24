@@ -2293,6 +2293,25 @@ function updateClock() {
   var t = now.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   document.getElementById('topbar-date').textContent = d + ' · ' + t;
 }
+// ── AUTO-LIMPIEZA v1 ──────────────────────────────────────────
+// Limpia OCs fantasma del localStorage que causan doPost innecesarios
+// en cada ciclo de sync. Se ejecuta UNA SOLA VEZ por dispositivo.
+(function() {
+  var FLAG = 'sc_limpieza_v1';
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    var raw = localStorage.getItem('stockcontrol_ordenes');
+    if (raw) {
+      var ordenes = JSON.parse(raw);
+      if (Array.isArray(ordenes)) {
+        localStorage.removeItem('stockcontrol_ordenes');
+        console.log('[AutoLimpieza] localStorage de órdenes limpiado (' + ordenes.length + ' entradas). Se recargará desde el Sheet.');
+      }
+    }
+    localStorage.setItem(FLAG, '1');
+  } catch(e) {}
+})();
+// ─────────────────────────────────────────────────────────────
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
 if (!window._syncOrdenesInterval) { window._syncOrdenesInterval = 
