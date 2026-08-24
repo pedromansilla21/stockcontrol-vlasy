@@ -2303,10 +2303,21 @@ if (!window._conexionInterval) { window._conexionInterval = setInterval(function
 // syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
 // podía saltear ciclos y el operario no recibía la notificación a tiempo.
 // Corre cada 3s: más rápido para que el operario reciba alertas sin demora
-if (!window._alertasInterval) { window._alertasInterval = setInterval(function(){ 
-if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(); if (typeof 
-_checkFinalizadoOC === 'function') _checkFinalizadoOC(); if (typeof 
-_limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana(); }, 3000); }                                                             
+if (!window._alertasInterval) { window._alertasInterval = setInterval(function(){
+  if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
+  if (CURRENT_USER && CURRENT_USER.rol === 'operario' && typeof sheetsRead === 'function') {
+    // Una sola lectura de ALERTAS!A{fila} por ciclo — antes _checkAlertaEscaneo
+    // y _limpiarAlertaHuerfana pedían la misma celda cada una por su cuenta.
+    var _fila = CURRENT_USER.filaAlerta || 1;
+    sheetsRead('ALERTAS!A' + _fila).then(function(rows) {
+      if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(rows);
+      if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana(rows);
+    }).catch(function(){});
+  } else {
+    if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
+    if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
+  }
+}, 3000); }
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
 // STOCK CONSULTA
@@ -8060,10 +8071,11 @@ var _sincAlertasOperarioInterval = null;
 var _alertasOperarioVistas = [];
 
 function iniciarSincAlertasOperario() {
-  // Las alertas de O.C. para operarios las maneja _checkAlertaEscaneo() (cada 8s)
+  // Las alertas de O.C. para operarios las maneja _checkAlertaEscaneo() (cada 3s)
   // que ya tiene su propio modal nativo. No duplicar con otro sistema.
   // Solo iniciar si NO es operario (para otros roles que puedan necesitarlo)
   if (!CURRENT_USER) return;
+  if (CURRENT_USER.rol === 'operario') return; // evita 2do polling leyendo la misma celda
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
   _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
   setTimeout(syncAlertasOperario, 500);
@@ -9284,12 +9296,13 @@ function _checkFinalizadoOC() {
 }
 
 var _busy_limpiarAlertaHuerfana = false;
-function _limpiarAlertaHuerfana() {
+function _limpiarAlertaHuerfana(_rowsPreload) {
   if (!CURRENT_USER) return;
   if (_busy_limpiarAlertaHuerfana) return;
   _busy_limpiarAlertaHuerfana = true;
   var fila = CURRENT_USER.filaAlerta || 1;
-  sheetsRead('ALERTAS!A' + fila).then(function(rows) {
+  var _lectura = _rowsPreload ? Promise.resolve(_rowsPreload) : sheetsRead('ALERTAS!A' + fila);
+  _lectura.then(function(rows) {
     var val = (rows && rows[0] && rows[0][0]) ? String(rows[0][0]).trim() : 'VACIO';
     if (!val || val === 'VACIO') {
       localStorage.removeItem('oc_en_escaneo');
@@ -9317,7 +9330,7 @@ var _busy_checkAlertaEscaneo = false;
 var _retryEnCursoAlerta = null;
 var _retryEnCursoAlertaVal = null;
 var _retryIntentos = 0;
-function _checkAlertaEscaneo() {
+function _checkAlertaEscaneo(_rowsPreload) {
   if (!CURRENT_USER || CURRENT_USER.rol !== 'operario') return;
   // Guard: si el pedido anterior todavía no volvió, no lanzar otro —
   // evita que se acumulen requests pendientes con la pestaña abierta
@@ -9327,7 +9340,8 @@ function _checkAlertaEscaneo() {
   // Cada operario lee SOLO su propia celda de ALERTAS (col A, fila = filaAlerta)
   // — así 3 operarios pueden recibir O.C. distintas al mismo tiempo sin pisarse.
   var fila = CURRENT_USER.filaAlerta || 1;
-  sheetsRead('ALERTAS!A' + fila).then(function(rows) {
+  var _lectura = _rowsPreload ? Promise.resolve(_rowsPreload) : sheetsRead('ALERTAS!A' + fila);
+  _lectura.then(function(rows) {
     if (!rows || !rows[0] || !rows[0][0]) return;
     var val = String(rows[0][0]).trim();
     if (!val || val === 'VACIO' || val.startsWith('EN_ESCANEO') || val.startsWith('FINALIZADO')) return;
