@@ -5643,7 +5643,7 @@ function renderOrdenes() {
       '</div>' +
       '<div class="oc-card-body" id="oc-body-' + i + '">' +
         '<div class="oc-meta-grid">' +
-          '<div class="oc-meta-item"><div class="oc-meta-label">Responsable</div><div class="oc-meta-val">' + escHtml(oc.responsable || '—') + '</div></div>' +
+          '<div class="oc-meta-item"><div class="oc-meta-label">Responsable</div><div class="oc-meta-val">' + escHtml(oc.escaneadoPor || oc.responsable || '—') + '</div></div>' +
           '<div class="oc-meta-item"><div class="oc-meta-label">N° Palet</div><div class="oc-meta-val">' + escHtml(oc.palet || '—') + '</div></div>' +
           '<div class="oc-meta-item"><div class="oc-meta-label">Fecha recepción</div><div class="oc-meta-val">' + fechaFmt + '</div></div>' +
           '<div class="oc-meta-item"><div class="oc-meta-label">Guardada</div><div class="oc-meta-val" style="font-size:10px;">' + savedFmt + '</div></div>' +
