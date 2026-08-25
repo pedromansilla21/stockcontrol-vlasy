@@ -3475,7 +3475,9 @@ function volverDesdeCompletarControl() {
 }
 
 async function finalizarControl() {
-  if (remito.length === 0) { showToast('No hay remito activo para finalizar'); return; }
+  if (window._busy_finalizarControl) return;
+  window._busy_finalizarControl = true;
+  if (remito.length === 0) { showToast('No hay remito activo para finalizar'); window._busy_finalizarControl = false; return; }
 
   // Leer fecha, lote, palet de la tabla de completar control (si se usó)
   _commitCompletarControlValues();
@@ -3516,7 +3518,7 @@ async function finalizarControl() {
 
   if (errores.length > 0) {
     alert('No se puede finalizar. Revisá los siguientes campos:\n\n' + errores.join('\n'));
-    return;
+   window._busy_finalizarControl = false; return;
   }
   // ── Fin validaciones ─────────────────────────────────────────────────────
 
@@ -3733,6 +3735,7 @@ function updateMetrics() {
       }
     }, 1500);
   }
+ window._busy_finalizarControl = false;
 }
 
 // ──────────────────────────────────────────────
