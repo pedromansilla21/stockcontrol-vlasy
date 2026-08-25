@@ -2336,7 +2336,7 @@ if (!window._alertasInterval) { window._alertasInterval = setInterval(function()
     if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
     if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
   }
-}, 3000); }
+}, 12000); }
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
 // STOCK CONSULTA
@@ -8102,9 +8102,9 @@ function iniciarSincAlertasOperario() {
   if (!CURRENT_USER) return;
   if (CURRENT_USER.rol === 'operario') return; // evita 2do polling leyendo la misma celda
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 3000);
+  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 12000);
   setTimeout(syncAlertasOperario, 500);
-  setTimeout(syncAlertasOperario, 3000);
+  setTimeout(syncAlertasOperario, 12000);
 }
 
 var _busy_syncAlertasOperario = false;
@@ -8200,7 +8200,7 @@ var _sincAlertasInterval = null;
 function iniciarSincAlertasRemito() {
   // Sincronizar cada 3 segundos
   if (_sincAlertasInterval) clearInterval(_sincAlertasInterval);
-  _sincAlertasInterval = setInterval(syncAlertasRemito, 3000);
+  _sincAlertasInterval = setInterval(syncAlertasRemito, 12000);
   syncAlertasRemito(); // Primera vez inmediatamente
 }
 
