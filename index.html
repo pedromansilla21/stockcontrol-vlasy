@@ -2328,9 +2328,10 @@ if (!window._alertasInterval) { window._alertasInterval = setInterval(function()
     // Una sola lectura de ALERTAS!A{fila} por ciclo — antes _checkAlertaEscaneo
     // y _limpiarAlertaHuerfana pedían la misma celda cada una por su cuenta.
     var _fila = CURRENT_USER.filaAlerta || 1;
-    sheetsRead('ALERTAS!A' + _fila).then(function(rows) {
+    sheetsRead('ALERTAS!A' + _fila + ':C' + _fila).then(function(rows) {
       if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo(rows);
       if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana(rows);
+      if (typeof _checkRespuestaEdicion === 'function') _checkRespuestaEdicion(rows);
     }).catch(function(){});
   } else {
     if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
@@ -2983,11 +2984,26 @@ function renderTablaControl() {
     });
 
     (function(idx) {
+      var _esOp = CURRENT_USER && CURRENT_USER.rol === 'operario';
       tr.lastElementChild.innerHTML =
-        '<div style="display:flex; gap:4px; justify-content:center;">' +
+        '<div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">' +
           '<button class="btn btn-sm btn-restar" title="Dar de baja unidades (corrección por escaneo de más)" style="background:rgba(251,191,36,0.08); border:1.5px solid var(--c-amber); color:var(--c-amber); display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-minus" style="font-size:13px;"></i> Bajas</button>' +
-        '</div>';
+          (_esOp ? '<button class="btn-edit-manual btn btn-sm" title="Solicitar edición manual de cantidad" style="background:rgba(91,191,214,0.08); border:1.5px solid #5BBFD6; color:#5BBFD6; display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:4px 10px; white-space:nowrap;"><i class="ti ti-edit" style="font-size:13px;"></i> Editar</button>' : '') +
+        '</div>' +
+        (_esOp ?
+          '<div class="edit-estado-' + idx + '" style="display:none; margin-top:4px; font-size:11px; text-align:center;"></div>' +
+          '<div class="edit-input-area-' + idx + '" style="display:none; margin-top:4px; align-items:center; gap:4px; justify-content:center;">' +
+            '<input type="number" min="0" step="1" class="edit-cant-' + idx + '" placeholder="Cant." style="width:80px; font-size:13px; padding:3px 6px; border:1px solid #5BBFD6; border-radius:4px; background:#0d1117; color:#e6edf3;">' +
+            '<button class="btn-edit-confirm btn btn-sm" style="background:#4CAF7D; color:#fff; font-size:11px; padding:3px 8px; border:none; border-radius:4px; cursor:pointer;">✓</button>' +
+          '</div>'
+        : '');
       tr.lastElementChild.querySelector('.btn-restar').addEventListener('click', function() { restarUnidadesControl(idx); });
+      if (_esOp) {
+        var _btnEdit = tr.lastElementChild.querySelector('.btn-edit-manual');
+        if (_btnEdit) _btnEdit.addEventListener('click', function() { solicitarEdicionManual(idx); });
+        var _btnConfirm = tr.lastElementChild.querySelector('.btn-edit-confirm');
+        if (_btnConfirm) _btnConfirm.addEventListener('click', function() { confirmarEdicionManual(idx); });
+      }
     })(i);
     tb.appendChild(tr);
   });
@@ -3001,6 +3017,93 @@ function renderTablaControl() {
   }
 }
 
+
+// ── EDICIÓN MANUAL DE CANTIDAD ──────────────────────────────────────────
+var _edicionManualPendiente = null; // { idx, cod, filaAlerta }
+var _edicionManualAprobada  = false;
+
+function solicitarEdicionManual(idx) {
+  if (!CURRENT_USER || !CURRENT_USER.filaAlerta) { showToast('⚠ Tu usuario no tiene fila de alerta asignada'); return; }
+  if (_edicionManualPendiente) { showToast('⚠ Ya hay una solicitud pendiente. Esperá la respuesta del supervisor.'); return; }
+  var r = remito[idx];
+  if (!r) return;
+  var ocId = remitoDatos ? (remitoDatos.id || '') : '';
+  var fila = CURRENT_USER.filaAlerta;
+  fetch(GAS_URL, {
+    method: 'POST', mode: 'no-cors',
+    body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!C' + fila, values: [['SOLICITUD_EDICION|' + ocId + '|' + r.cod + '|' + CURRENT_USER.name]] })
+  });
+  _edicionManualPendiente = { idx: idx, cod: r.cod, filaAlerta: fila };
+  _edicionManualAprobada  = false;
+  _actualizarEstadoEdicion(idx, 'waiting', '⏳ Esperando aprobación del supervisor...');
+  showToast('✅ Solicitud enviada al supervisor');
+}
+
+function confirmarEdicionManual(idx) {
+  var inputEl = document.querySelector('.edit-cant-' + idx);
+  if (!inputEl) return;
+  var val = parseInt(inputEl.value, 10);
+  if (isNaN(val) || val < 0) { showToast('⚠ Ingresá una cantidad válida'); return; }
+  var r = remito[idx];
+  if (!r) return;
+  r.unidadesControladas = val;
+  _edicionManualPendiente = null;
+  _edicionManualAprobada  = false;
+  _actualizarEstadoEdicion(idx, 'hidden');
+  renderTablaControl();
+  triggerAutosave();
+  showToast('✅ Cantidad actualizada: ' + val + ' u.');
+}
+
+function _actualizarEstadoEdicion(idx, estado, texto) {
+  var estadoEl = document.querySelector('.edit-estado-' + idx);
+  var inputArea = document.querySelector('.edit-input-area-' + idx);
+  if (!estadoEl) return;
+  if (estado === 'waiting') {
+    estadoEl.textContent = texto;
+    estadoEl.style.color = '#F0A44A';
+    estadoEl.style.display = 'block';
+    if (inputArea) inputArea.style.display = 'none';
+  } else if (estado === 'approved') {
+    estadoEl.textContent = texto;
+    estadoEl.style.color = '#4CAF7D';
+    estadoEl.style.display = 'block';
+    if (inputArea) inputArea.style.display = 'flex';
+  } else if (estado === 'rejected') {
+    estadoEl.textContent = texto;
+    estadoEl.style.color = '#f87171';
+    estadoEl.style.display = 'block';
+    if (inputArea) inputArea.style.display = 'none';
+    setTimeout(function() { if (estadoEl) estadoEl.style.display = 'none'; }, 4000);
+  } else {
+    estadoEl.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none';
+  }
+}
+
+function _checkRespuestaEdicion(rows) {
+  if (!_edicionManualPendiente) return;
+  if (!rows || rows.length === 0) return;
+  var fila = rows[0];
+  var valorC = (fila && fila.length > 2) ? String(fila[2] || '').trim() : '';
+  if (!valorC || valorC === 'VACIO' || valorC === '') return;
+  var partes = valorC.split('|');
+  var tipo = partes[0] || '';
+  var idx  = _edicionManualPendiente.idx;
+  if (tipo === 'APROBADO' && !_edicionManualAprobada) {
+    _edicionManualAprobada = true;
+    _actualizarEstadoEdicion(idx, 'approved', '✅ Aprobado — ingresá la cantidad:');
+    showToast('✅ Solicitud aprobada por el supervisor');
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'limpiarRango', rango: 'ALERTAS!C' + _edicionManualPendiente.filaAlerta }) });
+  } else if (tipo === 'RECHAZADO') {
+    _actualizarEstadoEdicion(idx, 'rejected', '❌ Solicitud rechazada');
+    showToast('❌ El supervisor rechazó la solicitud');
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'limpiarRango', rango: 'ALERTAS!C' + _edicionManualPendiente.filaAlerta }) });
+    _edicionManualPendiente = null;
+    _edicionManualAprobada  = false;
+  }
+}
+// ── FIN EDICIÓN MANUAL ──────────────────────────────────────────────────
 
 function restarUnidadesControl(i) {
   var r = remito[i];
@@ -8115,24 +8218,32 @@ async function syncAlertasOperario() {
   if (_busy_syncAlertasOperario) return;
   _busy_syncAlertasOperario = true;
   try {
-    if (!CURRENT_USER || !CURRENT_USER.filaAlerta) return;
-    
-    var filaAlerta = CURRENT_USER.filaAlerta;
-    var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
-    
-    if (!filas || filas.length === 0) return;
-    
-    var valor = String(filas[0][0] || '').trim();
-    
-    // Si la celda está vacía o dice "VACIO", no hacer nada
-    if (!valor || valor === 'VACIO' || valor === '') return;
-    
-    // ID único para esta alerta (evitar duplicados)
-    var id = 'alerta-op-' + filaAlerta + '-' + valor;
-    
-    if (_alertasOperarioVistas.indexOf(id) === -1) {
-      _alertasOperarioVistas.push(id);
-      mostrarNotificacionAlerta(valor, filaAlerta);
+    if (!CURRENT_USER) return;
+
+    // 1. Verificar alerta de OC (solo si el usuario tiene filaAlerta propia)
+    if (CURRENT_USER.filaAlerta) {
+      var filaAlerta = CURRENT_USER.filaAlerta;
+      var filas = await sheetsRead('ALERTAS!A' + filaAlerta + ':A' + filaAlerta);
+      if (filas && filas.length > 0) {
+        var valor = String(filas[0][0] || '').trim();
+        if (valor && valor !== 'VACIO' && valor !== '') {
+          var id = 'alerta-op-' + filaAlerta + '-' + valor;
+          if (_alertasOperarioVistas.indexOf(id) === -1) {
+            _alertasOperarioVistas.push(id);
+            mostrarNotificacionAlerta(valor, filaAlerta);
+          }
+        }
+      }
+    }
+
+    // 2. Verificar solicitudes de edición manual en col C (para todos los no-operarios)
+    var _operariosConFila = loadUsers().filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
+    if (_operariosConFila.length > 0) {
+      var _maxFila = Math.max.apply(null, _operariosConFila.map(function(u){ return u.filaAlerta; }));
+      try {
+        var _filasC = await sheetsRead('ALERTAS!C1:C' + _maxFila);
+        if (typeof _checkSolicitudesEdicion === 'function') _checkSolicitudesEdicion(_filasC, _operariosConFila);
+      } catch(e2) {}
     }
   } catch(e) {
   } finally {
@@ -8181,6 +8292,69 @@ function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
     _ejecutarEnvioEscaneo(ocId, filaAlerta);
   });
 }
+
+// ── SOLICITUDES DE EDICIÓN MANUAL — lado supervisor ─────────────────────
+var _solicitudesEdicionVistas = {};
+
+function _checkSolicitudesEdicion(filasC, operarios) {
+  if (!filasC || !operarios) return;
+  operarios.forEach(function(op) {
+    var filaIdx = op.filaAlerta - 1; // 0-indexed
+    var valorC = (filasC[filaIdx] && filasC[filaIdx][0]) ? String(filasC[filaIdx][0]).trim() : '';
+    if (!valorC || valorC === 'VACIO' || valorC === '') {
+      // Sin solicitud activa: eliminar notificación si existía
+      var notif = document.getElementById('notif-edicion-' + op.filaAlerta);
+      if (notif && _solicitudesEdicionVistas[op.filaAlerta]) {
+        notif.remove();
+        _solicitudesEdicionVistas[op.filaAlerta] = null;
+      }
+      return;
+    }
+    if (!valorC.startsWith('SOLICITUD_EDICION')) return;
+    if (_solicitudesEdicionVistas[op.filaAlerta] === valorC) return; // ya mostrada
+    _solicitudesEdicionVistas[op.filaAlerta] = valorC;
+    var partes = valorC.split('|');
+    // SOLICITUD_EDICION|ocId|cod|operario
+    var ocId     = partes[1] || '—';
+    var cod      = partes[2] || '—';
+    var opNombre = partes[3] || op.name;
+    _mostrarNotificacionEdicion(op.filaAlerta, ocId, cod, opNombre);
+  });
+}
+
+function _mostrarNotificacionEdicion(filaAlerta, ocId, cod, operario) {
+  var existing = document.getElementById('notif-edicion-' + filaAlerta);
+  if (existing) existing.remove();
+  var notif = document.createElement('div');
+  notif.id = 'notif-edicion-' + filaAlerta;
+  notif.style.cssText = 'position:fixed;top:72px;right:16px;z-index:9990;background:#1c2128;border:1.5px solid #5BBFD6;border-radius:10px;padding:14px 16px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:inherit;';
+  notif.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">' +
+      '<i class="ti ti-edit" style="font-size:20px;color:#5BBFD6;"></i>' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:700;color:#e6edf3;">Solicitud de edición manual</div>' +
+        '<div style="font-size:11px;color:#8b949e;">' + escHtml(operario) + ' · cód. ' + escHtml(cod) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+      '<button class="btn-edicion-aprobar" style="flex:1;background:#4CAF7D;color:#fff;border:none;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;">✓ Aprobar</button>' +
+      '<button class="btn-edicion-rechazar" style="flex:1;background:rgba(248,113,113,0.12);color:#f87171;border:1.5px solid #f87171;border-radius:6px;padding:7px;font-size:12px;font-weight:600;cursor:pointer;">✗ Rechazar</button>' +
+    '</div>';
+  document.body.appendChild(notif);
+  notif.querySelector('.btn-edicion-aprobar').addEventListener('click', function() {
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!C' + filaAlerta, values: [['APROBADO|' + ocId + '|' + cod]] }) });
+    _solicitudesEdicionVistas[filaAlerta] = null;
+    notif.remove();
+    showToast('✅ Edición aprobada');
+  });
+  notif.querySelector('.btn-edicion-rechazar').addEventListener('click', function() {
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'escribirRango', rango: 'ALERTAS!C' + filaAlerta, values: [['RECHAZADO|' + ocId + '|' + cod]] }) });
+    _solicitudesEdicionVistas[filaAlerta] = null;
+    notif.remove();
+    showToast('❌ Edición rechazada');
+  });
+}
+// ── FIN SOLICITUDES EDICIÓN — supervisor ────────────────────────────────
 
 function _marcarAlertaComoLeida(filaAlerta) {
   try {
