@@ -4846,10 +4846,12 @@ function loadOrdenes() {
   return _ordenesCache;
 }
 
+var _saveToSheetsTimer = null;
 function saveOrdenes(ordenes) {
   _ordenesCache = ordenes;
   try { localStorage.setItem(ORDENES_KEY, JSON.stringify(ordenes)); } catch(e) {}
-  _saveOrdenesToSheets(ordenes);
+  clearTimeout(_saveToSheetsTimer);
+  _saveToSheetsTimer = setTimeout(function() { _saveOrdenesToSheets(loadOrdenes()); }, 800);
 }
 
 
