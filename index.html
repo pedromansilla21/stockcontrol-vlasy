@@ -5133,6 +5133,28 @@ async function _checkAndRetryPendingFinRep() {
         (function(pid) { setTimeout(function() { _clearFinRep(pid); }, 60000); })(p.id);
       } catch(e) { /* queda como pending */ }
     }
+   async function _checkAndRetryPendingHistorial() {
+  try {
+    var keys = Object.keys(localStorage).filter(function(k) {
+      return k.indexOf('sc_pending_hist_') === 0 || k.indexOf('sc_pending_detalle_') === 0;
+    });
+    if (keys.length === 0) return;
+    showToast('⚠ Hay ' + keys.length + ' historial(es) pendiente(s) — reintentando...');
+    keys.forEach(function(key) {
+      try {
+        var data = JSON.parse(localStorage.getItem(key));
+        if (!data) return;
+        var accion = key.indexOf('sc_pending_hist_') === 0 ? 'guardarHistorial' : 'guardarDetalleHistorial';
+        fetch(GAS_URL, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify(Object.assign({ accion: accion }, data))
+        }).then(function() {
+          try { localStorage.removeItem(key); } catch(e) {}
+        }).catch(function() {});
+      } catch(e) {}
+    });
+  } catch(e) {}
+}
     if (toRetry.length > 0) showToast('✅ Descuentos de reposición reenviados al servidor');
   } catch(e) {}
 }
@@ -8341,6 +8363,7 @@ function _completarLogin(selected) {
   if (CURRENT_USER.rol !== 'operario' && CURRENT_USER.rol !== 'buscador') {
     setTimeout(_checkAndRetryPendingRestars, 3000); // esperar 3s para que cargue todo
     setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
+   setTimeout(_checkAndRetryPendingHistorial, 5000);
   }
   iniciarSincAlertasOperario();  
   aplicarRol(CURRENT_USER.rol);
