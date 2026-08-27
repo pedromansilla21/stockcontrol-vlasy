@@ -3018,6 +3018,174 @@ function renderTablaControl() {
 }
 
 
+// ── PICKING BETA — Panel de confirmación de destino en rack ─────────────────
+window._pickingBetaConfirmado = false;
+window._pickingBetaLineas     = null;
+window._pickingBetaOcObj      = null;
+
+function _parsearCodigoRack(codigo) {
+  // Formato: {cod}-{rack}-{tipo}
+  // El cod puede tener guiones (ej: 01004-4), por eso tomamos desde el final
+  // Ej: "01004-4R01-APICKING" → cod=01004, rack=4R01, tipo=APICKING
+  // Ej: "01004-4-4R01-APICKING" → cod=01004-4, rack=4R01, tipo=APICKING
+  var partes = codigo.trim().split('-');
+  if (partes.length < 3) return null;
+  var tipo  = partes[partes.length - 1].toUpperCase();
+  var rack  = partes[partes.length - 2];
+  var cod   = partes.slice(0, partes.length - 2).join('-');
+  if (!tipo || !rack || !cod) return null;
+  // tipo debe contener PICKING o REPOSICION
+  if (tipo.indexOf('PICKING') === -1 && tipo.indexOf('REPOSICION') === -1) return null;
+  var tipoLimpio = tipo.indexOf('PICKING') > -1 ? 'PICKING' : 'REPOSICION';
+  return { cod: cod, rack: rack, tipo: tipoLimpio };
+}
+
+function mostrarPanelConfirmacionRack(ocObj) {
+  // Preparar líneas a confirmar (solo las que tienen unidades)
+  var lineasPendientes = (ocObj.lineas || []).filter(function(l) {
+    return (l.unidadesControladas || l.cantUnidades || 0) > 0;
+  }).map(function(l) {
+    var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
+    return {
+      cod:          l.cod,
+      desc:         l.desc || artDb.desc || l.cod,
+      categoria:    l.categoria || artDb.categoria || '—',
+      marca:        l.marca || artDb.marca || '—',
+      cant:         l.unidadesControladas || l.cantUnidades || 0,
+      fecha:        l.fechaLote || '—',
+      lote:         l.lote || '—',
+      tipoUbicacion: null,  // se asigna al escanear el rack
+      cajasConfirmadas: 0,
+      cajasEsperadas: Math.ceil((l.unidadesControladas || l.cantUnidades || 0) / (parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1))
+    };
+  });
+
+  if (lineasPendientes.length === 0) {
+    showToast('⚠ No hay líneas para confirmar');
+    return;
+  }
+
+  var _idx = 0;   // índice de línea actual
+  var _fase = 'rack'; // 'rack' o 'cajas'
+
+  // Crear overlay
+  var overlay = document.createElement('div');
+  overlay.id = 'picking-beta-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+
+  function renderModal() {
+    var linea = lineasPendientes[_idx];
+    var progreso = (_idx + 1) + ' / ' + lineasPendientes.length;
+    var faseLabel = _fase === 'rack'
+      ? '📦 Escaneá el código del rack destino'
+      : '📬 Escaneá las cajas (' + linea.cajasConfirmadas + ' / ' + linea.cajasEsperadas + ')';
+
+    overlay.innerHTML =
+      '<div style="background:#1c2128;border:1.5px solid #5BBFD6;border-radius:14px;width:100%;max-width:420px;padding:24px;font-family:inherit;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">' +
+          '<div style="font-size:13px;font-weight:700;color:#5BBFD6;letter-spacing:0.04em;">CONFIRMACIÓN DE DESTINO</div>' +
+          '<div style="font-size:12px;color:#8b949e;">' + progreso + '</div>' +
+        '</div>' +
+        '<div style="background:#0d1117;border-radius:8px;padding:14px;margin-bottom:18px;">' +
+          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px;">' + linea.cod + '</div>' +
+          '<div style="font-size:14px;font-weight:600;color:#e6edf3;margin-bottom:8px;">' + escHtml(linea.desc) + '</div>' +
+          '<div style="font-size:12px;color:#8b949e;">Cantidad: <span style="color:#e6edf3;font-weight:600;">' + linea.cant + ' u. — ' + linea.cajasEsperadas + ' cajas</span></div>' +
+          (linea.tipoUbicacion ? '<div style="font-size:11px;color:#4CAF7D;margin-top:4px;">Destino: ' + linea.tipoUbicacion + '</div>' : '') +
+        '</div>' +
+        '<div style="font-size:13px;color:#e6edf3;margin-bottom:10px;">' + faseLabel + '</div>' +
+        '<input id="picking-beta-scan" type="text" autocomplete="off" placeholder="Esperando escaneo..." ' +
+          'style="width:100%;background:#0d1117;border:1.5px solid #5BBFD6;border-radius:8px;padding:10px 12px;color:#e6edf3;font-size:14px;font-family:monospace;margin-bottom:14px;">' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button id="picking-beta-cancelar" style="flex:1;background:rgba(248,113,113,0.1);color:#f87171;border:1.5px solid #f87171;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">✗ Cancelar</button>' +
+          (_fase === 'cajas' && linea.cajasConfirmadas === linea.cajasEsperadas
+            ? '<button id="picking-beta-siguiente" style="flex:2;background:#4CAF7D;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Confirmar y continuar →</button>'
+            : '') +
+        '</div>' +
+      '</div>';
+
+    // Focus al input
+    setTimeout(function() {
+      var inp = document.getElementById('picking-beta-scan');
+      if (inp) inp.focus();
+    }, 80);
+
+    // Cancelar → aborta todo
+    var btnCancel = document.getElementById('picking-beta-cancelar');
+    if (btnCancel) btnCancel.addEventListener('click', function() {
+      overlay.remove();
+      window._pickingBetaConfirmado = false;
+      window._pickingBetaLineas = null;
+      window._pickingBetaOcObj = null;
+      showToast('Confirmación cancelada — la reposición no se finalizó');
+    });
+
+    // Siguiente → avanza a siguiente línea o finaliza
+    var btnSig = document.getElementById('picking-beta-siguiente');
+    if (btnSig) btnSig.addEventListener('click', avanzar);
+
+    // Escaneo
+    var inp = document.getElementById('picking-beta-scan');
+    if (inp) inp.addEventListener('keydown', function(e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        var val = this.value.trim();
+        this.value = '';
+        if (!val) return;
+        procesarEscaneo(val);
+      }
+    });
+  }
+
+  function procesarEscaneo(codigo) {
+    var linea = lineasPendientes[_idx];
+    if (_fase === 'rack') {
+      var parsed = _parsearCodigoRack(codigo);
+      if (!parsed) {
+        showToast('⚠ Código de rack no reconocido. Escaneá el código de la posición.');
+        return;
+      }
+      // Validar que el cod del rack coincida con el artículo de la línea
+      if (String(parsed.cod).trim() !== String(linea.cod).trim()) {
+        showToast('⚠ Ese rack corresponde al artículo ' + parsed.cod + ', no a ' + linea.cod + '. Buscá la posición correcta.');
+        return;
+      }
+      linea.tipoUbicacion = parsed.tipo;
+      _fase = 'cajas';
+      showToast('✅ Rack validado — ' + parsed.tipo);
+      renderModal();
+    } else {
+      // Fase cajas: cualquier escaneo suma una caja
+      linea.cajasConfirmadas++;
+      if (linea.cajasConfirmadas >= linea.cajasEsperadas) {
+        showToast('✅ ' + linea.cajasEsperadas + ' cajas confirmadas');
+        renderModal(); // muestra botón "Confirmar y continuar"
+      } else {
+        showToast((linea.cajasEsperadas - linea.cajasConfirmadas) + ' cajas restantes');
+        renderModal();
+      }
+    }
+  }
+
+  function avanzar() {
+    _idx++;
+    _fase = 'rack';
+    if (_idx >= lineasPendientes.length) {
+      // Todas confirmadas → guardar y finalizar
+      overlay.remove();
+      window._pickingBetaConfirmado = true;
+      window._pickingBetaLineas = lineasPendientes;
+      showToast('✅ Todas las posiciones confirmadas — finalizando...');
+      finalizarControl();
+    } else {
+      renderModal();
+    }
+  }
+
+  document.body.appendChild(overlay);
+  renderModal();
+}
+// ── FIN PICKING BETA ──────────────────────────────────────────────────────────
+
 // ── EDICIÓN MANUAL DE CANTIDAD ──────────────────────────────────────────
 var _edicionManualPendiente = null; // { idx, cod, filaAlerta }
 var _edicionManualAprobada  = false;
@@ -3679,6 +3847,15 @@ async function finalizarControl() {
   });
 
   if (ocObj.esReposicion) {
+    // ── PICKING BETA: mostrar panel de confirmación de destino ──────────────
+    if (CURRENT_USER && CURRENT_USER.pickingBeta && !window._pickingBetaConfirmado) {
+      window._pickingBetaOcObj = ocObj;
+      window._busy_finalizarControl = false;
+      mostrarPanelConfirmacionRack(ocObj);
+      return;
+    }
+    // ── FIN PICKING BETA ────────────────────────────────────────────────────
+
     // Las OCs de reposición no se conservan en ordenes — se eliminan al finalizar
     // para que no aparezcan en el reporte. El descuento queda en HISTORIAL DE PALETS.
     if (ocIdx >= 0) { ordenes.splice(ocIdx, 1); }
@@ -4868,6 +5045,22 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
           _markFinRepSent(_finRepId);
           setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
         }).catch(function() { /* queda pending, se reintenta al próximo login */ });
+
+        // ── PICKING BETA: escribir en ESCANEO UBICACIONES ──────────────────
+        if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
+          var _filasUbi = window._pickingBetaLineas.map(function(l) {
+            return [l.cod || '—', l.desc || '—', l.categoria || '—', l.marca || '—',
+                    l.cant || 0, l.fecha || '—', l.lote || '—', l.tipoUbicacion || 'PICKING', 'ENTRADA'];
+          });
+          fetch(GAS_URL, {
+            method: 'POST', mode: 'no-cors',
+            body: JSON.stringify({ accion: 'agregarFilas', rango: 'ESCANEO UBICACIONES!A1', values: _filasUbi })
+          });
+          window._pickingBetaLineas = null;
+          window._pickingBetaConfirmado = false;
+          window._pickingBetaOcObj = null;
+        }
+        // ── FIN PICKING BETA ────────────────────────────────────────────────
       } else {
         // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
         _guardarEnHistorialPalets(oc, escaneadoPor);
@@ -7782,7 +7975,7 @@ function importarLineasOC() {
 async function syncUsuarios() {
   try {
     var timeoutPromise = new Promise(function(_, reject){ setTimeout(function(){ reject('timeout'); }, 8000); });
-    var rows = await Promise.race([sheetsRead('USUARIOS!A2:E99'), timeoutPromise]);
+    var rows = await Promise.race([sheetsRead('USUARIOS!A2:F99'), timeoutPromise]);
     if (rows && rows.length > 0) {
       var users = rows
         .filter(function(r){ return r[0] && String(r[0]).trim(); })
@@ -7796,7 +7989,8 @@ async function syncUsuarios() {
           var pin = String(r[2] || '').trim();
           var filaAlerta = r[3] ? parseInt(r[3], 10) : null;
           var sesionActiva = r[4] ? String(r[4]).trim() : '';
-          return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta, sesionActiva: sesionActiva };
+          var pickingBeta = String(r[5] || '').trim().toUpperCase() === 'SI';
+          return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta, sesionActiva: sesionActiva, pickingBeta: pickingBeta };
         });
       try { localStorage.setItem('stockcontrol_users', JSON.stringify(users)); } catch(e) {}
       return users;
