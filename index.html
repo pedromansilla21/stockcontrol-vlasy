@@ -4958,11 +4958,15 @@ async function _guardarDetalleHistorial(oc, escaneadoPor, tipo) {
         horaEscaneo                              // Hora de escaneo real de este producto (columna nueva, al final)
       ];
     });
-    fetch(GAS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ accion: 'guardarDetalleHistorial', filas: filas, ocId: oc.id })
-    });
+   var _pendHist = { filas: filas, ocId: oc.id };
+try { localStorage.setItem('sc_pending_detalle_' + oc.id, JSON.stringify(_pendHist)); } catch(e) {}
+fetch(GAS_URL, {
+  method: 'POST',
+  mode: 'no-cors',
+  body: JSON.stringify({ accion: 'guardarDetalleHistorial', filas: filas, ocId: oc.id })
+}).then(function() {
+  try { localStorage.removeItem('sc_pending_detalle_' + oc.id); } catch(e) {}
+}).catch(function() {});
   } catch(e) {}
 }
 
@@ -5069,12 +5073,15 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
       }
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
-      fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: JSON.stringify({ accion: 'guardarHistorial', fila: fila })
-      });
-    }
+     try { localStorage.setItem('sc_pending_hist_' + oc.id, JSON.stringify({ fila: fila })); } catch(e) {}
+fetch(GAS_URL, {
+  method: 'POST',
+  mode: 'no-cors',
+  body: JSON.stringify({ accion: 'guardarHistorial', fila: fila })
+}).then(function() {
+  try { localStorage.removeItem('sc_pending_hist_' + oc.id); } catch(e) {}
+}).catch(function() {});
+}
   } catch(e) { console.error('Error en _guardarEnHistorial:', e); }
 }
 
