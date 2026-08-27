@@ -8293,7 +8293,8 @@ function _completarLogin(selected) {
     rol: selected.rol || 'operario',
     color: userColor(selected.name),
     initials: userInitials(selected.name),
-    filaAlerta: selected.filaAlerta || 1
+    filaAlerta: selected.filaAlerta || 1,
+    pickingBeta: selected.pickingBeta === true
   };
 
   // Limpiar estado de la sesión anterior al cambiar de usuario
