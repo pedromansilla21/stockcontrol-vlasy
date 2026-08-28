@@ -3953,8 +3953,15 @@ async function finalizarControl() {
           mode: 'no-cors',
           body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta })
         });
-      }, 30000); // 30 segundos para que el admin vea FINALIZADO
-    }
+          }, 30000); // 30 segundos para que el admin vea FINALIZADO
+    setTimeout(function() {
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: CURRENT_USER.filaAlerta })
+      });
+    }, 60000); // Retry a los 60s por si el de 30s falló silenciosamente
+  }
     switchPanel('scanner');
     showToast(todoCompleto ? '\u2705 O.C. finalizada \u2014 esperando la pr\u00f3xima' : '\u26a0 O.C. guardada con diferencias');
     return;
