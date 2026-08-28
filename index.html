@@ -3138,21 +3138,37 @@ function mostrarPanelConfirmacionRack(ocObj) {
 
   function procesarEscaneo(codigo) {
     var linea = lineasPendientes[_idx];
-    if (_fase === 'rack') {
-      var parsed = _parsearCodigoRack(codigo);
-      if (!parsed) {
+        if (_fase === 'rack') {
+      // Extraer tipo del último segmento (confiable)
+      var partesTipo = codigo.trim().split('-');
+      var tipoRaw = partesTipo[partesTipo.length - 1].toUpperCase();
+      var tipoLimpio = tipoRaw.indexOf('PICKING') > -1 ? 'PICKING' : tipoRaw.indexOf('REPOSICION') > -1 ? 'REPOSICION' : null;
+      if (!tipoLimpio) {
         showToast('⚠ Código de rack no reconocido. Escaneá el código de la posición.');
         return;
       }
-      // Validar que el cod del rack coincida con el artículo de la línea
-      if (String(parsed.cod).trim() !== String(linea.cod).trim()) {
-        showToast('⚠ Ese rack corresponde al artículo ' + parsed.cod + ', no a ' + linea.cod + '. Buscá la posición correcta.');
-        return;
-      }
-      linea.tipoUbicacion = parsed.tipo;
-      _fase = 'cajas';
-      showToast('✅ Rack validado — ' + parsed.tipo);
-      renderModal();
+      showToast('🔍 Validando ubicación...');
+      sheetsRead("'STOCK POR UBICACION'!A2:M9999").then(function(rows) {
+        var codigoEsc = codigo.trim();
+        var fila = (rows || []).find(function(r) {
+          return String(r[12] || '').trim() === codigoEsc;
+        });
+        if (!fila) {
+          showToast('⚠ Código no encontrado en STOCK POR UBICACION. Verificá la posición.');
+          return;
+        }
+        var codArticuloRack = String(fila[0] || '').trim();
+        if (codArticuloRack !== String(linea.cod).trim()) {
+          showToast('⚠ Ese rack corresponde al artículo ' + codArticuloRack + ', no a ' + linea.cod + '. Buscá la posición correcta.');
+          return;
+        }
+        linea.tipoUbicacion = tipoLimpio;
+        _fase = 'cajas';
+        showToast('✅ Rack validado — ' + tipoLimpio);
+        renderModal();
+      }).catch(function() {
+        showToast('⚠ Error al leer STOCK POR UBICACION. Intentá de nuevo.');
+      });
     } else {
       // Fase cajas: cualquier escaneo suma una caja
       linea.cajasConfirmadas++;
