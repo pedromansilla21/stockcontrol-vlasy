@@ -3073,34 +3073,55 @@ function mostrarPanelConfirmacionRack(ocObj) {
   overlay.id = 'picking-beta-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
 
-  function renderModal() {
+    function renderModal() {
     var linea = lineasPendientes[_idx];
     var progreso = (_idx + 1) + ' / ' + lineasPendientes.length;
     var faseLabel = _fase === 'rack'
-      ? '📦 Escaneá el código del rack destino'
-      : '📬 Escaneá las cajas (' + linea.cajasConfirmadas + ' / ' + linea.cajasEsperadas + ')';
+      ? 'Escaneá el código del rack destino'
+      : 'Escaneá las cajas';
+    var colorUbi = linea.tipoUbicacion === 'PICKING' ? '#4CAF7D' : '#5BBFD6';
+    var cajasRestantes = linea.cajasEsperadas - linea.cajasConfirmadas;
+    var pct = linea.cajasEsperadas > 0 ? Math.round((linea.cajasConfirmadas / linea.cajasEsperadas) * 100) : 0;
 
     overlay.innerHTML =
-      '<div style="background:#1c2128;border:1.5px solid #5BBFD6;border-radius:14px;width:100%;max-width:420px;padding:24px;font-family:inherit;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">' +
-          '<div style="font-size:13px;font-weight:700;color:#5BBFD6;letter-spacing:0.04em;">CONFIRMACIÓN DE DESTINO</div>' +
-          '<div style="font-size:12px;color:#8b949e;">' + progreso + '</div>' +
+      '<div style="background:#1c2128;border:1.5px solid ' + colorUbi + ';border-radius:14px;width:100%;max-width:440px;padding:0;font-family:inherit;overflow:hidden;">' +
+        '<div style="background:' + colorUbi + ';padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">' +
+          '<div style="font-size:12px;font-weight:700;color:#0d1117;letter-spacing:0.06em;">CONFIRMACIÓN DE DESTINO</div>' +
+          '<div style="font-size:12px;font-weight:700;color:#0d1117;">' + progreso + '</div>' +
         '</div>' +
-        '<div style="background:#0d1117;border-radius:8px;padding:14px;margin-bottom:18px;">' +
-          '<div style="font-size:12px;color:#8b949e;margin-bottom:4px;">' + linea.cod + '</div>' +
-          '<div style="font-size:14px;font-weight:600;color:#e6edf3;margin-bottom:8px;">' + escHtml(linea.desc) + '</div>' +
-          '<div style="font-size:12px;color:#8b949e;">Cantidad: <span style="color:#e6edf3;font-weight:600;">' + linea.cant + ' u. — ' + linea.cajasEsperadas + ' cajas</span></div>' +
-          (linea.tipoUbicacion ? '<div style="font-size:11px;color:#4CAF7D;margin-top:4px;">Destino: ' + linea.tipoUbicacion + '</div>' : '') +
+        '<div style="padding:20px;">' +
+          '<div style="background:#0d1117;border-radius:10px;padding:16px;margin-bottom:16px;border-left:4px solid ' + colorUbi + ';">' +
+            '<div style="font-size:11px;color:#8b949e;letter-spacing:0.08em;margin-bottom:6px;">ARTÍCULO</div>' +
+            '<div style="font-size:22px;font-weight:800;color:' + colorUbi + ';letter-spacing:0.04em;margin-bottom:4px;">' + escHtml(linea.cod) + '</div>' +
+            '<div style="font-size:15px;font-weight:600;color:#e6edf3;line-height:1.3;">' + escHtml(linea.desc) + '</div>' +
+            (linea.tipoUbicacion
+              ? '<div style="margin-top:10px;display:inline-block;background:' + colorUbi + '22;border:1px solid ' + colorUbi + ';border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;color:' + colorUbi + ';">📍 ' + linea.tipoUbicacion + '</div>'
+              : '') +
+          '</div>' +
+          (_fase === 'cajas'
+            ? '<div style="background:#0d1117;border-radius:10px;padding:14px;margin-bottom:16px;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
+                  '<div style="font-size:11px;color:#8b949e;letter-spacing:0.06em;">CAJAS CONFIRMADAS</div>' +
+                  '<div style="font-size:26px;font-weight:800;color:#e6edf3;">' + linea.cajasConfirmadas + '<span style="font-size:14px;color:#8b949e;"> / ' + linea.cajasEsperadas + '</span></div>' +
+                '</div>' +
+                '<div style="background:#21262d;border-radius:4px;height:8px;overflow:hidden;">' +
+                  '<div style="background:' + colorUbi + ';height:100%;width:' + pct + '%;transition:width 0.3s;border-radius:4px;"></div>' +
+                '</div>' +
+                (cajasRestantes > 0
+                  ? '<div style="font-size:12px;color:#8b949e;margin-top:6px;">' + cajasRestantes + ' caja' + (cajasRestantes > 1 ? 's' : '') + ' restante' + (cajasRestantes > 1 ? 's' : '') + '</div>'
+                  : '<div style="font-size:12px;color:' + colorUbi + ';margin-top:6px;font-weight:600;">✅ Todas las cajas confirmadas</div>') +
+              '</div>'
+            : '<div style="font-size:13px;color:#8b949e;margin-bottom:16px;">📦 ' + faseLabel + '</div>') +
+          '<input id="picking-beta-scan" type="text" autocomplete="off" placeholder="Esperando escaneo..." ' +
+            'style="width:100%;background:#0d1117;border:1.5px solid ' + colorUbi + ';border-radius:8px;padding:10px 12px;color:#e6edf3;font-size:14px;font-family:monospace;margin-bottom:12px;box-sizing:border-box;">' +
+          '<div style="display:flex;gap:8px;">' +
+            '<button id="picking-beta-cancelar" style="flex:1;background:rgba(248,113,113,0.1);color:#f87171;border:1.5px solid #f87171;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">✗ Cancelar</button>' +
+            (_fase === 'cajas' && linea.cajasConfirmadas === linea.cajasEsperadas
+              ? '<button id="picking-beta-siguiente" style="flex:2;background:#4CAF7D;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Confirmar y continuar →</button>'
+              : '') +
+          '</div>' +
         '</div>' +
-        '<div style="font-size:13px;color:#e6edf3;margin-bottom:10px;">' + faseLabel + '</div>' +
-        '<input id="picking-beta-scan" type="text" autocomplete="off" placeholder="Esperando escaneo..." ' +
-          'style="width:100%;background:#0d1117;border:1.5px solid #5BBFD6;border-radius:8px;padding:10px 12px;color:#e6edf3;font-size:14px;font-family:monospace;margin-bottom:14px;">' +
-        '<div style="display:flex;gap:8px;">' +
-          '<button id="picking-beta-cancelar" style="flex:1;background:rgba(248,113,113,0.1);color:#f87171;border:1.5px solid #f87171;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">✗ Cancelar</button>' +
-          (_fase === 'cajas' && linea.cajasConfirmadas === linea.cajasEsperadas
-            ? '<button id="picking-beta-siguiente" style="flex:2;background:#4CAF7D;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Confirmar y continuar →</button>'
-            : '') +
-        '</div>' +
+      '</div>';
       '</div>';
 
     // Focus al input
