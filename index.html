@@ -8508,7 +8508,7 @@ async function syncAlertasOperario() {
     }
 
     // 2. Verificar solicitudes de edición manual en col C (para todos los no-operarios)
-  var _operariosConFila = ((await fetchUsers()) || loadUsers()).filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
+ var _operariosConFila = ((await syncUsuarios()) || loadUsers()).filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
     if (_operariosConFila.length > 0) {
       var _maxFila = Math.max.apply(null, _operariosConFila.map(function(u){ return u.filaAlerta; }));
       try {
