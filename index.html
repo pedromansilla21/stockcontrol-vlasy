@@ -8510,11 +8510,15 @@ async function syncAlertasOperario() {
     // 2. Verificar solicitudes de edición manual en col C (para todos los no-operarios)
  var _operariosConFila = ((await syncUsuarios()) || loadUsers()).filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
     if (_operariosConFila.length > 0) {
-      var _maxFila = Math.max.apply(null, _operariosConFila.map(function(u){ return u.filaAlerta; }));
-      try {
-        var _filasC = await sheetsRead('ALERTAS!C1:C' + _maxFila);
-        if (typeof _checkSolicitudesEdicion === 'function') _checkSolicitudesEdicion(_filasC, _operariosConFila);
-      } catch(e2) {}
+     try {
+  var _filasC = [];
+  for (var _oi = 0; _oi < _operariosConFila.length; _oi++) {
+    var _opFila = _operariosConFila[_oi].filaAlerta;
+    var _r = await sheetsRead('ALERTAS!C' + _opFila + ':C' + _opFila);
+    _filasC[_opFila - 1] = (_r && _r[0]) ? _r[0] : [];
+  }
+  if (typeof _checkSolicitudesEdicion === 'function') _checkSolicitudesEdicion(_filasC, _operariosConFila);
+} catch(e2) {}
     }
   } catch(e) {
   } finally {
