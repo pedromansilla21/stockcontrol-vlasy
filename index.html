@@ -2872,7 +2872,7 @@ function renderTablaControl() {
   var pendientes  = [];
   var completados = [];
   remito.forEach(function(r, i) {
-    var completo = (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === (r.cantUnidades || 0);
+   var completo = (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === _uEspBase(r);
     if (completo) completados.push({ r: r, i: i });
     else          pendientes.push({ r: r, i: i });
   });
@@ -3830,8 +3830,8 @@ async function finalizarControl() {
   }
   // ── Fin validaciones ─────────────────────────────────────────────────────
 
-  var completas   = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === (r.cantUnidades || 0); });
-  var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) < (r.cantUnidades || 0); });
+  var completas   = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === _uEspBase(r); });
+var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) !== _uEspBase(r); });
   var sinEscanear = remito.filter(function(r){ return (r.unidadesControladas || 0) === 0; });
   var todoCompleto = completas.length === remito.length;
 
