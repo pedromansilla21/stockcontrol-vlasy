@@ -8407,7 +8407,7 @@ function _completarLogin(selected) {
   if (CURRENT_USER.rol !== 'operario' && CURRENT_USER.rol !== 'buscador') {
     setTimeout(_checkAndRetryPendingRestars, 3000); // esperar 3s para que cargue todo
     setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
-   setTimeout(_checkAndRetryPendingHistorial, 5000);
+   ssetTimeout(function(){ if (typeof _checkAndRetryPendingHistorial === 'function') _checkAndRetryPendingHistorial(); }, 5000);
   }
   iniciarSincAlertasOperario();  
   aplicarRol(CURRENT_USER.rol);
