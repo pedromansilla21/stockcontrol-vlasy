@@ -4022,8 +4022,8 @@ function getBadge(r) {
 
 function updateMetrics() {
   var lineas = remito.length;
-  var ok   = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === (r.cantUnidades || 0); }).length;
-  var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) !== (r.cantUnidades || 0); }).length;
+ var ok   = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === _uEspBase(r); }).length;
+var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) !== _uEspBase(r); }).length;
   var totalCajas = registro.length;
   document.getElementById('m-lineas').textContent    = lineas;
   document.getElementById('m-escaneos').textContent  = totalCajas;
