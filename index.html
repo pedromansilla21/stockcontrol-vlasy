@@ -5079,7 +5079,7 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
                      (document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '');
     
     if (esPalet && paletValue) {
-    if (oc.esReposicion === true && !(CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaConfirmado)) {
+      if (oc.esReposicion === true) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
         // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
         var _finRepLineas = (oc.lineas || []).map(function(l) {
@@ -5100,12 +5100,8 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
           setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
         }).catch(function() { /* queda pending, se reintenta al próximo login */ });
 
-      } else {
-        // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
-               _guardarEnHistorialPalets(oc, escaneadoPor);
-        }
-        // ── PICKING BETA: escribir en REGISTRO POR UBICACION ──
-        if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
+        // ── PICKING BETA: escribir en ESCANEO UBICACIONES ──────────────────
+               if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
           var _filasUbi = [];
           window._pickingBetaLineas.forEach(function(l) {
             var cantCaja = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
@@ -5127,7 +5123,11 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
           window._pickingBetaConfirmado = false;
           window._pickingBetaOcObj = null;
         }
-        // ── FIN PICKING BETA ──
+        // ── FIN PICKING BETA ────────────────────────────────────────────────
+      } else {
+        // CONTROL NORMAL → guardar en HISTORIAL DE PALETS
+        _guardarEnHistorialPalets(oc, escaneadoPor);
+      }
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
      try { localStorage.setItem('sc_pending_hist_' + oc.id, JSON.stringify({ fila: fila })); } catch(e) {}
