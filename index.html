@@ -2821,7 +2821,7 @@ function renderTablaRemito() {
         (remitoDatos.esReposicion && (r.fechaLote || (r.lote && r.lote !== '—'))
           ? ' <span style="display:inline-block; margin-left:6px; padding:2px 7px; border-radius:4px; background:var(--c-surface2); border:1px solid var(--c-border); font-size:11px; font-weight:600; color:var(--c-text1); white-space:nowrap;">' +
             (r.fechaLote ? 'VTO ' + r.fechaLote : '') +
-            (r.fechaLote && r.lote && r.lote !== '—' ? '  ' : '') +
+            (r.fechaLote && r.lote && r.lote !== '—' ? '  ' : '') +
             (r.lote && r.lote !== '—' ? 'L:' + r.lote : '') +
             '</span>'
           : '') +
@@ -3183,8 +3183,7 @@ function mostrarPanelConfirmacionRack(ocObj) {
           showToast('⚠ Ese rack corresponde al artículo ' + codArticuloRack + ', no a ' + linea.cod + '. Buscá la posición correcta.');
           return;
         }
-                linea.tipoUbicacion = tipoLimpio;
-        linea.rack = codigoEsc;
+        linea.tipoUbicacion = tipoLimpio;
         _fase = 'cajas';
         showToast('✅ Rack validado — ' + tipoLimpio);
         renderModal();
@@ -3888,9 +3887,6 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
     // ── PICKING BETA: mostrar panel de confirmación de destino ──────────────
     if (CURRENT_USER && CURRENT_USER.pickingBeta && !window._pickingBetaConfirmado) {
       window._pickingBetaOcObj = ocObj;
-      if (ocIdx >= 0) { ordenes.splice(ocIdx, 1); }
-      saveOrdenes(ordenes);
-      _restarEnHistorialPalets(ocObj);
       window._busy_finalizarControl = false;
       mostrarPanelConfirmacionRack(ocObj);
       return;
@@ -5101,24 +5097,15 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
         }).catch(function() { /* queda pending, se reintenta al próximo login */ });
 
         // ── PICKING BETA: escribir en ESCANEO UBICACIONES ──────────────────
-               if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
-          var _filasUbi = [];
-          window._pickingBetaLineas.forEach(function(l) {
-            var cantCaja = parseInt(l.unidadesPorCaja || l.cantCaja || 1, 10) || 1;
-            for (var i = 0; i < l.cajasConfirmadas; i++) {
-              _filasUbi.push([
-                l.cod || '—', l.desc || '—', l.categoria || '—', l.marca || '—',
-                cantCaja, l.fecha || '—', l.lote || '—', l.rack || '—',
-                l.tipoUbicacion || 'PICKING', 'ENTRADA'
-              ]);
-            }
+        if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
+          var _filasUbi = window._pickingBetaLineas.map(function(l) {
+            return [l.cod || '—', l.desc || '—', l.categoria || '—', l.marca || '—',
+                    l.cant || 0, l.fecha || '—', l.lote || '—', l.tipoUbicacion || 'PICKING', 'ENTRADA'];
           });
-          if (_filasUbi.length > 0) {
-            fetch(GAS_URL, {
-              method: 'POST', mode: 'no-cors',
-              body: JSON.stringify({ accion: 'guardarRegistroUbicacion', filas: _filasUbi })
-            });
-          }
+          fetch(GAS_URL, {
+            method: 'POST', mode: 'no-cors',
+            body: JSON.stringify({ accion: 'agregarFilas', rango: 'ESCANEO UBICACIONES!A1', values: _filasUbi })
+          });
           window._pickingBetaLineas = null;
           window._pickingBetaConfirmado = false;
           window._pickingBetaOcObj = null;
