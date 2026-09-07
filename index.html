@@ -2178,14 +2178,29 @@ async function sincronizarEscaneosANube() {
   if (registro.length <= _registroSincronizadoHasta) return;  // nada nuevo
   var nuevos = registro.slice(_registroSincronizadoHasta);
   var operarioReal = (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—';
+  var _cursorDivisiones = {};
   var filas = nuevos.map(function(r) {
     // Buscar la línea de este producto para tomar su lote/fecha YA
     // completos (lo que se tipeó en "Completar control"), no lo que había
     // en el momento puntual del escaneo (que todavía no estaba lleno).
     var linea = remito.find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); });
-    var fechaFinal = (linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || '');
-    var loteFinal  = (linea && linea.lote)      ? linea.lote      : (r.lote  || '');
-    var paletFinal = (linea && linea.palet)     ? linea.palet     : (r.palet || '');
+    var upCajaDiv = parseInt(linea && (linea.unidadesPorCaja || linea.cantCaja) || 1, 10) || 1;
+    var tieneDiv = linea && linea.divisiones && linea.divisiones.length > 0;
+    var divAsignada = null;
+    if (tieneDiv) {
+      var codKey = String(r.cod).trim();
+      var idx = _cursorDivisiones[codKey] || 0;
+      var acumulado = 0;
+      for (var _i = 0; _i < linea.divisiones.length; _i++) {
+        var slotsDiv = Math.round((parseInt(linea.divisiones[_i].unidades, 10) || 0) / upCajaDiv) || 0;
+        if (idx < acumulado + slotsDiv) { divAsignada = linea.divisiones[_i]; break; }
+        acumulado += slotsDiv;
+      }
+      _cursorDivisiones[codKey] = idx + 1;
+    }
+    var fechaFinal = divAsignada ? ((divAsignada.mes && divAsignada.anio) ? (divAsignada.anio + '-' + String(divAsignada.mes).padStart(2,'0')) : (r.fecha || '')) : ((linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || ''));
+    var loteFinal  = divAsignada ? (divAsignada.lote  || (r.lote  || '')) : ((linea && linea.lote)  ? linea.lote  : (r.lote  || ''));
+    var paletFinal = divAsignada ? (divAsignada.palet || (r.palet || '')) : ((linea && linea.palet) ? linea.palet : (r.palet || ''));
     return [
       remitoDatos.nro || '',
       remitoDatos.ocId || '',
