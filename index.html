@@ -3883,7 +3883,8 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
     }
   });
 
-  if (ocObj.esReposicion) {
+  ocObj._esRepEfectiva = !!(ocObj.esReposicion || (ocObj.nro && String(ocObj.nro).indexOf('REP-') === 0));
+  if (ocObj._esRepEfectiva) {
     // ── PICKING BETA: mostrar panel de confirmación de destino ──────────────
     if (CURRENT_USER && CURRENT_USER.pickingBeta && !window._pickingBetaConfirmado) {
       window._pickingBetaOcObj = ocObj;
@@ -5075,7 +5076,7 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
                      (document.getElementById('rem-palet') ? document.getElementById('rem-palet').value.trim() : '');
     
     if (esPalet && paletValue) {
-      if (oc.esReposicion === true) {
+    if (oc.esReposicion === true || (oc.nro && String(oc.nro).indexOf('REP-') === 0)) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
         // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
         var _finRepLineas = (oc.lineas || []).map(function(l) {
