@@ -6388,7 +6388,16 @@ async function _cargarStockFrescoPalet(ocId) {
 
     // NO guardar en localStorage — syncOrdenes() pisaría los valores
     // Solo actualizar el DOM directamente con los datos frescos del Sheet
-    var lineasParaMostrar = (oc.lineas || []).map(function(linea) {
+       // Dedupear por código antes de mapear — evita pintar dos veces el mismo
+    // artículo cuando oc.lineas tiene más de una entrada para el mismo código
+    // (por ejemplo, ítems agregados fuera de la O.C. con varios lotes).
+    var _codsVistos = {};
+    var lineasParaMostrar = (oc.lineas || []).filter(function(linea) {
+      var cod = String(linea.cod);
+      if (_codsVistos[cod]) return false;
+      _codsVistos[cod] = true;
+      return true;
+    }).map(function(linea) {
       var fresca = lineasFrescas.find(function(lf){ return String(lf.cod) === String(linea.cod); });
       if (!fresca) return linea;
       var lineaDisplay = Object.assign({}, linea, {
@@ -6401,7 +6410,6 @@ async function _cargarStockFrescoPalet(ocId) {
       delete lineaDisplay.cantUnidadesAlEscaneo;
       return lineaDisplay;
     });
-
     // Guardar en caché para que renderOrdenes/renderReporteCompras no flashee con datos viejos
     _paletStockData[ocId] = lineasParaMostrar;
 
