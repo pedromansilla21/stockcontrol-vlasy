@@ -1701,8 +1701,8 @@
         <button class="btn" onclick="bpRefresh()" title="Recargar datos"><i class="ti ti-refresh"></i> Actualizar</button>
       </div>
 
-      <!-- Contadores -->
-      <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
+            <!-- Contadores -->
+      <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:8px;">
         <div class="card" style="padding:16px; text-align:center;">
           <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Total artículos</div>
           <div id="bp-total" style="font-size:28px; font-weight:700; color:var(--c-text1);">—</div>
@@ -1711,30 +1711,39 @@
           <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Total unidades</div>
           <div id="bp-unidades" style="font-size:28px; font-weight:700; color:var(--c-blue);">—</div>
         </div>
-        <div class="card" style="padding:16px; text-align:center;">
-          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Palets activos</div>
-          <div id="bp-palets" style="font-size:28px; font-weight:700; color:var(--c-teal,#0D9488);">—</div>
-        </div>
-        <div class="card" style="padding:16px; text-align:center;">
+        <div class="card" id="bp-card-ok" onclick="bpFiltrarEstado('ok')" style="padding:16px; text-align:center; cursor:pointer;">
           <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">En término</div>
           <div id="bp-ok" style="font-size:28px; font-weight:700; color:var(--c-green);">—</div>
         </div>
-        <div class="card" style="padding:16px; text-align:center;">
+        <div class="card" id="bp-card-porvencer" onclick="bpFiltrarEstado('porVencer')" style="padding:16px; text-align:center; cursor:pointer;">
+          <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Por vencer</div>
+          <div id="bp-porvencer" style="font-size:28px; font-weight:700; color:var(--c-amber);">—</div>
+        </div>
+        <div class="card" id="bp-card-vencidos" onclick="bpFiltrarEstado('vencido')" style="padding:16px; text-align:center; cursor:pointer;">
           <div style="font-size:11px; color:var(--c-text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">Vencidos</div>
           <div id="bp-vencidos" style="font-size:28px; font-weight:700; color:var(--c-red);">—</div>
         </div>
       </div>
-
+      <div style="font-size:11px; color:var(--c-text3); margin-bottom:20px;">Palets activos: <span id="bp-palets" style="font-weight:700; color:var(--c-teal,#0D9488);">—</span></div>
       <!-- Buscador -->
       <div class="card" style="padding:14px 16px; margin-bottom:14px;">
         <div style="display:flex; gap:10px; align-items:center;">
           <i class="ti ti-search" style="color:var(--c-text3); font-size:18px;"></i>
-          <input id="bp-search" type="text" placeholder="Buscar por código, descripción o palet…"
+          <input id="bp-search" type="text" placeholder="Buscar por código o descripción…"
             style="flex:1; background:transparent; border:none; outline:none; font-size:14px; color:var(--c-text1);"
             oninput="bpFiltrar()" />
         </div>
       </div>
-
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:12px; font-size:13px; color:var(--c-text2);">
+        <input type="checkbox" id="bp-ocultar-cero" onchange="bpFiltrar()" style="cursor:pointer;" />
+        <label for="bp-ocultar-cero" style="cursor:pointer;">Ocultar artículos con cantidad 0</label>
+      </div>
+      <!-- Filtro de marcas -->
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <span style="font-size:12px; color:var(--c-text3);">Filtrar por marca:</span>
+        <div id="bp-filtros-marca" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+      </div>
+     
       <!-- Tabla resultados -->
       <div class="card" style="padding:0; overflow:hidden;">
         <div class="table-wrap">
@@ -2508,6 +2517,7 @@ function scFiltrar() {
 // ── BUSCADOR DE PALETS ────────────────────────────────────────
 var _bpDatos = [];
 var _bpCargado = false;
+var _bpMarcaActiva = '';
 
 function bpRefresh() {
   _bpCargado = false;
@@ -2525,7 +2535,7 @@ async function bpLoad() {
   if (tbody)     tbody.innerHTML = '';
 
   try {
-    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:R");
     var resp = await fetch(url, { cache: 'no-store' });
     var data = await resp.json();
     if (!data.ok || !Array.isArray(data.data)) throw new Error('Sin datos');
@@ -2543,14 +2553,15 @@ async function bpLoad() {
         var partes  = fechaRaw.split(/[-T]/);
         var anio    = parseInt(partes[0], 10) || 0;
         var mes     = parseInt(partes[1], 10) || 0;
-        var vencida = anio > 0 && (anio < hoy.getFullYear() || (anio === hoy.getFullYear() && mes < (hoy.getMonth() + 1)));
-        var porVencer = !vencida && anio > 0 && (anio === hoy.getFullYear() && mes <= (hoy.getMonth() + 3));
+          var mesesRestantes = anio > 0 ? (anio * 12 + mes) - (hoy.getFullYear() * 12 + (hoy.getMonth() + 1)) : 999;
+          var vencida    = anio > 0 && mesesRestantes < 13;
+          var porVencer  = anio > 0 && mesesRestantes >= 13 && mesesRestantes <= 15;
         var fechaMostrar = (mes && anio) ? String(mes).padStart(2,'0') + '/' + anio : '—';
         return {
           cod:        String(row[0] || '').trim(),
           desc:       String(row[1] || '').trim(),
           cat:        String(row[2] || '').trim(),
-          marca:      String(row[3] || '').trim(),
+          marca:      String(row[17] || '').trim(),
           cant:       cant,
           un:         String(row[5] || 'UND').trim(),
           fecha:      fechaMostrar,
@@ -2564,6 +2575,7 @@ async function bpLoad() {
       });
 
     _bpCargado = true;
+    bpRenderizarFiltrosMarca();
     bpRenderizar(_bpDatos);
     bpActualizarContadores(_bpDatos);
   } catch(e) {
@@ -2609,26 +2621,62 @@ function bpActualizarContadores(datos) {
   var totalItems   = datos.length;
   var totalUnd     = datos.reduce(function(s, d){ return s + d.cant; }, 0);
   var paletsUnicos = new Set(datos.map(function(d){ return d.palet; })).size;
-  var enTermino    = datos.filter(function(d){ return !d.vencida; }).length;
-  var vencidos     = datos.filter(function(d){ return d.vencida; }).length;
+  // En término y Vencidos ahora se muestran en UNIDADES (antes contaban artículos)
+       var undEnTermino = datos.filter(function(d){ return !d.vencida && !d.porVencer; }).reduce(function(s, d){ return s + d.cant; }, 0);
+      var undPorVencer = datos.filter(function(d){ return d.porVencer; }).reduce(function(s, d){ return s + d.cant; }, 0);
+      var undVencidas = datos.filter(function(d){ return d.vencida; }).reduce(function(s, d){ return s + d.cant; }, 0);
   var set = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v.toLocaleString('es-AR'); };
   set('bp-total',    totalItems);
   set('bp-unidades', totalUnd);
   set('bp-palets',   paletsUnicos);
-  set('bp-ok',       enTermino);
-  set('bp-vencidos', vencidos);
+  set('bp-ok',       undEnTermino);
+  set('bp-porvencer', undPorVencer);
+  set('bp-vencidos', undVencidas);
 }
+
+function bpRenderizarFiltrosMarca() {
+  var marcas = {};
+  _bpDatos.forEach(function(d) { if (d.marca) marcas[d.marca] = true; });
+  var container = document.getElementById('bp-filtros-marca');
+  if (!container) return;
+  var html = '<button class="btn btn-sm' + (!_bpMarcaActiva ? ' btn-primary' : '') + '" onclick="bpFiltrarMarca(\'\')">Todas</button>';
+  Object.keys(marcas).sort().forEach(function(m) {
+    html += '<button class="btn btn-sm' + (_bpMarcaActiva === m ? ' btn-primary' : '') + '" onclick="bpFiltrarMarca(\'' + escHtml(m) + '\')">' + escHtml(m) + '</button>';
+  });
+  container.innerHTML = html;
+}
+
+function bpFiltrarMarca(marca) {
+  _bpMarcaActiva = marca;
+  bpRenderizarFiltrosMarca();
+  bpFiltrar();
+}
+       var _bpEstadoActivo = null;
+      function bpFiltrarEstado(estado) {
+        _bpEstadoActivo = (_bpEstadoActivo === estado) ? null : estado;
+        var mapa = { ok: 'bp-card-ok', porVencer: 'bp-card-porvencer', vencido: 'bp-card-vencidos' };
+        Object.keys(mapa).forEach(function(k) {
+          var el = document.getElementById(mapa[k]);
+          if (el) el.style.outline = (k === _bpEstadoActivo) ? '2px solid var(--c-blue)' : '';
+        });
+        bpFiltrar();
+      }
 
 function bpFiltrar() {
   var q = (document.getElementById('bp-search').value || '').toLowerCase().trim();
   var filtrados = _bpDatos.filter(function(d) {
-    return !q ||
-      d.cod.toLowerCase().indexOf(q)    !== -1 ||
-      d.desc.toLowerCase().indexOf(q)   !== -1 ||
-      d.palet.toLowerCase().indexOf(q)  !== -1 ||
-      d.ubi.toLowerCase().indexOf(q)    !== -1 ||
-      d.lote.toLowerCase().indexOf(q)   !== -1 ||
-      d.marca.toLowerCase().indexOf(q)  !== -1;
+    // Búsqueda limitada a código y descripción — antes también miraba
+    // palet/ubicación/lote/marca, y eso traía coincidencias sin relación
+    var coincideTexto = !q ||
+      d.cod.toLowerCase().indexOf(q)  !== -1 ||
+      d.desc.toLowerCase().indexOf(q) !== -1;
+    var coincideMarca = !_bpMarcaActiva || d.marca === _bpMarcaActiva;
+    var coincideCero = !document.getElementById('bp-ocultar-cero').checked || d.cant > 0;
+           var coincideEstado = !_bpEstadoActivo ||
+          (_bpEstadoActivo === 'ok' && !d.vencida && !d.porVencer) ||
+          (_bpEstadoActivo === 'porVencer' && d.porVencer) ||
+          (_bpEstadoActivo === 'vencido' && d.vencida);
+  return coincideTexto && coincideMarca && coincideCero && coincideEstado;
   });
   bpRenderizar(filtrados);
   bpActualizarContadores(filtrados);
@@ -4596,6 +4644,7 @@ function confirmarAgregarItemFueraOC() {
         desc:         nl.desc || '—',
         categoria:    nl.categoria || '—',
         marca:        oc.proveedor || '—',
+        marcaReal:    ((db||[]).find(function(a){ return String(a.cod).trim()===String(nl.cod).trim(); })||{}).marca || '—',
         cant:         nl.unidadesControladas || nl.cantUnidades || 0,
         un:           nl.un || 'UND',
         fecha:        nl.fechaLote || '—',
@@ -5362,6 +5411,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
               desc: linea.desc || '—',
               categoria: linea.categoria || '—',
               marca: proveedor,
+              marcaReal: ((db||[]).find(function(a){ return String(a.cod).trim()===String(linea.cod).trim(); })||{}).marca || '—',
               palet: palet,
               contenedor: contenedor,
               lote: lote,
@@ -5402,6 +5452,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
           desc: linea.desc || '—',
           categoria: linea.categoria || '—',
           marca: proveedor,
+          marcaReal: ((db||[]).find(function(a){ return String(a.cod).trim()===String(linea.cod).trim(); })||{}).marca || '—',
           palet: palet,
           contenedor: contenedor,
           lote: loteOperario,
@@ -7603,6 +7654,7 @@ function guardarClasificacion() {
           _filasPaletEdit.push({
             cod: l.cod || '—', desc: l.desc || '—',
             categoria: artDb.categoria || '—', marca: ocObj.proveedor || '—',
+            marcaReal: artDb.marca || '—',
             cant: div.cantReal || 0, un: 'UND',
             fecha: fecha, lote: div.lote || '—',
             palet: ocObj.palet || '—', contenedor: ocObj.contenedor || '—',
@@ -7618,6 +7670,7 @@ function guardarClasificacion() {
         _filasPaletEdit.push({
           cod: l.cod || '—', desc: l.desc || '—',
           categoria: artDb.categoria || '—', marca: ocObj.proveedor || '—',
+          marcaReal: artDb.marca || '—',
           cant: l.unidadesControladas || 0, un: 'UND',
           fecha: fechaL, lote: l.lote || '—',
           palet: ocObj.palet || '—', contenedor: ocObj.contenedor || '—',
