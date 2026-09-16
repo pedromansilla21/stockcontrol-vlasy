@@ -3542,14 +3542,16 @@ function abrirPanelCompletarControl() {
   // el operario en el momento porque es quien tiene la caja físicamente.
   var fueraContainer = document.getElementById('tabla-completar-fuera-oc');
   if (fueraContainer) {
-    var itemsFueraVisibles = (itemsFueraOC || []).filter(function(x){
-      return !_filtroCodCompletarControl || String(x.cod).trim() === _filtroCodCompletarControl;
+       var itemsFueraVisibles = (itemsFueraOC || []).filter(function(x){
+   return (x.unidadesTotal||0) > 0 && (!_filtroCodCompletarControl || String(x.cod).trim() === _filtroCodCompletarControl);
     });
     if (!itemsFueraOC || itemsFueraOC.length === 0 || itemsFueraVisibles.length === 0) {
       fueraContainer.innerHTML = '';
     } else {
       var tbodyFuera = '';
-      itemsFueraOC.forEach(function(x, j) {
+           itemsFueraOC.forEach(function(x, j) {
+        if ((x.unidadesTotal||0) <= 0) return;
+              if ((x.unidadesTotal||0) <= 0) return;
         if (_filtroCodCompletarControl && String(x.cod).trim() !== _filtroCodCompletarControl) return;
         var divididoFuera = x.divisiones && x.divisiones.length > 0;
         if (!divididoFuera) {
@@ -4388,12 +4390,16 @@ function renderItemsFueraOC() {
   var list  = document.getElementById('fuera-oc-list');
   var count = document.getElementById('fuera-oc-count');
   if (!card) return;
-  if (!itemsFueraOC || itemsFueraOC.length === 0) { card.style.display = 'none'; return; }
+    var itemsConStock = (itemsFueraOC || []).filter(function(x){ return (x.unidadesTotal||0) > 0; });
+   var itemsConStock = (itemsFueraOC || []).filter(function(x){ return (x.unidadesTotal||0) > 0; });
+  if (itemsConStock.length === 0) { card.style.display = 'none'; return; }
   card.style.display = 'block';
-  var totalCant = itemsFueraOC.reduce(function(s,x){ return s + (x.unidadesTotal||0); }, 0);
+  var totalCant = itemsConStock.reduce(function(s,x){ return s + (x.unidadesTotal||0); }, 0);
   count.textContent = totalCant + ' u.';
   list.innerHTML = '';
-  itemsFueraOC.forEach(function(x) {
+  itemsFueraOC.forEach(function(x, j) {
+    if ((x.unidadesTotal||0) <= 0) return;
+    if ((x.unidadesTotal||0) <= 0) return;
     var detalle = x.cajasEscaneadas > 0
       ? x.cajasEscaneadas + ' caja' + (x.cajasEscaneadas !== 1 ? 's' : '') + (x.unidadesSueltas > 0 ? ' +' + x.unidadesSueltas + 'u.s.' : '')
       : x.unidadesSueltas + ' u. sueltas';
@@ -6134,7 +6140,8 @@ function renderOrdenes() {
 }
 
 function renderItemsFueraOCReporte(oc) {
-  if (!oc.itemsFueraOC || oc.itemsFueraOC.length === 0) return '';
+  var itemsConStockRep = (oc.itemsFueraOC || []).filter(function(x){ return (x.unidadesTotal||0) > 0; });
+  if (itemsConStockRep.length === 0) return '';
   var puedeAgregar = oc.estadoManual === 'finalizado';
   var totalCant = oc.itemsFueraOC.reduce(function(s,x){ return s + (x.unidadesTotal||0); }, 0);
   var titulo = puedeAgregar ? 'Productos fuera de esta O.C. — pendientes de confirmar' : 'Productos fuera de esta O.C.';
@@ -6144,6 +6151,7 @@ function renderItemsFueraOCReporte(oc) {
     '</div>' +
     '<div style="display:flex; flex-direction:column; gap:3px;">';
   oc.itemsFueraOC.forEach(function(x, idx) {
+    if ((x.unidadesTotal||0) <= 0) return;
     var tieneDivisiones = x.divisiones && x.divisiones.length > 0;
     html += '<div style="background:var(--c-surface); border-radius:4px; padding:6px 10px; font-size:11px; margin-bottom:3px;">' +
       '<div style="display:flex; align-items:center; gap:8px;">' +
@@ -7033,9 +7041,11 @@ function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     ubicacion: oc.ubicacion || '—',
     fechaInicioEscaneo: new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'})
   };
-  remito        = JSON.parse(JSON.stringify(oc.lineas));
+   remito        = JSON.parse(JSON.stringify(oc.lineas));
   registro      = JSON.parse(JSON.stringify(oc.registro || []));
   itemsFueraOC  = JSON.parse(JSON.stringify(oc.itemsFueraOC || []));
+  var elAlertScan = document.getElementById('alert-scan');
+  if (elAlertScan) { elAlertScan.innerHTML = ''; elAlertScan.className = 'alert'; }
 
   document.getElementById('rem-nro').value        = oc.nro !== '\u2014' ? oc.nro : '';
   document.getElementById('rem-proveedor').value  = oc.proveedor !== '\u2014' ? oc.proveedor : '';
