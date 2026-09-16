@@ -6335,7 +6335,7 @@ function renderLineasOCTable(lineas, ocId) {
         '</td>' +
       '</tr>';
       l.divisiones.forEach(function(div, j) {
-        var divCant = (parseInt(div.cajas, 10) || 0) * upCajaL;
+      var divCant = (parseInt(div.unidades, 10) || 0) || (parseInt(div.cajas, 10) || 0) * upCajaL;
         if (divCant === 0) return;
         var divFecha = (div.mes && div.anio) ? div.mes + '/' + div.anio : '—';
         html += '<tr class="palet-row palet-div-row" data-desc="' + escHtml((l.desc||l.cod||'').toLowerCase()) + '">' +
