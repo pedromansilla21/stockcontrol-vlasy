@@ -2339,7 +2339,7 @@ function updateClock() {
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
 if (!window._syncOrdenesInterval) { window._syncOrdenesInterval = 
-setInterval(function(){ syncOrdenes(); }, 15000); }
+setInterval(function(){ syncOrdenes(); }, 30000); }
 if (!window._conexionInterval) { window._conexionInterval = setInterval(function()
 { _actualizarIndicadorConexion(navigator.onLine); }, 5000); }
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
@@ -2361,7 +2361,7 @@ if (!window._alertasInterval) { window._alertasInterval = setInterval(function()
     if (typeof _checkAlertaEscaneo === 'function') _checkAlertaEscaneo();
     if (typeof _limpiarAlertaHuerfana === 'function') _limpiarAlertaHuerfana();
   }
-}, 12000); }
+}, 20000); }
 // ──────────────────────────────────────────────
 // ──────────────────────────────────────────────
 // STOCK CONSULTA
@@ -8605,7 +8605,7 @@ function iniciarSincAlertasOperario() {
   if (!CURRENT_USER) return;
   if (CURRENT_USER.rol === 'operario') return; // evita 2do polling leyendo la misma celda
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 12000);
+  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 20000);
   setTimeout(syncAlertasOperario, 500);
   setTimeout(syncAlertasOperario, 12000);
 }
@@ -8778,7 +8778,7 @@ var _sincAlertasInterval = null;
 function iniciarSincAlertasRemito() {
   // Sincronizar cada 3 segundos
   if (_sincAlertasInterval) clearInterval(_sincAlertasInterval);
-  _sincAlertasInterval = setInterval(syncAlertasRemito, 12000);
+  _sincAlertasInterval = setInterval(syncAlertasRemito, 20000);
   syncAlertasRemito(); // Primera vez inmediatamente
 }
 
