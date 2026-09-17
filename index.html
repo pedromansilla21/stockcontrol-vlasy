@@ -5701,21 +5701,21 @@ async function syncOrdenes() {
         merged[oc.id] = oc;
         return;
       }
-      var existente = merged[oc.id];
-      // Para estadoManual: siempre tomar el más avanzado — nunca retrocecer
-      // de "finalizado" a "controlando" solo porque otra PC tiene un savedAt
-      // más reciente de cuando lo estaba escaneando.
+           var existente = merged[oc.id];
+      // Para estadoManual: tomar el más avanzado, salvo que el lado "atrasado"
+      // sea en realidad el más reciente (savedAt) — eso indica un cambio
+      // manual deliberado (ej: desde Reportes), no una copia vieja en caché.
       var prioExistente = PRIORIDAD_ESTADO[existente.estadoManual] || 0;
       var prioNuevo     = PRIORIDAD_ESTADO[oc.estadoManual] || 0;
       if (prioNuevo > prioExistente) {
-        // El nuevo tiene estado más avanzado — ganó, pero conservamos el
-        // savedAt más reciente para el resto de los campos
-        merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
+        if ((existente.savedAt || '') > (oc.savedAt || '')) {
+          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual, savedAt: existente.savedAt });
+        } else {
+          merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
+        }
       } else if (prioExistente > prioNuevo) {
-        // El existente tiene estado más avanzado — conservar estadoManual
-        // del existente pero actualizar otros campos si el nuevo es más reciente
         if ((oc.savedAt || '') > (existente.savedAt || '')) {
-          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual });
+          merged[oc.id] = Object.assign({}, oc);
         }
       } else {
         // Mismo estado — tomar el más reciente como antes
@@ -7756,6 +7756,7 @@ function cambiarEstadoOC(ocId, nuevoEstado) {
   var oc = ordenes.find(function(o){ return o.id === ocId; });
   if (!oc) return;
   oc.estadoManual = nuevoEstado;
+  oc.savedAt = new Date().toISOString();
   saveOrdenes(ordenes);
   renderOrdenes();
   showToast('Estado actualizado: ' + nuevoEstado);
