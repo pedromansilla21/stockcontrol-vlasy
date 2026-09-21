@@ -2668,7 +2668,7 @@ function bpFiltrar() {
     // Búsqueda limitada a código y descripción — antes también miraba
     // palet/ubicación/lote/marca, y eso traía coincidencias sin relación
     var coincideTexto = !q ||
-      d.cod.toLowerCase().indexOf(q)  !== -1 ||
+     d.cod.toLowerCase() === q ||
       d.desc.toLowerCase().indexOf(q) !== -1;
     var coincideMarca = !_bpMarcaActiva || d.marca === _bpMarcaActiva;
     var coincideCero = !document.getElementById('bp-ocultar-cero').checked || d.cant > 0;
@@ -2677,11 +2677,18 @@ function bpFiltrar() {
           (_bpEstadoActivo === 'porVencer' && d.porVencer) ||
           (_bpEstadoActivo === 'vencido' && d.vencida);
   return coincideTexto && coincideMarca && coincideCero && coincideEstado;
-  });
+    });
+  filtrados.sort(function(a, b) { return _bpFechaOrden(a.fecha) - _bpFechaOrden(b.fecha); });
   bpRenderizar(filtrados);
   bpActualizarContadores(filtrados);
 }
-
+function _bpFechaOrden(fechaMostrar) {
+  if (!fechaMostrar || fechaMostrar === '—') return Infinity;
+  var partes = fechaMostrar.split('/');
+  var mes = parseInt(partes[0], 10) || 0;
+  var anio = parseInt(partes[1], 10) || 0;
+  return anio * 12 + mes;
+}
 // REMITO
 // ──────────────────────────────────────────────
 function renderSelectArticulos() {
