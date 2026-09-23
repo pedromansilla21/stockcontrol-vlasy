@@ -4383,11 +4383,10 @@ function processScan() {
       linea.unidadesSueltas -= cantCaja;
     }
     linea.unidadesControladas = linea.cajasEscaneadas * cantCaja + linea.unidadesSueltas;
-  } else {
-    // DUN: 1 escaneo = 1 caja completa
+   } else {
+    // DUN: 1 escaneo = 1 caja completa (preserva unidades sueltas pendientes de EAN)
     linea.cajasEscaneadas += 1;
-    linea.unidadesSueltas = 0;
-    linea.unidadesControladas = linea.cajasEscaneadas * (linea.cantCaja || 1);
+    linea.unidadesControladas = linea.cajasEscaneadas * (linea.cantCaja || 1) + (linea.unidadesSueltas || 0);
   }
 
   renderTablaRemito();
