@@ -1099,6 +1099,7 @@
   </div>
   <div class="topbar-sep"></div>
   <div class="topbar-date" id="topbar-date"></div>
+ <button onclick="revisarAlertas()" style="margin-left:8px;padding:4px 10px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px">🔄 Revisar alertas</button>
 </div>
 
 <!-- LAYOUT -->
@@ -2336,6 +2337,24 @@ function updateClock() {
   } catch(e) {}
 })();
 // ─────────────────────────────────────────────────────────────
+ function revisarAlertas() {
+  if (!CURRENT_USER) return;
+  if (CURRENT_USER.rol === 'operario') {
+    _retryIntentos = 0; _retryEnCursoAlerta = null;
+    showToast('🔄 Buscando pedidos...');
+    var _esperarYRevisar = function() {
+      if (_busy_syncOrdenes) return setTimeout(_esperarYRevisar, 500);
+      _checkAlertaEscaneo();
+    };
+    syncOrdenes().then(_esperarYRevisar);
+    return;
+  } else {
+    if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
+    if (typeof syncAlertasOperario === 'function') syncAlertasOperario();
+    if (CURRENT_USER.name === 'Supervisor Pedidos' && typeof syncAlertasRemito === 'function') syncAlertasRemito();
+  }
+  showToast('🔄 Alertas revisadas');
+}
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
 if (!window._syncOrdenesInterval) { window._syncOrdenesInterval = 
@@ -2346,7 +2365,7 @@ if (!window._conexionInterval) { window._conexionInterval = setInterval(function
 // syncOrdenes terminara, pero como ahora todo pasa por el GAS (más lento),
 // podía saltear ciclos y el operario no recibía la notificación a tiempo.
 // Corre cada 3s: más rápido para que el operario reciba alertas sin demora
-if (!window._alertasInterval) { window._alertasInterval = setInterval(function(){
+if (false) { window._alertasInterval = setInterval(function(){
   if (typeof _checkFinalizadoOC === 'function') _checkFinalizadoOC();
   if (CURRENT_USER && CURRENT_USER.rol === 'operario' && typeof sheetsRead === 'function') {
     // Una sola lectura de ALERTAS!A{fila} por ciclo — antes _checkAlertaEscaneo
@@ -4084,7 +4103,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // bloqueando el slot para siempre. Después de 2 minutos, el operario la
   // limpia él mismo como fallback — el admin la habrá visto en ese tiempo
   // si estaba conectado (su polling es cada 15s).
-  setTimeout(function() {
+    if (false) setTimeout(function() {
     sheetsRead('ALERTAS!A' + filaParaFinalizar).then(function(rows) {
       var val = rows && rows[0] && rows[0][0] ? String(rows[0][0]).trim() : 'VACIO';
       if (val.startsWith('FINALIZADO|')) {
@@ -4096,7 +4115,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // Si es operario: quedarse en escaneo
   // Esperar 30 segundos antes de liberar el slot para que el admin vea FINALIZADO
   if (CURRENT_USER && CURRENT_USER.rol === 'operario') {
-    if (CURRENT_USER.filaAlerta) {
+ if (false) {
       setTimeout(function() {
         fetch(GAS_URL, {
           method: 'POST',
@@ -6155,7 +6174,8 @@ function renderOrdenes() {
         '<div id="oc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable((_paletStockData[oc.id] || oc.lineas), oc.id) + '</div>' +
         '<div class="oc-actions">' +
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
-          (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
+              (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
+          (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" onclick="event.stopPropagation();_cargarStockFrescoPalet(' + "'" + oc.id + "'" + ')"><i class="ti ti-refresh"></i> Actualizar stock</button>' : '') +
           '<button class="btn btn-sm" onclick="abrirModalClasificar(' + "'" + oc.id + "'" + ')"><i class="ti ti-edit"></i> Editar</button>' +
           '<button class="btn btn-sm" onclick="exportarOCExcel(' + "'" + oc.id + "'" + ')"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>' +
           '<button class="btn btn-danger btn-sm" onclick="eliminarOC(' + "'" + oc.id + "'" + ')"><i class="ti ti-trash"></i> Eliminar</button>' +
@@ -6177,7 +6197,7 @@ function renderOrdenes() {
     var allBodies = document.querySelectorAll('.oc-card-body.open');
     allBodies.forEach(function(bodyEl) {
       var _wrapEl = document.getElementById('oc-lineas-wrap-' + oc.id);
-      if (_wrapEl && bodyEl.contains(_wrapEl)) {
+           if (false) {
         _cargarStockFrescoPalet(oc.id);
       }
     });
@@ -6439,7 +6459,7 @@ function toggleOCBodyPalet(ocId, bodyId) {
   var estabaAbierto = body.classList.contains('open');
   body.classList.toggle('open');
   // Solo cargar cuando se abre (no cuando se cierra) y si no cargó ya
-  if (!estabaAbierto && !_paletStockCargado[ocId]) {
+    if (false) {
     _cargarStockFrescoPalet(ocId);
   }
 }
@@ -6449,16 +6469,17 @@ async function _cargarStockFrescoPalet(ocId) {
     var ordenes = loadOrdenes();
     var oc = ordenes.find(function(o){ return o.id === ocId; });
     // Solo aplica a palets finalizados — los pendientes/en proceso no tienen stock en HISTORIAL DE PALETS
-    if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
+     if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
+    showToast('🔄 Actualizando stock del palet...');
 
     var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
     var resp = await fetch(url, { cache: 'no-store' });
     var data = await resp.json();
-    if (!data.ok || !Array.isArray(data.data) || data.data.length === 0) return;
+    if (!data.ok || !Array.isArray(data.data) || data.data.length === 0) { showToast('⚠ No se pudo actualizar, probá de nuevo'); return; }
 
     var paletNum = String(oc.palet || '').trim();
     var filas = data.data.filter(function(row){ return String(row[8]||'').trim() === paletNum; });
-    if (filas.length === 0) return;
+      if (filas.length === 0) { showToast('⚠ Este palet no aparece en HISTORIAL DE PALETS'); return; }
 
     // Agrupar por Cod (misma lógica que abrirModalReposicion)
     var grupos = {}, ordenCods = [];
@@ -6530,9 +6551,10 @@ async function _cargarStockFrescoPalet(ocId) {
     var wrapRC = document.getElementById('rc-lineas-wrap-' + ocId);
     if (wrapRC) wrapRC.innerHTML = tablaHtml;
 
-    _paletStockCargado[ocId] = true;
+      _paletStockCargado[ocId] = true;
+    showToast('✅ Stock actualizado');
   } catch(e) {
-    // Falla silenciosa — no interrumpir la experiencia
+    showToast('⚠ No se pudo actualizar, probá de nuevo');
   }
 }
 
@@ -7044,7 +7066,12 @@ async function _verificarYEnviar(ocId, filaAlerta) {
 }
 
 
-function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
+async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
+  if (CURRENT_USER && CURRENT_USER.rol === 'administrativo') {
+    showToast('🔄 Preparando envío...');
+    await syncOrdenes();
+    while (_busy_syncOrdenes) { await new Promise(function(r){ setTimeout(r, 300); }); }
+  }
   filaAlerta = filaAlerta || 1;
   var ordenes = loadOrdenes();
   var oc = ordenes.find(function(o){ return o.id === ocId; });
@@ -8612,9 +8639,8 @@ function iniciarSincAlertasOperario() {
   if (!CURRENT_USER) return;
   if (CURRENT_USER.rol === 'operario') return; // evita 2do polling leyendo la misma celda
   if (_sincAlertasOperarioInterval) clearInterval(_sincAlertasOperarioInterval);
-  _sincAlertasOperarioInterval = setInterval(syncAlertasOperario, 35000);
+  // automático desactivado — se usa el botón "Revisar alertas"
   setTimeout(syncAlertasOperario, 500);
-  setTimeout(syncAlertasOperario, 12000);
 }
 
 var _busy_syncAlertasOperario = false;
@@ -8641,15 +8667,12 @@ async function syncAlertasOperario() {
     }
 
     // 2. Verificar solicitudes de edición manual en col C (para todos los no-operarios)
- var _operariosConFila = ((await syncUsuarios()) || loadUsers()).filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
+    var _operariosConFila = loadUsers().filter(function(u){ return u.rol === 'operario' && u.filaAlerta; });
     if (_operariosConFila.length > 0) {
      try {
+  var _todasC = await sheetsRead('ALERTAS!C1:C10');
   var _filasC = [];
-  for (var _oi = 0; _oi < _operariosConFila.length; _oi++) {
-    var _opFila = _operariosConFila[_oi].filaAlerta;
-    var _r = await sheetsRead('ALERTAS!C' + _opFila + ':C' + _opFila);
-    _filasC[_opFila - 1] = (_r && _r[0]) ? _r[0] : [];
-  }
+  _operariosConFila.forEach(function(u){ _filasC[u.filaAlerta - 1] = _todasC[u.filaAlerta - 1] || []; });
   if (typeof _checkSolicitudesEdicion === 'function') _checkSolicitudesEdicion(_filasC, _operariosConFila);
 } catch(e2) {}
     }
@@ -8785,7 +8808,7 @@ var _sincAlertasInterval = null;
 function iniciarSincAlertasRemito() {
   // Sincronizar cada 3 segundos
   if (_sincAlertasInterval) clearInterval(_sincAlertasInterval);
-  _sincAlertasInterval = setInterval(syncAlertasRemito, 35000);
+  // automático desactivado — se usa el botón "Revisar alertas"
   syncAlertasRemito(); // Primera vez inmediatamente
 }
 
