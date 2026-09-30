@@ -2346,6 +2346,12 @@ function updateClock() {
       if (_busy_syncOrdenes) return setTimeout(_esperarYRevisar, 500);
       _checkAlertaEscaneo();
     };
+        if (_edicionManualPendiente) {
+      var _fEd = CURRENT_USER.filaAlerta || 1;
+      sheetsRead('ALERTAS!A' + _fEd + ':C' + _fEd).then(function(rows) {
+        _checkRespuestaEdicion(rows);
+      }).catch(function(){});
+    }
     syncOrdenes().then(_esperarYRevisar);
     return;
   } else {
