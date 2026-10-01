@@ -5788,6 +5788,8 @@ function getEstadoOC(oc) {
   var completadas = lineasActivas.filter(function(l){
     var uCtrl = l.unidadesControladas||0;
     if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
+   if (oc.estadoManual === 'finalizado' && uCtrl > 0 && uCtrl >= (l.cantUnidades||0)) return true;
+if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
     return uCtrl > 0 && uCtrl === _uEspBase(l);
   }).length;
   if (completadas === lineasActivas.length) return 'completo';
@@ -6124,6 +6126,8 @@ function renderOrdenes() {
     var completadas = _lineasActivasRender.filter(function(l){
       var uCtrl = l.unidadesControladas||0;
       if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
+     if (oc.estadoManual === 'finalizado' && uCtrl > 0 && uCtrl >= (l.cantUnidades||0)) return true;
+if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
       return uCtrl > 0 && uCtrl === _uEspBase(l);
     }).length;
     var totalLineas = _lineasActivasRender.length;
