@@ -6179,7 +6179,7 @@ function renderOrdenes() {
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
               (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
           (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" onclick="event.stopPropagation();_cargarStockFrescoPalet(' + "'" + oc.id + "'" + ')"><i class="ti ti-refresh"></i> Actualizar stock</button>' : '') +
-          '<button class="btn btn-sm" onclick="abrirModalClasificar(' + "'" + oc.id + "'" + ')"><i class="ti ti-edit"></i> Editar</button>' +
+          '<button class="btn btn-sm" onclick="_editarConStockFresco(' + "'" + oc.id + "'" + ')"><i class="ti ti-edit"></i> Editar</button>' +
           '<button class="btn btn-sm" onclick="exportarOCExcel(' + "'" + oc.id + "'" + ')"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>' +
           '<button class="btn btn-danger btn-sm" onclick="eliminarOC(' + "'" + oc.id + "'" + ')"><i class="ti ti-trash"></i> Eliminar</button>' +
         '</div>' +
@@ -7331,7 +7331,15 @@ var clasOcIdEditar   = null;
 var clasArchivoData  = [];  // filas del excel
 var clasArchivoHdrs  = [];
 var clasTieneArchivo = false;
-
+async function _editarConStockFresco(ocId) {
+  var oc = loadOrdenes().find(function(o){ return o.id === ocId; });
+  if (oc && oc.esPalet && oc.estadoManual === 'finalizado') {
+    delete _paletStockData[ocId];
+    await _cargarStockFrescoPalet(ocId);
+    if (!_paletStockData[ocId]) { showToast('⚠ No se pudo leer el stock actual. Probá de nuevo.'); return; }
+  }
+  abrirModalClasificar(ocId);
+}
 function abrirModalClasificar(ocId) {
   clasOcIdEditar   = ocId;
   clasTieneArchivo = false;
@@ -7354,7 +7362,20 @@ function abrirModalClasificar(ocId) {
       selEstado(oc.estadoManual || 'pendiente');
       // Mostrar sección de líneas en modo edición
       document.getElementById('clas-lineas-zona').style.display = 'block';
-      _clasLineas = (oc.lineas || []).map(function(l){ return Object.assign({}, l); });
+           _clasLineas = ((oc.estadoManual === 'finalizado' && _paletStockData[oc.id]) ? _paletStockData[oc.id] : (oc.lineas || [])).map(function(l){
+        var c = Object.assign({}, l);
+        if (c.divisiones && c.divisiones.length > 0) {
+          var _up = parseInt(c.unidadesPorCaja || c.cantCaja || 1, 10) || 1;
+          c.divisiones = c.divisiones.map(function(d){
+            var n = Object.assign({}, d);
+            if (typeof n.cantReal === 'undefined') {
+              n.cantReal = (parseInt(n.unidades, 10) || 0) || ((parseInt(n.cajas, 10) || 0) * _up);
+            }
+            return n;
+          });
+        }
+        return c;
+      });
       _clasRenderLineas();
     }
   } else {
@@ -7691,7 +7712,7 @@ function guardarClasificacion() {
     // escaneó mientras el modal estaba abierto, ocBase.lineas tiene el estado
     // real (más reciente). Mergeamos campo a campo: el admin puede cambiar
     // cantidades esperadas, descripción, etc.; el operario conserva lo escaneado.
-    if (_clasLineas.length > 0 && ocBase.lineas && ocBase.lineas.length > 0) {
+        if (_clasLineas.length > 0 && ocBase.lineas && ocBase.lineas.length > 0 && ocBase.estadoManual !== 'finalizado') {
       _clasLineas = _clasLineas.map(function(linea) {
         var actual = ocBase.lineas.find(function(l){ return String(l.cod) === String(linea.cod); });
         if (!actual) return linea;
