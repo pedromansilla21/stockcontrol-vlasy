@@ -4178,24 +4178,21 @@ var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 &&
   // siempre, tal cual está en este momento. Con un pequeño debounce para no
   // mandar un guardado a la nube en cada escaneo individual si se escanea
   // muy rápido.
-  if (lineas > 0 && remitoDatos.ocId) {
-    clearTimeout(_cloudSyncTimer);
+  if (lineas > 0 && remitoDatos.ocId && !_cloudSyncTimer) {
     _cloudSyncTimer = setTimeout(function() {
+      _cloudSyncTimer = null;
       var id = remitoDatos.ocId;
+      if (!id || !remito || remito.length === 0) return;
       var ordenes = loadOrdenes();
       var idx = ordenes.findIndex(function(o){ return o.id === id; });
-      if (idx >= 0) {
+      if (idx >= 0 && ordenes[idx].estadoManual !== 'finalizado') {
         ordenes[idx].lineas       = JSON.parse(JSON.stringify(remito));
-        // El detalle de cada escaneo (registro) ya NO viaja acá, ni se manda
-        // de a poco durante el escaneo — se junta todo y se manda una sola
-        // vez a la hoja "ESCANEOS", recién al finalizar (ver finalizarControl),
-        // para que ya tenga el lote/fecha definitivo y el operario correcto.
         ordenes[idx].itemsFueraOC = JSON.parse(JSON.stringify(itemsFueraOC));
         ordenes[idx].savedAt      = new Date().toISOString();
         saveOrdenes(ordenes);
         updateBadgeOrdenes();
       }
-    }, 1500);
+    }, 60000);
   }
  window._busy_finalizarControl = false;
 }
