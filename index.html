@@ -5554,6 +5554,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
         filas: filas
       })
     });
+       if (filas.length > 0) _verificarHistorialPalet(filas).catch(function(){});
   } catch(e) { console.error('Error en _guardarEnHistorialPalets:', e); }
 }
 
@@ -6470,7 +6471,77 @@ function toggleOCBodyPalet(ocId, bodyId) {
     _cargarStockFrescoPalet(ocId);
   }
 }
-
+// ── Verificación de guardado en HISTORIAL DE PALETS ──
+// Después de enviar el palet, lee de vuelta el Sheet y compara. Si falta algo,
+// reenvía SOLO guardarHistorialPalets (nunca restar) hasta 3 veces, dentro de ~1 minuto.
+function _normLoteHist(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+  return s;
+}
+function _normFechaHist(v) {
+  var s = String(v == null ? '' : v).trim();
+  var m = s.match(/^(\d{4})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2];
+  m = s.match(/^(\d{1,2})\/(\d{4})$/);
+  if (m) return m[2] + '-' + String(m[1]).padStart(2, '0');
+  return s;
+}
+async function _verificarHistorialPalet(filasEnviadas, intento) {
+  intento = intento || 0;
+  if (!filasEnviadas || filasEnviadas.length === 0) return true;
+  var esperas = [8000, 12000, 15000, 20000];
+  await new Promise(function(r){ setTimeout(r, esperas[Math.min(intento, esperas.length - 1)]); });
+  var data = null;
+  try { data = await sheetsRead("'HISTORIAL DE PALETS'!A:R"); } catch (e) { data = null; }
+  var faltantes = {};
+  var hayFaltantes = false;
+  if (data) {
+    var palet = String(filasEnviadas[0].palet || '').trim();
+    var filasSheet = data.filter(function(r){ return String(r[8] || '').trim() === palet; });
+    var usadas = {};
+    filasEnviadas.forEach(function(f) {
+      var idx = -1, idxBaja = -1;
+      for (var i = 0; i < filasSheet.length; i++) {
+        if (usadas[i]) continue;
+        var r = filasSheet[i];
+        if (String(r[0] || '').trim() !== String(f.cod).trim()) continue;
+        if (f.lote && f.lote !== '—' && _normLoteHist(r[7]) !== _normLoteHist(f.lote)) continue;
+        var cantSheet = parseInt(r[4], 10) || 0, cantEnv = parseInt(f.cant, 10) || 0;
+        if (cantSheet !== cantEnv) {
+          // Menos cantidad en el Sheet = probable reposición posterior: NO se reenvía (evita revivir stock)
+          if (cantSheet < cantEnv && idxBaja < 0) idxBaja = i;
+          continue;
+        }
+        if (f.fecha && f.fecha !== '—' && _normFechaHist(r[6]) !== _normFechaHist(f.fecha)) continue;
+        if (f.marcaReal && f.marcaReal !== '—') {
+          var mr = String(r[17] || '').trim();
+          if (mr === '' || mr === '—') continue;
+        }
+        idx = i; break;
+      }
+      if (idx < 0 && idxBaja >= 0) { usadas[idxBaja] = true; return; }
+      if (idx >= 0) { usadas[idx] = true; }
+      else { faltantes[String(f.cod).trim()] = true; hayFaltantes = true; }
+    });
+    if (!hayFaltantes) { console.log('[verif historial] OK palet', palet, 'intento', intento); return true; }
+  }
+  if (intento >= 3) {
+    showToast(data ? '⚠ El palet ' + filasEnviadas[0].palet + ' no se grabó completo en el historial. Avisá a un supervisor.' : '⚠ No se pudo verificar el guardado del palet ' + filasEnviadas[0].palet);
+    return false;
+  }
+  if (data) {
+    // Reenviar TODAS las filas de cada código con problema (el GAS borra y reescribe por palet + código)
+    console.log('[verif historial] reenviando códigos', Object.keys(faltantes), 'intento', intento);
+    var reenviar = filasEnviadas.filter(function(f){ return faltantes[String(f.cod).trim()]; });
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: reenviar })
+    });
+  }
+  return _verificarHistorialPalet(filasEnviadas, intento + 1);
+}
 async function _cargarStockFrescoPalet(ocId) {
   try {
     var ordenes = loadOrdenes();
@@ -7796,6 +7867,7 @@ function guardarClasificacion() {
         mode: 'no-cors',
         body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: _filasPaletEdit })
       });
+           _verificarHistorialPalet(_filasPaletEdit).catch(function(){});
     }
   }
   // Limpiar caché de stock para que la vista refleje los datos nuevos inmediatamente
