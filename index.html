@@ -6575,7 +6575,7 @@ async function _cargarStockFrescoPalet(ocId) {
       if (isNaN(upCaja)||upCaja<1) upCaja = 1;
       var cantTotal = grupo.rows.reduce(function(s,r){ return s+(parseInt(r[4],10)||0); }, 0);
       var divisiones = [];
-      if (grupo.rows.length > 1) {
+         if (grupo.rows.length > 1) {
         divisiones = grupo.rows.map(function(row) {
           var cant = parseInt(row[4],10)||0;
           var fechaRaw = String(row[6]||'').trim();
@@ -6583,10 +6583,14 @@ async function _cargarStockFrescoPalet(ocId) {
           return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
         }).filter(function(d){ return d.cantReal > 0; });
       }
-      return Object.assign({}, ocLinea, {
-        cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
-        divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja
-      });
+         var primerRow = grupo.rows[0];
+    var loteP = String(primerRow[7]||'').trim();
+    var pfP = _normFechaHist(primerRow[6]).split('-');
+    return Object.assign({}, ocLinea, {
+      cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
+      divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
+      lote: loteP || ocLinea.lote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
+    });
     });
 
     // NO guardar en localStorage — syncOrdenes() pisaría los valores
