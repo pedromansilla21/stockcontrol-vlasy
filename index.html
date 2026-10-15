@@ -6607,12 +6607,15 @@ async function _cargarStockFrescoPalet(ocId) {
     }).map(function(linea) {
       var fresca = lineasFrescas.find(function(lf){ return String(lf.cod) === String(linea.cod); });
       if (!fresca) return linea;
-      var lineaDisplay = Object.assign({}, linea, {
-        cantUnidades: fresca.cantUnidades,
-        divisiones: fresca.divisiones,
-        // Sincronizar unidadesControladas con el stock real para no mostrar "Sobran X"
-        unidadesControladas: fresca.cantUnidades
-      });
+        var lineaDisplay = Object.assign({}, linea, {
+          cantUnidades: fresca.cantUnidades,
+          divisiones: fresca.divisiones,
+          unidadesControladas: fresca.cantUnidades,
+          lote: fresca.lote,
+          fechaLote: fresca.fechaLote,
+          mes: fresca.mes,
+          anio: fresca.anio
+        });
       // Borrar cantUnidadesAlEscaneo para que _uEspBase() use cantUnidades (stock fresco del Sheet)
       delete lineaDisplay.cantUnidadesAlEscaneo;
       return lineaDisplay;
