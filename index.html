@@ -2363,8 +2363,8 @@ function updateClock() {
 }
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
-if (!window._syncOrdenesInterval) { window._syncOrdenesInterval = 
-setInterval(function(){ syncOrdenes(); }, 45000); }
+if (!window._syncOrdenesInterval) { window._syncOrdenesInterval =
+setInterval(function(){ if (!document.hidden) syncOrdenes(); }, 120000); }
 if (!window._conexionInterval) { window._conexionInterval = setInterval(function()
 { _actualizarIndicadorConexion(navigator.onLine); }, 5000); }
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
