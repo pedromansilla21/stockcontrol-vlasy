@@ -6589,7 +6589,7 @@ async function _cargarStockFrescoPalet(ocId) {
     return Object.assign({}, ocLinea, {
       cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
       divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
-      lote: loteP || ocLinea.lote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
+       lote: loteP || ocLinea.lote || '', fechaLote: _normFechaHist(primerRow[6]) || ocLinea.fechaLote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
     });
     });
 
