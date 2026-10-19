@@ -3922,6 +3922,13 @@ function volverDesdeCompletarControl() {
 async function finalizarControl() {
   if (window._busy_finalizarControl) return;
   window._busy_finalizarControl = true;
+   clearTimeout(window._finTimer); window._finTimer = setTimeout(function(){
+    if (window._busy_finalizarControl) {
+      window._busy_finalizarControl = false;
+      showToast('⚠️ No se confirmó la finalización. NO cierres: tocá Finalizar de nuevo.');
+      try { fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'avisoFinalizarFallido', oc: (remitoDatos && remitoDatos.nro) || '', palet: (remitoDatos && remitoDatos.palet) || '', operario: (CURRENT_USER && CURRENT_USER.name) || '' }) }); } catch(e) {}
+    }
+  }, 20000);
   if (remito.length === 0) { showToast('No hay remito activo para finalizar'); window._busy_finalizarControl = false; return; }
 
   // Leer fecha, lote, palet de la tabla de completar control (si se usó)
@@ -3963,7 +3970,7 @@ async function finalizarControl() {
 
   if (errores.length > 0) {
     alert('No se puede finalizar. Revisá los siguientes campos:\n\n' + errores.join('\n'));
-   window._busy_finalizarControl = false; return;
+       clearTimeout(window._finTimer); window._busy_finalizarControl = false; return;
   }
   // ── Fin validaciones ─────────────────────────────────────────────────────
 
@@ -4026,6 +4033,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
     if (CURRENT_USER && CURRENT_USER.pickingBeta && !window._pickingBetaConfirmado) {
       window._pickingBetaOcObj = ocObj;
       window._busy_finalizarControl = false;
+           clearTimeout(window._finTimer);
       mostrarPanelConfirmacionRack(ocObj);
       return;
     }
@@ -4101,6 +4109,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // Siempre escribir FINALIZADO en la celda del operario actual para liberar su slot
   localStorage.removeItem('oc_en_escaneo');
   var filaParaFinalizar = (CURRENT_USER && CURRENT_USER.filaAlerta) || 1;
+     clearTimeout(window._finTimer);
   fetch(GAS_URL, {
     method: 'POST', mode: 'no-cors',
     body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : 'con diferencias') + '|' + Date.now(), fila: filaParaFinalizar })
