@@ -3925,7 +3925,7 @@ async function finalizarControl() {
    clearTimeout(window._finTimer); window._finTimer = setTimeout(function(){
     if (window._busy_finalizarControl) {
       window._busy_finalizarControl = false;
-      showToast('⚠️ No se confirmó la finalización. NO cierres: tocá Finalizar de nuevo.');
+            showToast('⚠️ No se confirmó la finalización. Avisá al administrativo para revisar el descuento.');
       try { fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'avisoFinalizarFallido', oc: (remitoDatos && remitoDatos.nro) || '', palet: (remitoDatos && remitoDatos.palet) || '', operario: (CURRENT_USER && CURRENT_USER.name) || '' }) }); } catch(e) {}
     }
   }, 20000);
