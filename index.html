@@ -6959,7 +6959,7 @@ function verificarEstadoOperarioRep(filaAlerta) {
     });
 }
 
-function enviarReposicion() {
+async function enviarReposicion() {
   if (!_reposicionOC) return;
   // Invalidar caché de stock de este palet — la reposición cambia los valores en el Sheet
   if (_reposicionOC.id) delete _paletStockData[_reposicionOC.id];
@@ -6976,6 +6976,37 @@ function enviarReposicion() {
     if (!confirm(operarioNombre + ' ya tiene una tarea asignada.\n¿Querés enviarle esta reposición igual y pisar la tarea actual?')) return;
   }
 
+   // Validar contra HISTORIAL DE PALETS que los lotes existan y alcancen (lectura única)
+  try {
+    var _vResp = await fetch(GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O"), { cache: 'no-store' });
+    var _vData = await _vResp.json();
+    if (_vData.ok && Array.isArray(_vData.data)) {
+      var _vPalet = String(_reposicionOC.palet || '').trim();
+      var _vReal = {};
+      _vData.data.forEach(function(row) {
+        if (String(row[8] || '').trim() !== _vPalet) return;
+        var k = String(row[0] || '').trim() + '|' + String(row[7] || '').trim();
+        _vReal[k] = (_vReal[k] || 0) + (parseInt(row[4], 10) || 0);
+      });
+      var _vErr = [];
+      (_reposicionOC.lineas || []).forEach(function(linea, i) {
+        var cods = String(linea.cod || '').trim();
+        var divs = (linea.divisiones && linea.divisiones.length > 0) ? linea.divisiones : [linea];
+        divs.forEach(function(d, j) {
+          var cEl = (linea.divisiones && linea.divisiones.length > 0) ? document.getElementById('rep-cant-' + i + '-' + j) : document.getElementById('rep-cant-' + i);
+          var c = parseInt(cEl ? cEl.value : '0', 10);
+          if (isNaN(c) || c <= 0) return;
+          var lt = String(d.lote || linea.lote || '').trim();
+          var hay = _vReal[cods + '|' + lt] || 0;
+          if (hay < c) _vErr.push(cods + ' lote ' + lt + ': pedís ' + c + ' y hay ' + hay);
+        });
+      });
+      if (_vErr.length > 0) {
+        alert('Palet desactualizado. Tocá "Actualizar stock" y reintentá:\n\n' + _vErr.join('\n'));
+        return;
+      }
+    }
+  } catch (eV) { /* sin conexión: seguir igual */ }
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
   (_reposicionOC.lineas || []).forEach(function(linea, i) {
