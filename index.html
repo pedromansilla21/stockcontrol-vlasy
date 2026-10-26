@@ -2183,10 +2183,22 @@ async function sheetsAppend(range, values) {
 // vuelve a mandar las que ya se sincronizaron antes). Se llama una sola vez,
 // al finalizar — para ese momento, el lote/fecha por producto ya está
 // completo (se llenó en "Completar control"), y se sabe quién escaneó.
+// Si ya hay una subida en curso, se espera esa en vez de arrancar otra: dos
+// subidas a la vez mandaban las mismas filas y duplicaban ESCANEOS (P78 22/10).
+var _syncEscaneosEnCurso = null;
 async function sincronizarEscaneosANube() {
+  if (_syncEscaneosEnCurso) return _syncEscaneosEnCurso;
+  _syncEscaneosEnCurso = _sincronizarEscaneosANube();
+  try { return await _syncEscaneosEnCurso; } finally { _syncEscaneosEnCurso = null; }
+}
+
+async function _sincronizarEscaneosANube() {
   if (!remitoDatos.ocId) return;
   if (registro.length <= _registroSincronizadoHasta) return;  // nada nuevo
-  var nuevos = registro.slice(_registroSincronizadoHasta);
+  // Tomar el límite ANTES de enviar: lo que se escanee mientras se envía
+  // queda para la próxima subida (antes se marcaba como enviado sin enviarse)
+  var _hasta = registro.length;
+  var nuevos = registro.slice(_registroSincronizadoHasta, _hasta);
   var operarioReal = (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—';
   var _cursorDivisiones = {};
   var filas = nuevos.map(function(r) {
@@ -2236,7 +2248,7 @@ async function sincronizarEscaneosANube() {
     filas = _grOrden.map(function(k) { return _gr[k]; });
   try {
     await sheetsAppend('ESCANEOS!A:L', filas);
-    _registroSincronizadoHasta = registro.length;
+    _registroSincronizadoHasta = _hasta;
   } catch(e) {
     // Si falla (sin red, etc.) no se actualiza el contador — se va a
     // reintentar mandar estas mismas filas en el próximo sync.
@@ -3993,9 +4005,24 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   var ordenes = loadOrdenes();
   var ocIdx = ordenes.findIndex(function(o){ return o.id === id; });
 
+  // Foto del escaneo ANTES de esperar la subida: mientras se espera, otra
+  // llamada a finalizar (el aviso de 60s libera el bloqueo), un cambio de
+  // usuario o la carga de otra OC pueden vaciar remito/remitoDatos. Antes se
+  // guardaba igual la OC vacía y pisaba la buena (P78 22/10).
+  var _datosAlIniciar  = remitoDatos;
+  var _remitoAlIniciar = remito;
+
   // Mandar a la nube cualquier escaneo que todavía no se haya sincronizado
   // (por si quedó alguno pendiente del debounce de 1.5s)
   await sincronizarEscaneosANube();
+
+  if (remitoDatos !== _datosAlIniciar || remito !== _remitoAlIniciar || remito.length === 0) {
+    console.warn('[finalizarControl] El escaneo cambió mientras se subían los escaneos — no se guarda', id);
+    clearTimeout(window._finTimer); window._busy_finalizarControl = false;
+    var _yaGuardada = loadOrdenes().some(function(o){ return o.id === id && o.estadoManual === 'finalizado' && o.lineas && o.lineas.length > 0; });
+    if (!_yaGuardada) showToast('⚠ No se pudo finalizar la O.C. ' + nro + ' — revisá que esté guardada');
+    return;
+  }
 
   var ocObj = {
     id: id,
