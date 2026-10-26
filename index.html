@@ -2205,7 +2205,10 @@ async function _sincronizarEscaneosANube() {
     // Buscar la línea de este producto para tomar su lote/fecha YA
     // completos (lo que se tipeó en "Completar control"), no lo que había
     // en el momento puntual del escaneo (que todavía no estaba lleno).
-    var linea = remito.find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); });
+    var linea = remito.find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); })
+      // Producto fuera de la O.C.: tomar su lote/fecha de itemsFueraOC (antes
+      // subía con lote "—" y la fecha del día, P78 22/10)
+      || (itemsFueraOC || []).find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); });
     var upCajaDiv = parseInt(linea && (linea.unidadesPorCaja || linea.cantCaja) || 1, 10) || 1;
     var tieneDiv = linea && linea.divisiones && linea.divisiones.length > 0;
     var divAsignada = null;
