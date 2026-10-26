@@ -3573,6 +3573,7 @@ function abrirPanelCompletarControl() {
   });
 
   var container = document.getElementById('tabla-completar-control');
+  container.dataset.oc = _claveTablaCompletar();  // ver _tablaCompletarEsDeEstaOC()
   if (_filtroCodCompletarControl && !algunaVisible) {
     container.innerHTML = '<div class="card" style="text-align:center; padding:24px; color:var(--c-text3);">No se encontró ese producto en esta O.C.</div>';
   } else {
@@ -3849,7 +3850,21 @@ function cerrarDivisionLinea(i) {
 // Lee fecha/lote/palet de la tabla "Completar control" (si está abierta) y los guarda
 // en cada línea de `remito`. Se usa tanto al finalizar como al volver a escanear,
 // para que nada de lo tipeado se pierda entre sesiones.
+// La tabla de "Completar control" queda dibujada (oculta) después de finalizar.
+// Sus casilleros solo se leen si la tabla se armó para esa misma O.C.: si no,
+// la O.C. siguiente tomaba por posición los lotes/fechas de la anterior
+// (P211 quedó con los lotes del P196, 21/10).
+// El remito manual no tiene ocId: se identifica por número + fecha.
+function _claveTablaCompletar() {
+  return remitoDatos.ocId ? String(remitoDatos.ocId) : ('remito:' + (remitoDatos.nro || '') + '|' + (remitoDatos.fecha || ''));
+}
+function _tablaCompletarEsDeEstaOC() {
+  var c = document.getElementById('tabla-completar-control');
+  return !!c && c.dataset.oc === _claveTablaCompletar();
+}
+
 function _commitCompletarControlValues() {
+  if (!_tablaCompletarEsDeEstaOC()) return;
   remito.forEach(function(r, i) {
     if (r.divisiones && r.divisiones.length > 0) {
       // Línea dividida: leer cada parte por separado, no los campos simples
@@ -3987,6 +4002,23 @@ async function finalizarControl() {
       }
     }
   });
+  // 3. Productos fuera de la O.C. con unidades: también necesitan fecha y lote
+  //    (antes pasaban vacíos y al agregarlos llegaban al historial con "—").
+  if (!remitoDatos.esReposicion) {
+    (itemsFueraOC || []).forEach(function(x) {
+      if ((x.unidadesTotal || 0) <= 0) return;
+      var descF = (x.desc || x.cod) + ' (fuera de OC)';
+      if (x.divisiones && x.divisiones.length > 0) {
+        x.divisiones.forEach(function(d, j) {
+          if (!d.mes || !d.anio) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta la fecha.');
+          if (!d.lote || /^[-–—\s]+$/.test(String(d.lote))) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta el lote.');
+        });
+      } else {
+        if (!x.fechaLote || /^[-–—\s]+$/.test(String(x.fechaLote))) errores.push('• ' + descF + ': falta la fecha.');
+        if (!x.lote || /^[-–—\s]+$/.test(String(x.lote))) errores.push('• ' + descF + ': falta el lote.');
+      }
+    });
+  }
 
   if (errores.length > 0) {
     alert('No se puede finalizar. Revisá los siguientes campos:\n\n' + errores.join('\n'));
@@ -5494,7 +5526,9 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     var fechaHoy = new Date().toLocaleDateString('es-AR');
     // M=CONTROL PALET y N=CONTROL UBICACIÓN: fecha en que el operario COMENZÓ el escaneo
     var fechaControlPalet = remitoDatos.fechaInicioEscaneo || fechaHoy;
-    
+    // El respaldo desde la pantalla solo vale si la tabla es de esta misma O.C.
+    var _usarDOM = !!remitoDatos.ocId && oc.id === remitoDatos.ocId && _tablaCompletarEsDeEstaOC();
+
     // Agrupar líneas: Cod Prod + Lote + Vencimiento + Palet = misma fila
     var filasAgrupadas = {};
     oc.lineas.forEach(function(linea, i) {
@@ -5504,10 +5538,10 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
         linea.divisiones.forEach(function(d, j) {
           // Prioridad: objeto d (ya committeado por _commitCompletarControlValues)
           // DOM como fallback por si la función se llamó antes del commit
-          var cajasEl = document.getElementById('cc-div-' + i + '-' + j + '-cajas');
-          var mesEl   = document.getElementById('cc-div-' + i + '-' + j + '-mes');
-          var anioEl  = document.getElementById('cc-div-' + i + '-' + j + '-anio');
-          var loteEl  = document.getElementById('cc-div-' + i + '-' + j + '-lote');
+          var cajasEl = _usarDOM ? document.getElementById('cc-div-' + i + '-' + j + '-cajas') : null;
+          var mesEl   = _usarDOM ? document.getElementById('cc-div-' + i + '-' + j + '-mes') : null;
+          var anioEl  = _usarDOM ? document.getElementById('cc-div-' + i + '-' + j + '-anio') : null;
+          var loteEl  = _usarDOM ? document.getElementById('cc-div-' + i + '-' + j + '-lote') : null;
 
           var cajasDOM = (cajasEl && cajasEl.value) ? parseInt(cajasEl.value, 10) : 0;
           var upCaja = linea.unidadesPorCaja || linea.cantCaja || 1;
@@ -5550,9 +5584,9 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
 
       // Prioridad: linea object (ya committeado por _commitCompletarControlValues)
       // DOM como fallback por si la función se llamó antes del commit
-      var loteEl = document.getElementById('cc-lote-' + i);
-      var mesEl  = document.getElementById('cc-mes-'  + i);
-      var anioEl = document.getElementById('cc-anio-' + i);
+      var loteEl = _usarDOM ? document.getElementById('cc-lote-' + i) : null;
+      var mesEl  = _usarDOM ? document.getElementById('cc-mes-'  + i) : null;
+      var anioEl = _usarDOM ? document.getElementById('cc-anio-' + i) : null;
 
       var loteOperario = linea.lote || (loteEl && loteEl.value.trim()) || '—';
       var vencimientoOperario = '—';
