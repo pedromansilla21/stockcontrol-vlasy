@@ -5760,8 +5760,10 @@ async function syncOrdenes() {
   if (_busy_syncOrdenes) return;
   _busy_syncOrdenes = true;
   try {
-    // Formato nuevo: una fila por O.C. (columna A = id, columna B = datos)
-    var rows = await sheetsRead('ORDENES!A2:B5000');
+    // Formato nuevo: una fila por O.C. (columna A = id, columna B = datos).
+    // Se lee A:D de una vez (la D = ids eliminados, ver más abajo): antes eran
+    // dos lecturas por sync y cada una es una ejecución del GAS.
+    var rows = await sheetsRead('ORDENES!A2:D5000');
     var sheetsData = rows.filter(function(r){ return r && r[1]; }).map(function(r){
       try { return JSON.parse(r[1]); } catch(e) { return null; }
     }).filter(function(oc){ return oc !== null; });
@@ -5790,12 +5792,9 @@ async function syncOrdenes() {
     // propio sync (cada 15s) y dejan de incluirla en sus reescrituras — no
     // hace falta borrarla a mano en cada tablet/PC para que no se resucite.
     var eliminados = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
-    try {
-      var filasElim = await sheetsRead('ORDENES!D2:D5000');
-      filasElim.forEach(function(f){
-        if (f && f[0] && eliminados.indexOf(f[0]) < 0) eliminados.push(f[0]);
-      });
-    } catch(eElim) {}
+    rows.forEach(function(f){
+      if (f && f[3] && eliminados.indexOf(f[3]) < 0) eliminados.push(f[3]);
+    });
     try { localStorage.setItem('oc_eliminadas', JSON.stringify(eliminados)); } catch(e) {}
 
     // Merge: combinar Sheets + local, sin perder OC de ninguno
