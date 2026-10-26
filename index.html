@@ -7351,6 +7351,24 @@ async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
 
 function eliminarOC(ocId) {
   if (!confirm('¿Eliminar esta O.C. del historial? Esta acción no se puede deshacer.')) return;
+  // Si es un palet finalizado, ofrecer poner en 0 sus filas de HISTORIAL DE
+  // PALETS (antes quedaban con stock y aparecían productos fantasma, ej. P134).
+  // Solo los códigos+lotes de ESTA O.C.: los nombres de palet se reutilizan.
+  var ocElim = loadOrdenes().find(function(o){ return o.id === ocId; });
+  var vaciar = null;
+  if (ocElim && ocElim.esPalet && !ocElim.esReposicion && ocElim.estadoManual === 'finalizado' && ocElim.palet && ocElim.palet !== '—') {
+    var lineasVaciar = [];
+    (ocElim.lineas || []).forEach(function(l) {
+      if (l.divisiones && l.divisiones.length > 0) {
+        l.divisiones.forEach(function(d) { lineasVaciar.push({ cod: l.cod, lote: d.lote || '—' }); });
+      } else {
+        lineasVaciar.push({ cod: l.cod, lote: l.lote || '—' });
+      }
+    });
+    if (lineasVaciar.length > 0 && confirm('¿También poner en 0 el palet ' + ocElim.palet + ' en HISTORIAL DE PALETS?\n\nSolo los artículos y lotes de esta O.C. (' + lineasVaciar.length + ' línea' + (lineasVaciar.length !== 1 ? 's' : '') + '). Queda anotado en LOG DESCUENTOS.')) {
+      vaciar = { accion: 'vaciarPaletOC', ocId: ocId, palet: ocElim.palet, lineas: lineasVaciar, operario: (CURRENT_USER && CURRENT_USER.name) || '' };
+    }
+  }
   // Guardar ID como eliminado para que el sync no lo restaure en ESTE dispositivo
   var eliminados = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
   if (eliminados.indexOf(ocId) < 0) eliminados.push(ocId);
@@ -7377,6 +7395,11 @@ function eliminarOC(ocId) {
     method: 'POST', mode: 'no-cors',
     body: JSON.stringify({ accion: 'eliminarHistorial', id: ocId })
   });
+  if (vaciar) {
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(vaciar) });
+    showToast('O.C. eliminada — palet ' + vaciar.palet + ' puesto en 0 (ver LOG DESCUENTOS)');
+    return;
+  }
   showToast('O.C. eliminada');
 }
 
