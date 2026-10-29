@@ -5117,20 +5117,37 @@ function saveOrdenes(ordenes) {
 
 
 // ── SISTEMA OFFLINE / COLA DE SINCRONIZACIÓN ──────────────
-var _offlineQueue = JSON.parse(localStorage.getItem('sc_offline_queue') || '[]');
+var _offlineQueue = [];
+try { _offlineQueue = JSON.parse(localStorage.getItem('sc_offline_queue') || '[]'); } catch(e) {}
+// Lo pendiente de más de 24 h se descarta: son copias viejas que, reenviadas
+// hoy, pisarían o revivirían O.C. (en una PC había 17, 4 MB, desde agosto).
+_offlineQueue = _offlineQueue.filter(function(x){ return x && (Date.now() - (x.ts || 0)) < 86400000; });
 var _isOnline = true;
 
 function _saveOfflineQueue() {
-  try { localStorage.setItem('sc_offline_queue', JSON.stringify(_offlineQueue)); } catch(e) {}
+  try { localStorage.setItem('sc_offline_queue', JSON.stringify(_offlineQueue)); }
+  catch(e) {
+    // Memoria llena: liberar la caché de órdenes (se vuelve a bajar de la hoja) y reintentar
+    try { localStorage.removeItem(ORDENES_KEY); localStorage.setItem('sc_offline_queue', JSON.stringify(_offlineQueue)); } catch(e2) {}
+  }
 }
+_saveOfflineQueue();
 
 function _addToQueue(accion, payload) {
+  // guardarOrdenesFilas manda TODAS las O.C.: alcanza con la última copia
+  if (accion === 'guardarOrdenesFilas') {
+    _offlineQueue = _offlineQueue.filter(function(x){ return x.accion !== 'guardarOrdenesFilas'; });
+  }
   _offlineQueue.push({ accion: accion, payload: payload, ts: Date.now() });
   _saveOfflineQueue();
 }
 
+var _ultimoIntentoCola = 0;
 async function _procesarCola() {
   if (_offlineQueue.length === 0) return;
+  // Máximo un intento por minuto: si algo falla no reintentar cada 5 s (ejecuciones del GAS)
+  if (Date.now() - _ultimoIntentoCola < 60000) return;
+  _ultimoIntentoCola = Date.now();
   var pendientes = _offlineQueue.slice();
   _offlineQueue = [];
   _saveOfflineQueue();
@@ -5140,7 +5157,9 @@ async function _procesarCola() {
       if (item.accion === 'guardarOrdenesFilas') {
         // El guardado de O.C. (una fila por O.C.) no pasa por el Apps
         // Script — va directo a Sheets — así que se reintenta distinto.
-        await _escribirOrdenesEnFilas(item.payload);
+        // Sin las O.C. eliminadas mientras tanto, para no revivirlas.
+        var _elim = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
+        await _escribirOrdenesEnFilas(item.payload.filter(function(oc){ return _elim.indexOf(oc.id) < 0; }));
       } else if (item.accion === 'marcarOCEliminada') {
         // Aviso de borrado (columna D de ORDENES) — también va directo a
         // Sheets, se reintenta igual que el guardado de filas.
@@ -5160,6 +5179,9 @@ async function _procesarCola() {
 
 function _actualizarIndicadorConexion(online) {
   _isOnline = online;
+  // La cola se procesa aunque no exista el indicador: antes el return de
+  // abajo la cortaba siempre (no hay #conexion-badge) y nunca se mandaba.
+  if (online && _offlineQueue.length > 0) _procesarCola();
   var badge = document.getElementById('conexion-badge');
   if (!badge) return;
   if (online) {
@@ -5167,7 +5189,6 @@ function _actualizarIndicadorConexion(online) {
     badge.style.color = 'var(--c-green)';
     if (_offlineQueue.length > 0) {
       badge.textContent = '\u21bb Sincronizando...';
-      _procesarCola();
     }
   } else {
     badge.textContent = '\u25cf Sin conexión';
@@ -7278,7 +7299,8 @@ async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     var ordenesAct = loadOrdenes();
     var idxAct = ordenesAct.findIndex(function(o){ return o.id === ocId; });
     if (idxAct >= 0) { ordenesAct[idxAct].estadoManual = 'controlando'; saveOrdenes(ordenesAct); }
-    localStorage.setItem('oc_en_escaneo', oc.id);
+    // try: con la memoria del navegador llena tiraba error y la alerta no salía
+    try { localStorage.setItem('oc_en_escaneo', oc.id); } catch(e) {}
     // Enviar a la celda del operario elegido (ALERTAS!A{filaAlerta})
     fetch(GAS_URL, {
       method: 'POST', mode: 'no-cors',
