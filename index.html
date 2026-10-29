@@ -5769,13 +5769,21 @@ function _jsonOCParaHoja(oc) {
 
 async function _escribirOrdenesEnFilas(ordenes) {
   var filas = ordenes.map(function(oc) { return [oc.id, _jsonOCParaHoja(oc)]; });
-  // Una sola llamada al GAS que hace upsert por id (no toca las demás filas).
-  var resp = await fetch(GAS_URL, {
-    method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'guardarOrdenesFilas', filas: filas })
-  });
-  if (_ordenesEnHoja) filas.forEach(function(f){ _ordenesEnHoja[f[0]] = f[1]; });
-  return resp;
+  // La foto se actualiza ANTES de enviar: si se guarda dos veces seguidas
+  // (saveOrdenes + _saveOrdenesToSheets) la segunda no reenvía lo mismo, y el
+  // GAS no agrega dos filas para una O.C. nueva (así se duplicaban).
+  var _previas = {};
+  if (_ordenesEnHoja) filas.forEach(function(f){ _previas[f[0]] = _ordenesEnHoja[f[0]]; _ordenesEnHoja[f[0]] = f[1]; });
+  try {
+    // Una sola llamada al GAS que hace upsert por id (no toca las demás filas).
+    return await fetch(GAS_URL, {
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ accion: 'guardarOrdenesFilas', filas: filas })
+    });
+  } catch(e) {
+    if (_ordenesEnHoja) filas.forEach(function(f){ _ordenesEnHoja[f[0]] = _previas[f[0]]; });
+    throw e;
+  }
 }
 
 async function _saveOrdenesToSheets(ordenes) {
