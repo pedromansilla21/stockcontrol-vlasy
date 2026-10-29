@@ -7614,6 +7614,8 @@ function abrirModalClasificar(ocId) {
         }
         return c;
       });
+      _clasFirmasOrig = _firmasPorCod(_clasLineas);
+      _clasCabeceraOrig = _cabeceraPaletHist(oc);
       _clasRenderLineas();
     }
   } else {
@@ -7623,6 +7625,7 @@ function abrirModalClasificar(ocId) {
     });
     document.getElementById('clas-lineas-zona').style.display = 'none';
     _clasLineas = [];
+    _clasFirmasOrig = null;
     document.getElementById('clas-fecha').valueAsDate = new Date();
     // Prellenar proveedor y responsable del usuario activo
     if (CURRENT_USER) {
@@ -7642,6 +7645,41 @@ function abrirModalClasificarConArchivo() {
 }
 
 var _clasLineas = [];
+
+// Al editar un palet desde Reportes solo se reescriben en HISTORIAL DE PALETS
+// los artículos que se cambiaron. Antes se reescribía todo el palet con las
+// cantidades de la O.C., que no siempre coinciden con el historial, y se
+// pisaba el stock real (P209 02041: 312 u. quedaron en 0 el 19/10).
+var _clasFirmasOrig = null;
+var _clasCabeceraOrig = null;
+function _firmaLineaHist(l) {
+  var divs = (l.divisiones || []).map(function(d){
+    return [d.cantReal || 0, d.lote || '', d.mes || '', d.anio || '', d.fecha || ''].join('~');
+  }).join(';');
+  return [l.unidadesControladas || 0, l.lote || '', l.mes || '', l.anio || '', l.fechaVenc || '', divs].join('|');
+}
+function _firmasPorCod(lineas) {
+  var m = {};
+  (lineas || []).forEach(function(l){
+    var k = String(l.cod);
+    (m[k] = m[k] || []).push(_firmaLineaHist(l));
+  });
+  Object.keys(m).forEach(function(k){ m[k] = m[k].sort().join('#'); });
+  return m;
+}
+function _cabeceraPaletHist(oc) {
+  function n(v) { v = String(v || '').trim(); return v === '—' ? '' : v; }
+  return [n(oc.palet), n(oc.ubicacion), n(oc.contenedor), n(oc.obs)].join('|');
+}
+// Devuelve los cod a reescribir, o null = todos (si cambió palet, ubicación,
+// contenedor u obs, que van en todas las filas, o si no hay foto de antes).
+function _codsCambiadosEdicion(ocObj) {
+  if (!_clasFirmasOrig || _cabeceraPaletHist(ocObj) !== _clasCabeceraOrig) return null;
+  var ahora = _firmasPorCod(ocObj.lineas);
+  var cambiados = {};
+  Object.keys(ahora).forEach(function(k){ if (ahora[k] !== _clasFirmasOrig[k]) cambiados[k] = true; });
+  return cambiados;
+}
 
 function _clasRenderLineas() {
   var cont = document.getElementById('clas-lineas-tabla');
@@ -7988,7 +8026,10 @@ function guardarClasificacion() {
   if (clasOcIdEditar && ocObj.esPalet) {
     var _filasPaletEdit = [];
     var _fechaHoyEdit = new Date().toLocaleDateString('es-AR');
+    var _codsCambiados = _codsCambiadosEdicion(ocObj);
     (ocObj.lineas || []).forEach(function(l) {
+      // Todas las líneas del mismo cod van juntas: el GAS borra palet|cod entero
+      if (_codsCambiados && !_codsCambiados[String(l.cod)]) return;
       var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
       if (l.divisiones && l.divisiones.length > 0) {
         l.divisiones.forEach(function(div) {
