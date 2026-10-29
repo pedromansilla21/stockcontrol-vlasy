@@ -2205,7 +2205,9 @@ async function _sincronizarEscaneosANube() {
     // Buscar la línea de este producto para tomar su lote/fecha YA
     // completos (lo que se tipeó en "Completar control"), no lo que había
     // en el momento puntual del escaneo (que todavía no estaba lleno).
-    var linea = remito.find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); })
+    var _lineaEsc = (typeof r.idxLinea === 'number' && r.idxLinea >= 0) ? remito[r.idxLinea] : null;
+    if (_lineaEsc && String(_lineaEsc.cod).trim() !== String(r.cod).trim()) _lineaEsc = null;
+    var linea = _lineaEsc || remito.find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); })
       // Producto fuera de la O.C.: tomar su lote/fecha de itemsFueraOC (antes
       // subía con lote "—" y la fecha del día, P78 22/10)
       || (itemsFueraOC || []).find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); });
@@ -2232,7 +2234,8 @@ async function _sincronizarEscaneosANube() {
       r.cod || '',
       r.cb || '',
       r.desc || '',
-      r.unidadesXCaja || '',
+      // Unidades: corrección = negativo; EAN suelto = 1 (antes siempre una caja)
+      r.correccion ? (r.cantidad || 0) : (typeof r.unidades === 'number' ? r.unidades : (r.unidadesXCaja || '')),
       fechaFinal,
       loteFinal,
       paletFinal,
@@ -3473,6 +3476,7 @@ function restarUnidadesControl(i) {
     contenedor: remitoDatos.contenedor || '—',
     operario:   (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—',
     hora:       hora,
+    idxLinea:   remito.indexOf(r),
     correccion: true,
     cantidad:   -cant
   });
@@ -4429,7 +4433,12 @@ function processScan() {
     palet:      remitoDatos.palet || '—',
     contenedor: remitoDatos.contenedor || '—',
     operario:   (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—',
-    hora:       hora
+    hora:       hora,
+    // Unidades reales de este escaneo (EAN suelto = 1, no una caja) y la línea
+    // a la que se sumó: con el mismo artículo en varios lotes, ESCANEOS tiene
+    // que llevar el lote de ESA línea (antes todos subían con el de la primera).
+    unidades:   (art.cbSuelto && raw === art.cbSuelto) ? 1 : (art.cantCaja || 1),
+    idxLinea:   linea ? remito.indexOf(linea) : -1
   });
   renderRegistro();
   updateMetrics();
