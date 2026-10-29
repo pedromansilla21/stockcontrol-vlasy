@@ -2387,7 +2387,7 @@ function updateClock() {
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
 if (!window._syncOrdenesInterval) { window._syncOrdenesInterval =
-setInterval(function(){ if (!document.hidden) syncOrdenes(); }, 120000); }
+setInterval(function(){ if (!document.hidden) syncOrdenes(); }, 300000); } // cada 5 min (antes 2): ejecuciones del GAS
 if (!window._conexionInterval) { window._conexionInterval = setInterval(function()
 { _actualizarIndicadorConexion(navigator.onLine); }, 5000); }
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
@@ -5134,8 +5134,15 @@ function _saveOfflineQueue() {
 _saveOfflineQueue();
 
 function _addToQueue(accion, payload) {
-  // guardarOrdenesFilas manda TODAS las O.C.: alcanza con la última copia
+  // guardarOrdenesFilas: un solo ítem en la cola, juntando las O.C. de los
+  // pendientes anteriores (la versión más nueva de cada una gana)
   if (accion === 'guardarOrdenesFilas') {
+    var porId = {};
+    _offlineQueue.forEach(function(x){
+      if (x.accion === 'guardarOrdenesFilas') (x.payload || []).forEach(function(oc){ if (oc && oc.id) porId[oc.id] = oc; });
+    });
+    (payload || []).forEach(function(oc){ if (oc && oc.id) porId[oc.id] = oc; });
+    payload = Object.keys(porId).map(function(k){ return porId[k]; });
     _offlineQueue = _offlineQueue.filter(function(x){ return x.accion !== 'guardarOrdenesFilas'; });
   }
   _offlineQueue.push({ accion: accion, payload: payload, ts: Date.now() });
@@ -5748,29 +5755,42 @@ async function _guardarAlertaRemito(nroRemito, nroOC, lineasRemito) {
 // = id, columna B = sus datos en JSON, sin el "registro" que ya vive en su
 // propia hoja). Antes de escribir, limpia un rango generoso para que no
 // queden filas viejas pegadas si se borró alguna O.C.
+// Foto de cada O.C. tal como está en la hoja (id → JSON de la col B), tomada en
+// cada syncOrdenes. Con ella se mandan solo las O.C. que cambiaron, no las
+// ~1.000 (1,4 MB) en cada guardado; y una O.C. vieja que nadie tocó en esta PC
+// no se reenvía, así no revive si otro la eliminó.
+// null = todavía no se bajó la hoja en esta sesión: se manda todo, como antes.
+var _ordenesEnHoja = null;
+function _jsonOCParaHoja(oc) {
+  var ocSinRegistro = {};
+  for (var k in oc) { if (oc.hasOwnProperty(k) && k !== 'registro') ocSinRegistro[k] = oc[k]; }
+  return JSON.stringify(ocSinRegistro);
+}
+
 async function _escribirOrdenesEnFilas(ordenes) {
-  var filas = ordenes.map(function(oc) {
-    var ocSinRegistro = {};
-    for (var k in oc) { if (oc.hasOwnProperty(k) && k !== 'registro') ocSinRegistro[k] = oc[k]; }
-    return [oc.id, JSON.stringify(ocSinRegistro)];
-  });
-  // Una sola llamada al GAS que hace clear+write atómicamente,
-  // evitando race conditions entre múltiples PCs.
-  return fetch(GAS_URL, {
+  var filas = ordenes.map(function(oc) { return [oc.id, _jsonOCParaHoja(oc)]; });
+  // Una sola llamada al GAS que hace upsert por id (no toca las demás filas).
+  var resp = await fetch(GAS_URL, {
     method: 'POST', mode: 'no-cors',
     body: JSON.stringify({ accion: 'guardarOrdenesFilas', filas: filas })
   });
+  if (_ordenesEnHoja) filas.forEach(function(f){ _ordenesEnHoja[f[0]] = f[1]; });
+  return resp;
 }
 
 async function _saveOrdenesToSheets(ordenes) {
+  var aEnviar = _ordenesEnHoja
+    ? ordenes.filter(function(oc){ return oc && oc.id && _ordenesEnHoja[oc.id] !== _jsonOCParaHoja(oc); })
+    : ordenes;
+  if (aEnviar.length === 0) return;
   if (!navigator.onLine) {
-    _addToQueue('guardarOrdenesFilas', ordenes);
+    _addToQueue('guardarOrdenesFilas', aEnviar);
     return;
   }
   try {
-    await _escribirOrdenesEnFilas(ordenes);
+    await _escribirOrdenesEnFilas(aEnviar);
   } catch(e) {
-    _addToQueue('guardarOrdenesFilas', ordenes);
+    _addToQueue('guardarOrdenesFilas', aEnviar);
   }
 }
 
@@ -5785,6 +5805,9 @@ async function syncOrdenes() {
     // Se lee A:D de una vez (la D = ids eliminados, ver más abajo): antes eran
     // dos lecturas por sync y cada una es una ejecución del GAS.
     var rows = await sheetsRead('ORDENES!A2:D5000');
+    var _foto = {};
+    rows.forEach(function(r){ if (r && r[0] && r[1]) _foto[r[0]] = String(r[1]); });
+    _ordenesEnHoja = _foto;
     var sheetsData = rows.filter(function(r){ return r && r[1]; }).map(function(r){
       try { return JSON.parse(r[1]); } catch(e) { return null; }
     }).filter(function(oc){ return oc !== null; });
@@ -8577,15 +8600,30 @@ async function _verificarUsuarioDisponible(nombreUsuario) {
   // Si el deviceId es este mismo dispositivo, dejar pasar (reconexión)
   if (deviceId === _getDeviceId()) return true;
   // Si el heartbeat tiene más de 30s, considerar sesión caída
-   if (Date.now() - ts > 150000) return true;
+  // 6 min: el latido va cada 5 min y solo con la pantalla visible
+   if (Date.now() - ts > 360000) return true;
   return false; // ocupado
 }
 
+// Latido cada 5 min y solo con la pantalla visible (antes cada 2 min siempre:
+// ~30 ejecuciones del GAS por hora por dispositivo, aunque estuviera bloqueado).
+// Al volver a la pantalla se manda uno enseguida.
+var _heartbeatUsuario = null;
+var _ultimoLatido = 0;
+function _latido() {
+  if (!_heartbeatUsuario || document.hidden) return;
+  _ultimoLatido = Date.now();
+  _registrarSesionActiva(_heartbeatUsuario);
+}
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden && _sesionHeartbeatInterval && Date.now() - _ultimoLatido > 60000) _latido();
+});
+
 function _arrancarHeartbeat(nombreUsuario) {
   _detenerHeartbeat();
-  _sesionHeartbeatInterval = setInterval(function() {
-    _registrarSesionActiva(nombreUsuario);
-   }, 120000);
+  _heartbeatUsuario = nombreUsuario;
+  _ultimoLatido = Date.now();
+  _sesionHeartbeatInterval = setInterval(_latido, 300000);
 }
 
 function _detenerHeartbeat() {
