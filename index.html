@@ -4076,6 +4076,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
     esPalet:         !!(document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked),
     esReposicion:    !!(remitoDatos.esReposicion),
     paletOriginalId: remitoDatos.paletOriginalId || null,
+    enviadoPor:      remitoDatos.enviadoPor || '',
     ubicacion:       remitoDatos.ubicacion || (document.getElementById('rem-ubicacion') ? document.getElementById('rem-ubicacion').value.trim() : '—') || '—',
     lineas:          JSON.parse(JSON.stringify(remito)),
     // El detalle de escaneos (registro) ya no viaja en esta celda — se
@@ -4186,7 +4187,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
      clearTimeout(window._finTimer);
   fetch(GAS_URL, {
     method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : 'con diferencias') + '|' + Date.now(), fila: filaParaFinalizar })
+    body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : 'con diferencias') + '|' + Date.now() + '|' + (ocObj.enviadoPor||''), fila: filaParaFinalizar })
   });
   // Si el admin no tiene el sistema abierto, la celda quedaría en FINALIZADO
   // bloqueando el slot para siempre. Después de 2 minutos, el operario la
@@ -4271,6 +4272,7 @@ var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 &&
       if (idx >= 0 && ordenes[idx].estadoManual !== 'finalizado') {
         ordenes[idx].lineas       = JSON.parse(JSON.stringify(remito));
         ordenes[idx].itemsFueraOC = JSON.parse(JSON.stringify(itemsFueraOC));
+        if (remitoDatos.enviadoPor) ordenes[idx].enviadoPor = remitoDatos.enviadoPor;
         ordenes[idx].savedAt      = new Date().toISOString();
         saveOrdenes(ordenes);
         updateBadgeOrdenes();
@@ -7067,7 +7069,8 @@ function verificarEstadoOperarioRep(filaAlerta) {
     .then(function(r){ return r.json(); })
     .then(function(resp) {
       var val = (resp.ok && resp.data && resp.data[0] && resp.data[0][0]) ? String(resp.data[0][0]).trim() : 'VACIO';
-      if (val === 'VACIO' || val === '') {
+      // FINALIZADO = ya terminó: su celda puede seguir esperando al que envió la tarea
+      if (val === 'VACIO' || val === '' || val.startsWith('FINALIZADO|')) {
         estadoEl.innerHTML = '<span style="color:var(--c-green); font-weight:600;">✓ Disponible</span>';
         _repOperarioOcupado = false;
       } else {
@@ -7223,7 +7226,7 @@ async function enviarReposicion() {
 
   // Primero guardar la OC en el Sheet, LUEGO mandar la alerta al operario
   _saveOrdenesToSheets(ordenes).then(function() {
-    var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+    var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now() + '|' + (CURRENT_USER ? CURRENT_USER.name : '');
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -7233,7 +7236,7 @@ async function enviarReposicion() {
   }).catch(function() {
     // Si falla el save, mandar la alerta igual después de un delay
     setTimeout(function() {
-      var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now();
+      var valorAlerta = repId + '|' + repOC.proveedor + '|' + repOC.nro + '|' + _getDeviceId() + '|' + Date.now() + '|' + (CURRENT_USER ? CURRENT_USER.name : '');
       fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -7323,7 +7326,7 @@ async function _verificarYEnviar(ocId, filaAlerta) {
 }
 
 
-async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
+async function _ejecutarEnvioEscaneo(ocId, filaAlerta, enviadoPor) {
   if (CURRENT_USER && CURRENT_USER.rol === 'administrativo') {
     showToast('🔄 Preparando envío...');
     await syncOrdenes();
@@ -7346,7 +7349,7 @@ async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
       method: 'POST', mode: 'no-cors',
       body: JSON.stringify({
         accion: 'setAlerta',
-        valor: oc.id + '|' + (oc.proveedor||'') + '|' + (oc.nro||'') + '|' + _getDeviceId() + '|' + Date.now(),
+        valor: oc.id + '|' + (oc.proveedor||'') + '|' + (oc.nro||'') + '|' + _getDeviceId() + '|' + Date.now() + '|' + CURRENT_USER.name,
         fila: filaAlerta
       })
     });
@@ -7368,6 +7371,7 @@ async function _ejecutarEnvioEscaneo(ocId, filaAlerta) {
     operario: oc.responsable, obs: oc.obs, nroProv: oc.nroProv || '',
     esReposicion: oc.esReposicion || false,
     paletOriginalId: oc.paletOriginalId || null,
+    enviadoPor: enviadoPor || oc.enviadoPor || '',
     ubicacion: oc.ubicacion || '—',
     fechaInicioEscaneo: new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'})
   };
@@ -8171,6 +8175,7 @@ function saveSession() {
     // crea otra de cero ya "finalizada").
     mergedDatos.ocId    = remitoDatos.ocId || '';
     mergedDatos.nroProv = remitoDatos.nroProv || '';
+    mergedDatos.enviadoPor = remitoDatos.enviadoPor || '';
     var esPalet = document.getElementById('rem-es-palet') ? document.getElementById('rem-es-palet').checked : false;
     var payload = {
       usuario: CURRENT_USER ? CURRENT_USER.name : '',
@@ -10227,6 +10232,7 @@ document.getElementById('modal-agregar-fuera-oc').addEventListener('click', func
 
 <script>
 var _alertaEscaneoOcId = null;
+var _alertaEscaneoEnviadoPor = '';
 
 function _getDeviceId() {
   var k = 'sc_device_id';
@@ -10271,6 +10277,11 @@ function _checkFinalizadoOC() {
       // que el admin no esté conectado.
       if (!CURRENT_USER || (CURRENT_USER.rol !== 'administrativo' && CURRENT_USER.name !== 'Supervisor Pedidos')) return;
 
+      // Cada alerta es del que envió la tarea: no mostrarla ni limpiarla si es
+      // de otro. Las que no traen nombre (envíos viejos) las ve cualquiera.
+      var enviadoPor = partes[5] || '';
+      if (enviadoPor && enviadoPor !== CURRENT_USER.name) return;
+
       // Limpiar la fila ahora que el admin ya la leyó
       fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
 
@@ -10278,13 +10289,29 @@ function _checkFinalizadoOC() {
       if (vistas.indexOf(val) >= 0) return; // ya se mostró este popup
       vistas.push(val);
       sessionStorage.setItem('_alv_fin', JSON.stringify(vistas));
-      document.getElementById('alerta-finalizado-nro').textContent    = nro ? 'O.C. #' + nro : 'O.C.';
-      document.getElementById('alerta-finalizado-prov').textContent   = prov || '';
-      document.getElementById('alerta-finalizado-estado').textContent = estado === 'completo' ? '✅ Completada sin diferencias' : '⚠ Guardada con diferencias';
-      document.getElementById('alerta-finalizado-estado').style.color = estado === 'completo' ? 'var(--c-green)' : 'var(--c-amber)';
-      document.getElementById('modal-alerta-finalizado').classList.add('open');
+      _colaFinalizados.push({ nro: nro, prov: prov, estado: estado });
     });
+    if (!document.getElementById('modal-alerta-finalizado').classList.contains('open')) _mostrarAlertaFinalizado();
   }).catch(function(){}).finally(function(){ _busy_checkFinalizadoOC = false; });
+}
+
+// Si terminaron varias tareas a la vez se muestran de a una, sin perder ninguna.
+var _colaFinalizados = [];
+function _mostrarAlertaFinalizado() {
+  var a = _colaFinalizados.shift();
+  if (!a) return;
+  document.getElementById('alerta-finalizado-nro').textContent    = a.nro ? 'O.C. #' + a.nro : 'O.C.';
+  document.getElementById('alerta-finalizado-prov').textContent   = a.prov || '';
+  document.getElementById('alerta-finalizado-estado').textContent = a.estado === 'completo' ? '✅ Completada sin diferencias' : '⚠ Guardada con diferencias';
+  document.getElementById('alerta-finalizado-estado').style.color = a.estado === 'completo' ? 'var(--c-green)' : 'var(--c-amber)';
+  document.getElementById('btn-alerta-finalizado').textContent = _colaFinalizados.length > 0 ? 'Siguiente (faltan ' + _colaFinalizados.length + ')' : 'Ver en Reporte';
+  document.getElementById('modal-alerta-finalizado').classList.add('open');
+}
+function _cerrarAlertaFinalizado() {
+  if (_colaFinalizados.length > 0) { _mostrarAlertaFinalizado(); return; }
+  document.getElementById('modal-alerta-finalizado').classList.remove('open');
+  switchPanel('ordenes');
+  renderOrdenes();
 }
 
 var _busy_limpiarAlertaHuerfana = false;
@@ -10377,6 +10404,7 @@ function _checkAlertaEscaneo(_rowsPreload) {
     sessionStorage.setItem('_alv', JSON.stringify(vistas));
     _alertaEscaneoOcId = ocId;
     _alertaEscaneoFila = fila; // guardar para usarla al aceptar
+    _alertaEscaneoEnviadoPor = partes[5] || '';
     var nro  = partes[2] || (pendiente.nro || '');
     var prov = partes[1] || (pendiente.proveedor || '');
     document.getElementById('alerta-escaneo-titulo').textContent = nro ? 'O.C. #' + nro + ' lista' : 'O.C. lista para escanear';
@@ -10395,6 +10423,7 @@ async function aceptarAlertaEscaneo() {
   if (!_alertaEscaneoOcId) return;
   var fila = _alertaEscaneoFila || (CURRENT_USER && CURRENT_USER.filaAlerta) || 1;
   var ocId = _alertaEscaneoOcId;
+  var enviadoPor = _alertaEscaneoEnviadoPor;
   _alertaEscaneoOcId = null;
 
   fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'EN_ESCANEO|' + ocId, fila: fila }) });
@@ -10405,13 +10434,13 @@ async function aceptarAlertaEscaneo() {
 
   if (ocLocal) {
     // Encontrada localmente — cargar YA sin esperar sync
-    _ejecutarEnvioEscaneo(ocId);
+    _ejecutarEnvioEscaneo(ocId, fila, enviadoPor);
     switchPanel('scanner');
   } else {
     // No está localmente — sincronizar y después cargar
     showToast('Cargando O.C...');
     try { await syncOrdenes(); } catch(e) {}
-    _ejecutarEnvioEscaneo(ocId);
+    _ejecutarEnvioEscaneo(ocId, fila, enviadoPor);
     switchPanel('scanner');
   }
 }
@@ -10456,7 +10485,7 @@ async function aceptarAlertaEscaneo() {
     <div class="modal-title" style="margin-bottom:6px;" id="alerta-finalizado-nro">O.C. finalizada</div>
     <div style="font-size:14px; color:var(--c-text2); margin-bottom:8px;" id="alerta-finalizado-prov"></div>
     <div style="font-size:15px; font-weight:600; margin-bottom:24px;" id="alerta-finalizado-estado"></div>
-    <button class="btn btn-primary" style="width:100%;" onclick="document.getElementById('modal-alerta-finalizado').classList.remove('open'); switchPanel('ordenes'); renderOrdenes();">
+    <button class="btn btn-primary" id="btn-alerta-finalizado" style="width:100%;" onclick="_cerrarAlertaFinalizado();">
       Ver en Reporte
     </button>
   </div>
