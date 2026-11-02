@@ -2255,10 +2255,12 @@ async function _sincronizarEscaneosANube() {
   try {
     await sheetsAppend('ESCANEOS!A:L', filas);
     _registroSincronizadoHasta = _hasta;
+    return true;
   } catch(e) {
     // Si falla (sin red, etc.) no se actualiza el contador — se va a
     // reintentar mandar estas mismas filas en el próximo sync.
     console.error('Error sincronizando escaneos:', e);
+    return false; // finalizarControl no sigue: si no, se borraría `registro`
   }
 }
 
@@ -3961,6 +3963,37 @@ function volverDesdeCompletarControl() {
   switchPanel('scanner');
 }
 
+// Suma `registro` por línea y, si no coincide con las unidades controladas de
+// esa línea, agrega una fila de ajuste. Pasa con la edición manual de cantidad
+// (no deja escaneo) y al retomar una reposición desde ORDENES (`registro` no
+// viaja en la O.C. y lo ya escaneado no subía a ESCANEOS). Llamarla dos veces no
+// duplica: la segunda da diferencia 0.
+function _ajustarRegistroReposicion() {
+  var sumas = {};
+  registro.forEach(function(r) {
+    var codR = String(r.cod).trim();
+    var i = (typeof r.idxLinea === 'number' && r.idxLinea >= 0 && remito[r.idxLinea] && String(remito[r.idxLinea].cod).trim() === codR)
+      ? r.idxLinea
+      : remito.findIndex(function(x){ return String(x.cod).trim() === codR; });
+    if (i < 0) return;
+    var u = r.correccion ? (r.cantidad || 0) : (typeof r.unidades === 'number' ? r.unidades : (parseInt(r.unidadesXCaja, 10) || 0));
+    sumas[i] = (sumas[i] || 0) + u;
+  });
+  var hora = new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  remito.forEach(function(l, i) {
+    var dif = (l.unidadesControladas || 0) - (sumas[i] || 0);
+    if (dif === 0) return;
+    registro.push({
+      cb: 'AJUSTE', cod: l.cod, desc: l.desc, unidadesXCaja: l.cantCaja,
+      fecha: remitoDatos.fecha || new Date().toISOString().split('T')[0],
+      lote: l.lote || '—', palet: remitoDatos.palet || '—',
+      contenedor: remitoDatos.contenedor || '—',
+      operario: (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—',
+      hora: hora, idxLinea: i, correccion: true, cantidad: dif
+    });
+  });
+}
+
 async function finalizarControl() {
   if (window._busy_finalizarControl) return;
   window._busy_finalizarControl = true;
@@ -3978,8 +4011,13 @@ async function finalizarControl() {
 
   // ── Validaciones antes de guardar ────────────────────────────────────────
   var errores = [];
+  var _esRepFin = remitoDatos.esReposicion || String(remitoDatos.nro || '').indexOf('REP-') === 0;
   remito.forEach(function(r) {
     var desc = r.desc || r.cod;
+    // Reposición: tiene que dar exacto lo pedido, ni más ni menos
+    if (_esRepFin && (r.unidadesControladas || 0) !== _uEspBase(r)) {
+      errores.push('• ' + desc + ': se pidieron ' + _uEspBase(r) + ' u. y hay ' + (r.unidadesControladas || 0) + ' u. Tiene que dar exacto.');
+    }
     // 1. Líneas divididas: la suma de cajas de las partes debe ser exactamente
     //    igual al total escaneado — ni más ni menos.
     if (r.divisiones && r.divisiones.length > 0) {
@@ -4051,15 +4089,25 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   var _datosAlIniciar  = remitoDatos;
   var _remitoAlIniciar = remito;
 
+  // Reposición: el GAS descuenta lo que diga ESCANEOS, así que tiene que dar
+  // igual a lo que se ve en pantalla
+  if (remitoDatos.esReposicion || String(nro).indexOf('REP-') === 0) _ajustarRegistroReposicion();
+
   // Mandar a la nube cualquier escaneo que todavía no se haya sincronizado
   // (por si quedó alguno pendiente del debounce de 1.5s)
-  await sincronizarEscaneosANube();
+  var _escaneosSubidos = await sincronizarEscaneosANube();
 
   if (remitoDatos !== _datosAlIniciar || remito !== _remitoAlIniciar || remito.length === 0) {
     console.warn('[finalizarControl] El escaneo cambió mientras se subían los escaneos — no se guarda', id);
     clearTimeout(window._finTimer); window._busy_finalizarControl = false;
     var _yaGuardada = loadOrdenes().some(function(o){ return o.id === id && o.estadoManual === 'finalizado' && o.lineas && o.lineas.length > 0; });
     if (!_yaGuardada) showToast('⚠ No se pudo finalizar la O.C. ' + nro + ' — revisá que esté guardada');
+    return;
+  }
+  // Si no se pudieron subir los escaneos NO se finaliza: nada se borró y se puede reintentar
+  if (_escaneosSubidos === false) {
+    clearTimeout(window._finTimer); window._busy_finalizarControl = false;
+    alert('No se pudieron subir los escaneos (revisá la conexión).\n\nLa O.C. ' + nro + ' NO se finalizó y no se perdió nada. Probá Finalizar de nuevo.');
     return;
   }
 
@@ -4630,6 +4678,8 @@ function quitarItemAgregado(ocId, cod) {
   var oc = ordenes[ocIdx];
   var liIdx = (oc.lineas || []).findIndex(function(l){ return String(l.cod) === String(cod) && l.agregadaEnEscaneo; });
   if (liIdx < 0) { showToast('Ítem no encontrado'); return; }
+  // Palet finalizado: el ítem ya está en el historial y Quitar no lo saca de ahí
+  if (oc.esPalet && oc.estadoManual === 'finalizado') { showToast('⚠ Palet finalizado: quitalo desde Editar, así baja también el stock'); return; }
   var linea = oc.lineas[liIdx];
   // Devolver a itemsFueraOC
   oc.itemsFueraOC = oc.itemsFueraOC || [];
@@ -4826,6 +4876,7 @@ function confirmarAgregarItemFueraOC() {
       mode: 'no-cors',
       body: JSON.stringify({ accion: 'guardarHistorialPalets', filas: filasPalet })
     });
+    _verificarHistorialPalet(filasPalet).catch(function(){});
   } else {
     // Registrar cada nueva línea por separado en HISTORIAL COMPLETO
     _agregarDetalleHistorial(oc, lineasNuevas, oc.escaneadoPor || oc.responsable || '');
@@ -5335,16 +5386,16 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
         // REPOSICIÓN → restar cantidades en HISTORIAL DE PALETS
         // Usa ESCANEOS como fuente de verdad (más confiable que los datos del HTML)
         var _finRepLineas = (oc.lineas || []).map(function(l) {
-          return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
+          return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || 0 };
         });
         var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-        _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas);
+        _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas, (CURRENT_USER && CURRENT_USER.name) || '');
         fetch(GAS_URL, {
           method: 'POST',
           mode: 'no-cors',
              body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet, operario: (CURRENT_USER && CURRENT_USER.name) || '',
             lineas: (oc.lineas || []).map(function(l) {
-              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || l.cantUnidades || 0 };
+              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || 0 };
             })
           })
         }).then(function() {
@@ -5389,10 +5440,10 @@ fetch(GAS_URL, {
 var PENDING_RESTARS_KEY = 'stockcontrol_pending_restars';
 var PENDING_FINREP_KEY  = 'stockcontrol_pending_finrep';
 
-function _savePendingFinRep(id, ocId, palet, lineas) {
+function _savePendingFinRep(id, ocId, palet, lineas, operario) {
   try {
     var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
-    pending.push({ id: id, ocId: ocId, palet: palet, lineas: lineas || [], timestamp: new Date().toISOString(), status: 'pending' });
+    pending.push({ id: id, ocId: ocId, palet: palet, lineas: lineas || [], operario: operario || '', timestamp: new Date().toISOString(), status: 'pending' });
     localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
   } catch(e) {}
 }
@@ -5427,7 +5478,7 @@ async function _checkAndRetryPendingFinRep() {
       try {
         await fetch(GAS_URL, {
           method: 'POST', mode: 'no-cors',
-          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: p.ocId, palet: p.palet, lineas: p.lineas || [] })
+          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: p.ocId, palet: p.palet, operario: p.operario || (CURRENT_USER && CURRENT_USER.name) || '', lineas: p.lineas || [] })
         });
         _markFinRepSent(p.id);
         (function(pid) { setTimeout(function() { _clearFinRep(pid); }, 60000); })(p.id);
@@ -5666,6 +5717,9 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     
     // Enviar filas al GAS
     var filas = Object.values(filasAgrupadas);
+    // Pendiente persistido ANTES de enviar: solo se borra cuando la lectura
+    // confirma que el palet quedó en el historial (el no-cors no avisa errores)
+    if (filas.length > 0) _savePendingPalet(oc.id, palet, filas);
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -5673,9 +5727,56 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
         accion: 'guardarHistorialPalets',
         filas: filas
       })
-    });
-       if (filas.length > 0) _verificarHistorialPalet(filas).catch(function(){});
+    }).catch(function(){ /* queda pendiente, se reintenta al próximo login */ });
+    if (filas.length > 0) _verificarHistorialPalet(filas).then(function(ok){
+      if (ok) _clearPendingPalet(oc.id);
+    }).catch(function(){});
   } catch(e) { console.error('Error en _guardarEnHistorialPalets:', e); }
+}
+
+// ── Palets sin confirmar en HISTORIAL DE PALETS (quedan en esta PC/tablet) ───
+var PENDING_PALET_KEY = 'sc_pending_palet';
+function _leerPendingPalet() {
+  try { return JSON.parse(localStorage.getItem(PENDING_PALET_KEY) || '[]'); } catch(e) { return []; }
+}
+function _savePendingPalet(ocId, palet, filas) {
+  try {
+    var lista = _leerPendingPalet().filter(function(p){ return p.ocId !== ocId; });
+    lista.push({ ocId: ocId, palet: palet, filas: filas, intentos: 0, timestamp: new Date().toISOString() });
+    localStorage.setItem(PENDING_PALET_KEY, JSON.stringify(lista));
+  } catch(e) { console.error('No se pudo guardar el pendiente del palet', palet, e); }
+}
+function _clearPendingPalet(ocId) {
+  try {
+    localStorage.setItem(PENDING_PALET_KEY, JSON.stringify(_leerPendingPalet().filter(function(p){ return p.ocId !== ocId; })));
+  } catch(e) {}
+}
+// Al entrar: verifica cada pendiente leyendo el historial y reenvía solo si falta
+// (como máximo 2 lecturas y 1 reenvío por palet). Tras 3 ingresos sin confirmar
+// avisa y deja fila en LOG DESCUENTOS. Si no hay pendientes no gasta ejecuciones.
+async function _checkAndRetryPendingPalets() {
+  var lista = _leerPendingPalet();
+  if (lista.length === 0 || !navigator.onLine) return;
+  showToast('⚠ Hay ' + lista.length + ' palet(s) sin confirmar en el historial — revisando...');
+  for (var i = 0; i < lista.length; i++) {
+    var p = lista[i];
+    var ok = false;
+    try { ok = await _verificarHistorialPalet(p.filas, 2); } catch(e) {}
+    if (ok) { _clearPendingPalet(p.ocId); continue; }
+    var actual = _leerPendingPalet();
+    var item = actual.find(function(x){ return x.ocId === p.ocId; });
+    if (!item) continue;
+    item.intentos = (item.intentos || 0) + 1;
+    if (item.intentos < 3) {
+      try { localStorage.setItem(PENDING_PALET_KEY, JSON.stringify(actual)); } catch(e) {}
+      continue;
+    }
+    try {
+      await sheetsAppend('LOG DESCUENTOS!A:K', [[new Date().toLocaleString('es-AR'), String(p.ocId), '', String(p.palet), '', '', '', '', 'NO CONFIRMADO', 'Carga de palet sin confirmar en HISTORIAL DE PALETS: revisar a mano', (CURRENT_USER && CURRENT_USER.name) || '']]);
+      _clearPendingPalet(p.ocId);
+    } catch(e) { continue; }
+    alert('El palet ' + p.palet + ' no se pudo confirmar en HISTORIAL DE PALETS.\n\nAvisá a un supervisor para revisarlo a mano.');
+  }
 }
 
 // Guarda OC del admin_compras en hoja ORDENES_ADMIN_PRUEBA (JSON completo)
@@ -7977,6 +8078,17 @@ function guardarClasificacion() {
     return;
   }
 
+  // Palet finalizado: no cambiar su número. El GAS escribe las filas en el palet
+  // nuevo y no borra las del viejo: el stock quedaría duplicado en los dos.
+  if (clasOcIdEditar) {
+    var _ocPrevPalet = loadOrdenes().find(function(o){ return o.id === clasOcIdEditar; });
+    if (_ocPrevPalet && _ocPrevPalet.esPalet && _ocPrevPalet.estadoManual === 'finalizado' &&
+        String(_ocPrevPalet.palet || '—').trim() !== (palet || '—')) {
+      showAlert(al, 'err', 'No se puede cambiar el N° de un palet finalizado (' + _ocPrevPalet.palet + '): el stock quedaría duplicado. Dejá el número original.');
+      return;
+    }
+  }
+
   var lineasNuevas = [];
 
   // Si tiene archivo, importar líneas
@@ -8109,6 +8221,25 @@ function guardarClasificacion() {
         });
       }
     });
+    // Línea quitada en Editar de un palet finalizado: ese artículo pasa a 0 en
+    // el historial (si no, seguía con stock). Queda amarillo en LOG DESCUENTOS.
+    if (ocBase.estadoManual === 'finalizado' && _clasFirmasOrig) {
+      var _codsQuedan = _firmasPorCod(ocObj.lineas);
+      Object.keys(_clasFirmasOrig).forEach(function(c) {
+        if (_codsQuedan[c]) return;
+        var artQ = (db || []).find(function(a){ return String(a.cod).trim() === String(c).trim(); }) || {};
+        _filasPaletEdit.push({
+          cod: c, desc: artQ.desc || '—',
+          categoria: artQ.categoria || '—', marca: ocObj.proveedor || '—',
+          marcaReal: artQ.marca || '—',
+          cant: 0, un: 'UND', fecha: '—', lote: '—',
+          palet: ocObj.palet || '—', contenedor: ocObj.contenedor || '—',
+          ubicacion: ocObj.ubicacion || '—', observacion: ocObj.obs || '',
+          controlPalet: _fechaHoyEdit, controlUbicacion: _fechaHoyEdit,
+          operario: ocObj.responsable || '—'
+        });
+      });
+    }
     if (_filasPaletEdit.length > 0) {
       fetch(GAS_URL, {
         method: 'POST',
@@ -8927,13 +9058,15 @@ function _completarLogin(selected) {
   if (!opInput.value.trim()) opInput.value = CURRENT_USER.name;
   document.getElementById('modal-login').classList.remove('open');
   showToast('Bienvenido, ' + CURRENT_USER.name);
+  // El descuento pendiente queda en la tablet del operario: se reintenta para todos
+  setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
   // Solo administrativo/supervisor revisan pendientes — el operario no tiene acceso al sheet
   if (CURRENT_USER.rol !== 'operario' && CURRENT_USER.rol !== 'buscador') {
     setTimeout(_checkAndRetryPendingRestars, 3000); // esperar 3s para que cargue todo
-    setTimeout(_checkAndRetryPendingFinRep,  4000); // retry de finalizarReposicion pendientes
   setTimeout(function(){ if (typeof _checkAndRetryPendingHistorial === 'function') _checkAndRetryPendingHistorial(); }, 5000);
   }
   iniciarSincAlertasOperario();  
+  setTimeout(_checkAndRetryPendingPalets, 6000); // palets sin confirmar de esta PC/tablet (todos los roles)
   aplicarRol(CURRENT_USER.rol);
 }
 
