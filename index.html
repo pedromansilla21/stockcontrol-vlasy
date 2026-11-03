@@ -8493,10 +8493,35 @@ function recuperarSesion() {
 }
 
 function descartarSesion() {
+  // Datos de la O.C. descartada (antes de borrar la sesión) para liberar ALERTAS
+  var _ocDescartada = '', _usrDescartada = '';
+  try {
+    var _sd = JSON.parse(localStorage.getItem(SAVE_KEY) || '{}');
+    _ocDescartada  = (_sd.remitoDatos && _sd.remitoDatos.ocId) || '';
+    _usrDescartada = _sd.usuario || '';
+  } catch(e) {}
   clearSession();
   document.getElementById('modal-recover').classList.remove('open');
   showToast('Sesión anterior descartada');
+  if (_ocDescartada) {
+    if (CURRENT_USER) _liberarAlertaDeOC(_ocDescartada);
+    else window._alertaDescartadaPend = { oc: _ocDescartada, usuario: _usrDescartada }; // se libera al loguearse
+  }
   if (!CURRENT_USER) abrirModalLogin(false);
+}
+
+// Pone en VACIO la celda de ALERTAS del operario SOLO si todavía tiene esa O.C.
+// (si el supervisor ya mandó otra, no la toca). 1 lectura + 1 escritura por clic.
+function _liberarAlertaDeOC(ocId) {
+  if (!ocId || !CURRENT_USER || CURRENT_USER.rol !== 'operario' || !CURRENT_USER.filaAlerta) return;
+  var fila = CURRENT_USER.filaAlerta;
+  sheetsRead('ALERTAS!A' + fila).then(function(rows) {
+    var val = (rows && rows[0] && rows[0][0]) ? String(rows[0][0]).trim() : '';
+    if (val === 'EN_ESCANEO|' + ocId || val.split('|')[0] === ocId) {
+      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'VACIO', fila: fila }) });
+      localStorage.removeItem('oc_en_escaneo');
+    }
+  }).catch(function(){});
 }
 
 // ──────────────────────────────────────────────
@@ -9094,6 +9119,12 @@ function _completarLogin(selected) {
   // Registrar sesión activa en el Sheet y arrancar heartbeat
   _registrarSesionActiva(selected.name);
   _arrancarHeartbeat(selected.name);
+  // Si descartó una sesión antes de loguearse, liberar ALERTAS ahora (solo si es el mismo usuario)
+  if (window._alertaDescartadaPend) {
+    var _pendD = window._alertaDescartadaPend;
+    window._alertaDescartadaPend = null;
+    if (!_pendD.usuario || _pendD.usuario === selected.name) _liberarAlertaDeOC(_pendD.oc);
+  }
   // Actualizar topbar
   document.getElementById('topbar-user-avatar').textContent = CURRENT_USER.initials;
   document.getElementById('topbar-user-avatar').style.background = CURRENT_USER.color;
