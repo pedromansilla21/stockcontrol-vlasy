@@ -3507,8 +3507,28 @@ function borrarLineaControl(i) {
 
 var _filtroCodCompletarControl = null;
 
+// COMPLETAR PALET (código COMPLETAR): artículo inventado, siempre completo
+// (1/1, fecha/lote/tipo fijos) para que no pida datos ni deje la O.C. incompleta
+function _esLineaCompletar(r) { return String((r && r.cod) || '').trim().toUpperCase() === 'COMPLETAR'; }
+function _autocompletarLineaCompletar() {
+  (remito || []).forEach(function(r) {
+    if (!_esLineaCompletar(r)) return;
+    r.unidadesControladas = _uEspBase(r) || 1;
+    if (!r.fechaLote) r.fechaLote = '2099-12';
+    if (!r.lote) r.lote = 'COMPLETAR';
+    if (!r.tipoFecha) r.tipoFecha = 'Impreso';
+  });
+}
+// Palet de la O.C. para precargar el campo Palet de cada línea
+function _paletDefCompletar() {
+  var p = String((remitoDatos && remitoDatos.palet) || '').trim();
+  return (p && p !== '—') ? p : '';
+}
+
 function abrirPanelCompletarControl() {
   if (remito.length === 0) { showToast('No hay escaneo activo'); return; }
+  _autocompletarLineaCompletar();
+  var _paletDef = _paletDefCompletar();
   // Renderizar tabla con fecha, lote, palet por línea
   // (si hay un filtro activo por búsqueda/escaneo, se omiten las líneas que
   // no coinciden — pero el índice "i" se mantiene el de remito original,
@@ -3542,7 +3562,7 @@ function abrirPanelCompletarControl() {
           '</td>' +
           '<td><input type="text" id="cc-lote-' + i + '" value="' + escHtml(r.lote || '') + '" placeholder="Ej: L-2024" autocomplete="off" /></td>' +
           '<td><select id="cc-tipofecha-' + i + '" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (r.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (r.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
-          '<td><input type="text" id="cc-palet-' + i + '" value="' + escHtml(r.palet || '') + '" placeholder="Ej: P-01" autocomplete="off" /></td>' +
+          '<td><input type="text" id="cc-palet-' + i + '" value="' + escHtml(r.palet || _paletDef) + '" placeholder="Ej: P-01" autocomplete="off" /></td>' +
           '<td><input type="text" id="cc-contenedor-' + i + '" value="' + escHtml(r.contenedor || '') + '" placeholder="Ej: CTR-01" autocomplete="off" /></td>' +
           '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleDividirLinea(' + i + ')" title="Dividir en varios lotes/fechas/palets" style="font-size:11px; padding:4px 8px;"><i class="ti ti-git-branch"></i> Dividir</button></td>' +
         '</tr>';
@@ -3568,7 +3588,7 @@ function abrirPanelCompletarControl() {
             '</td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-lote" value="' + escHtml(d.lote || '') + '" placeholder="Ej: L-2024" style="min-width:90px;" /></td>' +
             '<td><select id="cc-div-' + i + '-' + j + '-tipofecha" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (d.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (d.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
-            '<td><input type="text" id="cc-div-' + i + '-' + j + '-palet" value="' + escHtml(d.palet || '') + '" placeholder="Ej: P-01" /></td>' +
+            '<td><input type="text" id="cc-div-' + i + '-' + j + '-palet" value="' + escHtml(d.palet || _paletDef) + '" placeholder="Ej: P-01" /></td>' +
             '<td><input type="text" id="cc-div-' + i + '-' + j + '-contenedor" value="' + escHtml(d.contenedor || '') + '" placeholder="Ej: CTR-01" /></td>' +
           '</tr>';
       });
@@ -3631,7 +3651,8 @@ function abrirPanelCompletarControl() {
                 'style="width:64px; text-align:center; padding:5px 4px;" />' +
               '</td>' +
               '<td><input type="text" id="cc-fuera-lote-' + j + '" value="' + escHtml(x.lote || '') + '" placeholder="Ej: L-2024" /></td>' +
-              '<td><input type="text" id="cc-fuera-palet-' + j + '" value="' + escHtml(x.palet || '') + '" placeholder="Ej: P-01" /></td>' +
+              '<td><select id="cc-fuera-tipofecha-' + j + '" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (x.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (x.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
+              '<td><input type="text" id="cc-fuera-palet-' + j + '" value="' + escHtml(x.palet || _paletDef) + '" placeholder="Ej: P-01" /></td>' +
               '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleDividirFuera(' + j + ')" style="font-size:11px; padding:4px 8px;"><i class="ti ti-git-branch"></i> Dividir</button></td>' +
             '</tr>';
         } else {
@@ -3640,7 +3661,7 @@ function abrirPanelCompletarControl() {
             '<tr style="background:var(--c-bg2);">' +
               '<td><span style="font-family:monospace;color:var(--c-text2);font-size:11px;">' + escHtml(x.cod) + '</span></td>' +
               '<td colspan="3">' + escHtml(x.desc) + ' <span style="font-size:10px;color:var(--c-text3);">— dividido en ' + x.divisiones.length + ' parte(s) · ' + (x.unidadesTotal||0) + ' u. total</span></td>' +
-              '<td colspan="1"></td>' +
+              '<td colspan="3"></td>' +
               '<td style="text-align:center;"><button type="button" class="btn btn-sm" onclick="cerrarDivisionFuera(' + j + ')" style="font-size:11px; padding:4px 8px; color:var(--c-red);"><i class="ti ti-x"></i> Cerrar división</button></td>' +
             '</tr>';
           // Sub-filas por división
@@ -3656,11 +3677,12 @@ function abrirPanelCompletarControl() {
                   '<input type="number" id="cc-fuera-div-' + j + '-' + k + '-anio" min="2020" max="2040" placeholder="AAAA" value="' + (d.anio||'') + '" style="width:64px;text-align:center;padding:5px 4px;" />' +
                 '</td>' +
                 '<td><input type="text" id="cc-fuera-div-' + j + '-' + k + '-lote" value="' + escHtml(d.lote||'') + '" placeholder="Ej: L-2024" /></td>' +
-                '<td><input type="text" id="cc-fuera-div-' + j + '-' + k + '-palet" value="' + escHtml(d.palet||'') + '" placeholder="Ej: P-01" /></td>' +
+                '<td><select id="cc-fuera-div-' + j + '-' + k + '-tipofecha" style="height:32px; font-size:12px; padding:4px 6px; width:110px;"><option value="">-- Tipo --</option><option value="Troquelado"' + (d.tipoFecha === 'Troquelado' ? ' selected' : '') + '>Troquelado</option><option value="Impreso"' + (d.tipoFecha === 'Impreso' ? ' selected' : '') + '>Impreso</option></select></td>' +
+                '<td><input type="text" id="cc-fuera-div-' + j + '-' + k + '-palet" value="' + escHtml(d.palet||_paletDef) + '" placeholder="Ej: P-01" /></td>' +
               '</tr>';
           });
           tbodyFuera +=
-            '<tr><td colspan="6" style="padding:6px 8px 12px;">' +
+            '<tr><td colspan="8" style="padding:6px 8px 12px;">' +
               '<button type="button" class="btn btn-sm" onclick="agregarDivisionFuera(' + j + ')" style="font-size:11px;padding:4px 8px;"><i class="ti ti-plus"></i> Agregar otra parte</button>' +
             '</td></tr>';
         }
@@ -3673,7 +3695,7 @@ function abrirPanelCompletarControl() {
           '<table class="completar-table">' +
             '<thead><tr>' +
               '<th>Código</th><th>Descripción</th><th style="text-align:center;">Cant.</th>' +
-              '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Palet</th><th></th>' +
+              '<th>Venc. (MM/AAAA)</th><th>Lote</th><th>Tipo Fecha</th><th>Palet</th><th></th>' +
             '</tr></thead>' +
             '<tbody>' + tbodyFuera + '</tbody>' +
           '</table>' +
@@ -3921,6 +3943,8 @@ function _commitCompletarControlValues() {
         var anioEl = document.getElementById('cc-fuera-div-' + j + '-' + k + '-anio');
         var loteEl = document.getElementById('cc-fuera-div-' + j + '-' + k + '-lote');
         var paletEl= document.getElementById('cc-fuera-div-' + j + '-' + k + '-palet');
+        var tipoFEl= document.getElementById('cc-fuera-div-' + j + '-' + k + '-tipofecha');
+        if (tipoFEl) d.tipoFecha = tipoFEl.value;
         if (uEl)    d.unidades = parseInt(uEl.value, 10) || 0;
         if (mesEl)  d.mes  = mesEl.value.trim();
         if (anioEl) d.anio = anioEl.value.trim();
@@ -3933,6 +3957,8 @@ function _commitCompletarControlValues() {
     var anioEl = document.getElementById('cc-fuera-anio-' + j);
     var loteEl  = document.getElementById('cc-fuera-lote-'  + j);
     var paletEl = document.getElementById('cc-fuera-palet-' + j);
+    var tipoFEl = document.getElementById('cc-fuera-tipofecha-' + j);
+    if (tipoFEl) x.tipoFecha = tipoFEl.value;
     if (mesEl && anioEl && mesEl.value && anioEl.value) {
       var mesF = String(mesEl.value).padStart(2, '0');
       x.fechaLote = anioEl.value + '-' + mesF;
@@ -4008,6 +4034,7 @@ async function finalizarControl() {
 
   // Leer fecha, lote, palet de la tabla de completar control (si se usó)
   _commitCompletarControlValues();
+  _autocompletarLineaCompletar();
 
   // ── Validaciones antes de guardar ────────────────────────────────────────
   var errores = [];
@@ -4057,10 +4084,12 @@ async function finalizarControl() {
         x.divisiones.forEach(function(d, j) {
           if (!d.mes || !d.anio) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta la fecha.');
           if (!d.lote || /^[-–—\s]+$/.test(String(d.lote))) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta el lote.');
+          if (!d.tipoFecha) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta el tipo de fecha (Troquelado/Impreso).');
         });
       } else {
         if (!x.fechaLote || /^[-–—\s]+$/.test(String(x.fechaLote))) errores.push('• ' + descF + ': falta la fecha.');
         if (!x.lote || /^[-–—\s]+$/.test(String(x.lote))) errores.push('• ' + descF + ': falta el lote.');
+        if (!x.tipoFecha) errores.push('• ' + descF + ': falta el tipo de fecha (Troquelado/Impreso).');
       }
     });
   }
@@ -4691,6 +4720,7 @@ function quitarItemAgregado(ocId, cod) {
     unidadesSueltas: linea.unidadesSueltas || 0,
     fechaLote: linea.fechaLote || '',
     lote: linea.lote || '',
+    tipoFecha: linea.tipoFecha || '',
     operario: linea.operario || '',
     ultimaVez: ''
   });
@@ -4783,6 +4813,7 @@ function confirmarAgregarItemFueraOC() {
           unidadesControladas: uDiv,
           fechaLote: fechaDiv,
           lote: d.lote || '',
+          tipoFecha: d.tipoFecha || x.tipoFecha || '',
           palet: d.palet || x.palet || '',
           agregadaEnEscaneo: true,
           horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
@@ -4807,6 +4838,7 @@ function confirmarAgregarItemFueraOC() {
           unidadesControladas: _porDiv,
           fechaLote: fechaDiv,
           lote: d.lote || '',
+          tipoFecha: d.tipoFecha || x.tipoFecha || '',
           palet: d.palet || x.palet || '',
           agregadaEnEscaneo: true,
           horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
@@ -4823,7 +4855,7 @@ function confirmarAgregarItemFueraOC() {
       cajasEsperadas: x.cajasEscaneadas, sueltasEsperadas: x.unidadesSueltas,
       cajasEscaneadas: x.cajasEscaneadas, unidadesSueltas: x.unidadesSueltas,
       unidadesControladas: x.unidadesTotal,
-      fechaLote: x.fechaLote || '', lote: x.lote || '',
+      fechaLote: x.fechaLote || '', lote: x.lote || '', tipoFecha: x.tipoFecha || '',
       agregadaEnEscaneo: true,
       horaAgregado: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}),
       horaEscaneoReal: x.ultimaVez ? ((oc.fecha || '') + ' ' + x.ultimaVez) : ''
@@ -4868,7 +4900,8 @@ function confirmarAgregarItemFueraOC() {
         observacion:  oc.obs || '',
         controlPalet:     fechaHoy,
         controlUbicacion: fechaHoy,
-        operario:     oc.escaneadoPor || oc.responsable || '—'
+        operario:     oc.escaneadoPor || oc.responsable || '—',
+        tipoFecha:    nl.tipoFecha || ''
       };
     });
     fetch(GAS_URL, {
