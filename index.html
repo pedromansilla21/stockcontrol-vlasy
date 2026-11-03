@@ -6180,94 +6180,139 @@ async function mostrarPanelReposiciones(btn) {
   panel.style.display = 'block';
   panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">Cargando reposiciones...</p>';
 
-  function fmtFecha(val) {
-    if (!val) return '—';
-    var s = String(val);
-    // ISO: 2026-08-11T07:49:05.000Z o 2026-08-11
-    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[3] + '/' + m[2] + '/' + m[1];
-    return s;
-  }
-  function fmtFechaHora(val) {
-    if (!val) return '—';
-    var s = String(val);
-    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-    if (m) return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
-    // ya formateado (toLocaleString)
-    return s;
-  }
-  function nombrePalet(raw) {
-    if (!raw) return '—';
-    // REP-2121 → REP-2121, P182_2026-... → P182
-    var s = String(raw);
-    if (s.startsWith('REP-')) return s;
-    return s.split('_')[0];
-  }
-
+  // Lee LOG DESCUENTOS (una sola lectura por clic). Solo reposiciones:
+  // no muestra las OC eliminadas (VACIADO / NO VACIADO) ni las cargas de palet.
   try {
-    var rows = await sheetsRead("'HISTORIAL COMPLETO'!A2:P5000");
-    var repos = (rows || []).filter(function(r){ return r[0] === 'REPOSICIÓN'; });
-    if (repos.length === 0) {
+    var rows = await sheetsRead("'LOG DESCUENTOS'!A2:K5000");
+    var grupos = {}, orden = [];
+    (rows || []).forEach(function(r) {
+      var oc  = String(r[1] || '').trim();
+      var res = String(r[8] || '').trim().toUpperCase();
+      if (oc.indexOf('REP_') !== 0 && oc.indexOf('REP-') !== 0) return;
+      if (res.indexOf('VACIADO') > -1) return;
+      if (!grupos[oc]) { grupos[oc] = { oc: oc, palet: r[3], fecha: r[0], operario: r[10], lineas: [] }; orden.push(oc); }
+      var g = grupos[oc];
+      if (r[10]) g.operario = r[10];
+      g.fecha = r[0] || g.fecha;
+      g.lineas.push({ cod: r[2], lote: r[4], pedido: r[5], habia: r[6], quedo: r[7], res: res, motivo: r[9] });
+    });
+    orden.reverse();
+    window._repLogGrupos = orden.map(function(k){ return grupos[k]; });
+    if (window._repLogGrupos.length === 0) {
       panel.innerHTML = '<p style="color:var(--c-text3); padding:16px;">No hay reposiciones registradas aún.</p>';
       return;
     }
-    var grupos = {};
-    var orden = [];
-    repos.forEach(function(r) {
-      var id = r[13] || r[1] || 'sin-id';
-      if (!grupos[id]) { grupos[id] = { palet: r[1], proveedor: r[2], fecha: r[12], operario: r[11], admin: r[10], lineas: [] }; orden.push(id); }
-      grupos[id].lineas.push({ cod: r[4], desc: r[5], esp: r[6], ctrl: r[7], estado: r[9], lote: r[14], fechaVto: r[15] });
-    });
-    var html = '<div style="display:flex; flex-direction:column; gap:14px; padding:4px 0;">';
-    orden.reverse().forEach(function(id) {
-      var g = grupos[id];
-      var estadoGrupo = g.lineas.every(function(l){ return l.estado === 'Completo'; }) ? 'Completo'
-                      : g.lineas.some(function(l){ return l.estado === 'Completo'; }) ? 'Parcial'
-                      : 'En proceso';
-      var badgeColor = estadoGrupo === 'Completo' ? 'var(--c-green)' : estadoGrupo === 'Parcial' ? 'var(--c-orange)' : 'var(--c-accent)';
-      var nombre = nombrePalet(g.palet);
-      var fecha  = fmtFechaHora(g.fecha);
-      html += '<div style="background:#1c2133; border:1px solid #3a4060; border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.35);">';
-      // Header
-      html += '<div style="display:flex; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid #3a4060; flex-wrap:wrap; background:#252a3a;">';
-      html += '<span style="font-size:13px; font-weight:700; color:var(--c-accent); letter-spacing:.3px;">🔄 ' + escHtml(nombre) + '</span>';
-      html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(g.proveedor || '—') + '</span>';
-      html += '<span style="color:var(--c-text3); font-size:12px;">' + escHtml(fecha) + '</span>';
-      html += '<span style="color:var(--c-text2); font-size:12px;">Op: <b>' + escHtml(g.operario || '—') + '</b></span>';
-      if (g.admin && g.admin !== '—') html += '<span style="color:var(--c-text2); font-size:12px;">Admin: <b>' + escHtml(g.admin) + '</b></span>';
-      html += '<span style="margin-left:auto; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; background:' + badgeColor + '22; color:' + badgeColor + '; border:1px solid ' + badgeColor + '44;">' + estadoGrupo + '</span>';
-      html += '<button onclick="eliminarReposicionHistorial(\'' + escHtml(id) + '\')" style="padding:3px 10px; border-radius:6px; border:1px solid var(--c-red)44; background:var(--c-red)11; color:var(--c-red); font-size:11px; cursor:pointer;">🗑</button>';
-      html += '</div>';
-      // Tabla
-      html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<tr style="color:var(--c-text3); font-size:11px; text-transform:uppercase; letter-spacing:.4px; background:var(--c-surface2);">';
-      html += '<th style="text-align:left; padding:6px 14px; font-weight:600;">Código</th>';
-      html += '<th style="text-align:left; padding:6px 8px; font-weight:600;">Artículo</th>';
-      html += '<th style="text-align:center; padding:6px 8px; font-weight:600;">Lote</th>';
-      html += '<th style="text-align:center; padding:6px 8px; font-weight:600;">Vto.</th>';
-      html += '<th style="text-align:center; padding:6px 8px; font-weight:600;">Esperado</th>';
-      html += '<th style="text-align:center; padding:6px 8px; font-weight:600;">Repuesto</th>';
-      html += '<th style="text-align:center; padding:6px 14px; font-weight:600;">Estado</th></tr>';
-      g.lineas.forEach(function(l, i) {
-        var eColor = l.estado === 'Completo' ? 'var(--c-green)' : l.estado === 'En proceso' ? 'var(--c-accent)' : 'var(--c-red)';
-        var rowBg = i % 2 === 1 ? 'background:var(--c-surface2)08;' : '';
-        html += '<tr style="border-top:1px solid var(--c-border)44; ' + rowBg + '">';
-        html += '<td style="padding:7px 14px; color:var(--c-text3); font-family:monospace; font-size:12px;">' + escHtml(String(l.cod)) + '</td>';
-        html += '<td style="padding:7px 8px; color:var(--c-text1);">' + escHtml(l.desc) + '</td>';
-        html += '<td style="padding:7px 8px; text-align:center; color:var(--c-text3); font-family:monospace; font-size:12px;">' + escHtml(l.lote || '—') + '</td>';
-        html += '<td style="padding:7px 8px; text-align:center; color:var(--c-text3); font-size:12px;">' + escHtml(fmtFecha(l.fechaVto)) + '</td>';
-        html += '<td style="padding:7px 8px; text-align:center; color:var(--c-text2);">' + escHtml(String(l.esp)) + ' <span style="color:var(--c-text3);font-size:11px;">u.</span></td>';
-        html += '<td style="padding:7px 8px; text-align:center; font-weight:700; color:var(--c-text1);">' + escHtml(String(l.ctrl)) + ' <span style="color:var(--c-text3);font-size:11px;">u.</span></td>';
-        html += '<td style="padding:7px 14px; text-align:center;"><span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:' + eColor + '22; color:' + eColor + ';">' + escHtml(l.estado) + '</span></td>';
-        html += '</tr>';
-      });
-      html += '</table></div>';
-    });
-    html += '</div>';
-    panel.innerHTML = html;
+    window._repLogFiltro = 'todas';
+    _renderPanelRepLog();
   } catch(e) {
-    panel.innerHTML = '<p style="color:var(--c-red); padding:16px;">Error al cargar reposiciones: ' + e.message + '</p>';
+    panel.innerHTML = '<p style="color:var(--c-red); padding:16px;">Error al cargar reposiciones: ' + escHtml(e.message) + '</p>';
   }
+}
+
+// Estado de una línea / de una reposición: error (rojo), revisar (amarillo), ok (verde)
+function _repLogEstado(res) {
+  if (res.indexOf('NO ') === 0) return 'error';
+  if (res.indexOf('REVISAR') > -1) return 'revisar';
+  if (res.indexOf('DESCONTADO') === 0) return 'ok';
+  return 'revisar';
+}
+
+function _repLogFiltrar(f) {
+  window._repLogFiltro = f;
+  _renderPanelRepLog();
+}
+
+function _renderPanelRepLog() {
+  var panel = document.getElementById('panel-reposiciones-hist');
+  var grupos = window._repLogGrupos || [];
+  var filtro = window._repLogFiltro || 'todas';
+  var COL = {
+    ok:      { c: 'var(--c-green)', bg: 'var(--c-green-bg)', txt: '✔ Descontado' },
+    revisar: { c: 'var(--c-amber)', bg: 'var(--c-amber-bg)', txt: '⚠ Revisar' },
+    error:   { c: 'var(--c-red)',   bg: 'var(--c-red-bg)',   txt: '✖ No descontado' }
+  };
+  function fmtFechaHora(val) {
+    if (!val) return '—';
+    var s = String(val);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+      var d = new Date(s);
+      if (!isNaN(d)) return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return s;
+  }
+  // Sheets convierte códigos como 9001-05 en fecha: se vuelve a armar el código
+  function fmtCod(val) {
+    var s = String(val == null ? '' : val);
+    var m = s.match(/^(\d{4})-(\d{2})-01T/);
+    return m ? m[1] + '-' + m[2] : s;
+  }
+  function descDe(cod) {
+    try {
+      var a = (typeof db !== 'undefined' && db || []).find(function(x){ return String(x.cod).trim() === String(cod).trim(); });
+      return a ? (a.desc || '') : '';
+    } catch(e) { return ''; }
+  }
+  function num(v) { return (v === '' || v == null) ? '—' : escHtml(String(v)); }
+
+  var cuenta = { todas: grupos.length, error: 0, revisar: 0, ok: 0 };
+  grupos.forEach(function(g) {
+    var est = g.lineas.some(function(l){ return _repLogEstado(l.res) === 'error'; }) ? 'error'
+            : g.lineas.some(function(l){ return _repLogEstado(l.res) === 'revisar'; }) ? 'revisar' : 'ok';
+    g.estado = est;
+    cuenta[est]++;
+  });
+
+  // Botones de filtro (sin lecturas nuevas: filtra lo ya cargado)
+  var html = '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">';
+  [['todas', 'Todas', 'var(--c-accent)'], ['error', '✖ Con error', 'var(--c-red)'], ['revisar', '⚠ Revisar', 'var(--c-amber)'], ['ok', '✔ Descontadas', 'var(--c-green)']].forEach(function(b) {
+    var act = filtro === b[0];
+    html += '<button onclick="_repLogFiltrar(\'' + b[0] + '\')" style="padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid ' + b[2] + '; background:' + (act ? b[2] : 'transparent') + '; color:' + (act ? '#14161C' : b[2]) + ';">' + b[1] + ' (' + cuenta[b[0]] + ')</button>';
+  });
+  html += '</div>';
+
+  var visibles = grupos.filter(function(g){ return filtro === 'todas' || g.estado === filtro; });
+  if (visibles.length === 0) html += '<p style="color:var(--c-text3); padding:16px;">No hay reposiciones en este filtro.</p>';
+
+  html += '<div style="display:flex; flex-direction:column; gap:14px;">';
+  visibles.forEach(function(g) {
+    var cg = COL[g.estado];
+    var totalPedido = g.lineas.reduce(function(s, l){ return s + (parseInt(l.pedido, 10) || 0); }, 0);
+    html += '<div style="background:var(--c-surface); border:1px solid var(--c-border); border-left:5px solid ' + cg.c + '; border-radius:10px; overflow:hidden;">';
+    // Cabecera
+    html += '<div style="display:flex; align-items:center; gap:14px; padding:12px 16px; flex-wrap:wrap; background:var(--c-surface2);">';
+    html += '<span style="font-size:16px; font-weight:700; color:var(--c-text);">🔄 Palet ' + escHtml(String(g.palet || '—')) + '</span>';
+    html += '<span style="color:var(--c-text2); font-size:13px;">' + escHtml(fmtFechaHora(g.fecha)) + '</span>';
+    html += '<span style="color:var(--c-text2); font-size:13px;">Operario: <b style="color:var(--c-text);">' + escHtml(String(g.operario || '—')) + '</b></span>';
+    html += '<span style="color:var(--c-text2); font-size:13px;">' + g.lineas.length + ' línea' + (g.lineas.length !== 1 ? 's' : '') + ' · ' + totalPedido + ' u.</span>';
+    html += '<span style="margin-left:auto; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700; background:' + cg.bg + '; color:' + cg.c + '; border:1px solid ' + cg.c + ';">' + cg.txt + '</span>';
+    html += '</div>';
+    // Tabla
+    html += '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:14px; min-width:620px;">';
+    html += '<tr style="color:var(--c-text3); font-size:11px; text-transform:uppercase; letter-spacing:.4px;">';
+    html += '<th style="text-align:left; padding:8px 16px;">Artículo</th>';
+    html += '<th style="text-align:center; padding:8px;">Lote</th>';
+    html += '<th style="text-align:center; padding:8px;">Había</th>';
+    html += '<th style="text-align:center; padding:8px;">Se descontó</th>';
+    html += '<th style="text-align:center; padding:8px;">Quedó</th>';
+    html += '<th style="text-align:left; padding:8px 16px;">Resultado</th></tr>';
+    g.lineas.forEach(function(l) {
+      var est = _repLogEstado(l.res);
+      var cl = COL[est];
+      var cod = fmtCod(l.cod);
+      var desc = descDe(cod);
+      html += '<tr style="border-top:1px solid var(--c-border);' + (est !== 'ok' ? ' background:' + cl.bg + ';' : '') + '">';
+      html += '<td style="padding:8px 16px;"><span style="font-family:monospace; color:var(--c-text2);">' + escHtml(cod || '—') + '</span>' + (desc ? '<div style="color:var(--c-text); font-size:13px;">' + escHtml(desc) + '</div>' : '') + '</td>';
+      html += '<td style="padding:8px; text-align:center; font-family:monospace; color:var(--c-text2);">' + escHtml(String(l.lote || '—')) + '</td>';
+      html += '<td style="padding:8px; text-align:center; color:var(--c-text2);">' + num(l.habia) + '</td>';
+      html += '<td style="padding:8px; text-align:center; font-weight:700; color:' + (est === 'error' ? 'var(--c-red)' : 'var(--c-text)') + ';">' + (est === 'error' ? '0 <span style="font-weight:400; font-size:12px;">(de ' + num(l.pedido) + ')</span>' : '−' + num(l.pedido)) + '</td>';
+      html += '<td style="padding:8px; text-align:center; font-weight:700; color:var(--c-text);">' + num(l.quedo) + '</td>';
+      html += '<td style="padding:8px 16px;"><span style="font-weight:700; color:' + cl.c + ';">' + escHtml(est === 'ok' ? '✔ Descontado' : l.res) + '</span>' + (l.motivo ? '<div style="color:var(--c-text2); font-size:12px;">' + escHtml(String(l.motivo)) + '</div>' : '') + '</td>';
+      html += '</tr>';
+    });
+    html += '</table></div></div>';
+  });
+  html += '</div>';
+  panel.innerHTML = html;
 }
 
 function filtrarOC(filtro, btn) {
@@ -10666,11 +10711,20 @@ function confirmarEscaneadoPor() {
   }
 
   // Liberar sesión activa del Sheet cuando se cierra el HTML
+  // text/plain: con application/json Chrome no manda el beacon al GAS (nunca liberaba)
+  var _sesionLiberadaAlCerrar = false;
+  function _liberarSesionAlCerrar() {
+    if (_sesionLiberadaAlCerrar || !CURRENT_USER) return;
+    var _filaU = _getFilaUsuario(CURRENT_USER.name);
+    if (!_filaU) return;
+    _sesionLiberadaAlCerrar = true;
+    _detenerHeartbeat();
+    navigator.sendBeacon(GAS_URL, new Blob([JSON.stringify({ accion: 'escribirRango', rango: 'USUARIOS!E' + _filaU, values: [['']] })], { type: 'text/plain;charset=UTF-8' }));
+  }
+  window.addEventListener('pagehide', _liberarSesionAlCerrar);
   window.addEventListener('beforeunload', function() {
     if (CURRENT_USER) {
-      _detenerHeartbeat();
-      var payload = JSON.stringify({ accion: 'escribirRango', rango: 'USUARIOS!E' + (_getFilaUsuario(CURRENT_USER.name)), values: [['']] });
-      navigator.sendBeacon(GAS_URL, new Blob([payload], { type: 'application/json' }));
+      _liberarSesionAlCerrar();
       // Solo limpiar ALERTAS si el operario NO estaba escaneando
       // Si estaba escaneando (remito.length > 0), mantener ALERTAS para
       // que el admin vea que sigue ocupado y el operario pueda recuperar al volver
