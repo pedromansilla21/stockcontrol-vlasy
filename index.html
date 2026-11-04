@@ -2675,6 +2675,7 @@ async function bpLoad() {
           cant:       cant,
           un:         String(row[5] || 'UND').trim(),
           fecha:      fechaMostrar,
+          tipoFecha:  (String(row[15] || '').trim() === '—') ? '' : String(row[15] || '').trim().toUpperCase(),
           lote:       String(row[7] || '—').trim(),
           palet:      String(row[8] || '—').trim(),
           contenedor: String(row[9] || '—').trim(),
@@ -2720,7 +2721,7 @@ function bpRenderizar(datos) {
       '<td style="font-size:12px;">' + escHtml(d.contenedor) + '</td>' +
       '<td style="font-size:12px; font-weight:600;">' + escHtml(d.ubi) + '</td>' +
       '<td class="mono" style="font-size:12px;">' + escHtml(d.lote) + '</td>' +
-      '<td style="font-size:12px;">' + escHtml(d.fecha) + '</td>' +
+      '<td style="font-size:12px;">' + escHtml(d.fecha) + (d.tipoFecha ? '<br><span style="font-size:10px; color:var(--c-text3);">' + escHtml(d.tipoFecha) + '</span>' : '') + '</td>' +
       '<td style="text-align:center; font-weight:700;">' + d.cant + '</td>' +
       '<td style="text-align:center;">' + estadoBadge + '</td>' +
     '</tr>';
@@ -2777,9 +2778,10 @@ function bpFiltrar() {
   var filtrados = _bpDatos.filter(function(d) {
     // Búsqueda limitada a código y descripción — antes también miraba
     // palet/ubicación/lote/marca, y eso traía coincidencias sin relación
+    // Con números = código exacto (250 no trae los "x250"); sin números = descripción
     var coincideTexto = !q ||
-     d.cod.toLowerCase() === q ||
-      d.desc.toLowerCase().indexOf(q) !== -1;
+    _normLoteHist(d.cod.toLowerCase()) === _normLoteHist(q) ||
+      (!/\d/.test(q) && d.desc.toLowerCase().indexOf(q) !== -1);
     var coincideMarca = !_bpMarcaActiva || d.marca === _bpMarcaActiva;
     var coincideCero = !document.getElementById('bp-ocultar-cero').checked || d.cant > 0;
            var coincideEstado = !_bpEstadoActivo ||
