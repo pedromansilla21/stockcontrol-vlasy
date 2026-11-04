@@ -4117,6 +4117,15 @@ async function finalizarControl() {
     if (_esRepFin && (r.unidadesControladas || 0) !== _uEspBase(r)) {
       errores.push('• ' + desc + ': se pidieron ' + _uEspBase(r) + ' u. y hay ' + (r.unidadesControladas || 0) + ' u. Tiene que dar exacto.');
     }
+    // Reposición: el lote tiene que ser el que se mandó a reponer (P211 04/11:
+    // cambiaron Eo371 por EP872 y no se descontó nada)
+    if (_esRepFin && r.loteEnviado && r.loteEnviado !== '—') {
+      var _lotesRep = (r.divisiones && r.divisiones.length > 0) ? r.divisiones.map(function(d){ return d.lote; }) : [r.lote];
+      var _loteMal = _lotesRep.some(function(l) {
+        return _normLoteHist(String(l || '').toUpperCase()) !== _normLoteHist(String(r.loteEnviado).toUpperCase());
+      });
+      if (_loteMal) errores.push('• ' + desc + ': se mandó a reponer el lote ' + r.loteEnviado + '. No se puede cambiar el lote.');
+    }
     // 1. Líneas divididas: la suma de cajas de las partes debe ser exactamente
     //    igual al total escaneado — ni más ni menos.
     if (r.divisiones && r.divisiones.length > 0) {
@@ -6880,6 +6889,13 @@ function _normLoteHist(v) {
   if (/^\d+$/.test(s)) return String(parseInt(s, 10));
   return s;
 }
+// Tipo de fecha de HISTORIAL DE PALETS (col P) con la escritura de los selects
+function _tipoFechaHist(v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  if (s === 'troquelado') return 'Troquelado';
+  if (s === 'impreso') return 'Impreso';
+  return '';
+}
 function _normFechaHist(v) {
   var s = String(v == null ? '' : v).trim();
   var m = s.match(/^(\d{4})-(\d{2})/);
@@ -6951,7 +6967,7 @@ async function _cargarStockFrescoPalet(ocId) {
      if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
     showToast('🔄 Actualizando stock del palet...');
 
-    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:P");
     var resp = await fetch(url, { cache: 'no-store' });
     var data = await resp.json();
     if (!data.ok || !Array.isArray(data.data) || data.data.length === 0) { showToast('⚠ No se pudo actualizar, probá de nuevo'); return; }
@@ -6981,7 +6997,7 @@ async function _cargarStockFrescoPalet(ocId) {
           var cant = parseInt(row[4],10)||0;
           var fechaRaw = String(row[6]||'').trim();
           var pf = fechaRaw.split('-');
-          return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+          return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant, tipoFecha: _tipoFechaHist(row[15]) };
         }).filter(function(d){ return d.cantReal > 0; });
       }
          var primerRow = grupo.rows[0];
@@ -6990,7 +7006,8 @@ async function _cargarStockFrescoPalet(ocId) {
     return Object.assign({}, ocLinea, {
       cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
       divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
-       lote: loteP || ocLinea.lote || '', fechaLote: _normFechaHist(primerRow[6]) || ocLinea.fechaLote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
+       lote: loteP || ocLinea.lote || '', fechaLote: _normFechaHist(primerRow[6]) || ocLinea.fechaLote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || '',
+      tipoFecha: _tipoFechaHist(primerRow[15]) || ocLinea.tipoFecha || ''
     });
     });
 
@@ -7168,7 +7185,7 @@ async function abrirModalReposicion(ocId) {
   // Leer HISTORIAL DE PALETS desde el Sheet para tener divisiones y stock actuales
   var lineasParaModal = oc.lineas || [];
   try {
-    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:P");
     var resp = await fetch(url, { cache: 'no-store' });
     var data = await resp.json();
     if (data.ok && Array.isArray(data.data) && data.data.length > 0) {
@@ -7198,7 +7215,7 @@ async function abrirModalReposicion(ocId) {
               var cant = parseInt(row[4],10)||0;
               var fechaRaw = String(row[6]||'').trim(); // YYYY-MM
               var pf = fechaRaw.split('-');
-              return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
+              return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant, tipoFecha: _tipoFechaHist(row[15]) };
             }).filter(function(d){ return d.cantReal > 0; });
           }
           var primerRow = grupo.rows[0];
@@ -7210,7 +7227,8 @@ async function abrirModalReposicion(ocId) {
             divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
             lote: loteRawP || ocLinea.lote || '',
             mes:  pfP[1]  || ocLinea.mes  || '',
-            anio: pfP[0]  || ocLinea.anio || ''
+            anio: pfP[0]  || ocLinea.anio || '',
+            tipoFecha: _tipoFechaHist(primerRow[15]) || ocLinea.tipoFecha || ''
           });
         });
         // Actualizar _reposicionOC con los datos frescos (solo artículos con stock)
@@ -7423,9 +7441,13 @@ async function enviarReposicion() {
         lineaRep.cantCaja            = upCaja;
         // Guardar lote/fecha de esta división específica
         lineaRep.lote     = div.lote || '—';
+        lineaRep.loteEnviado = div.lote || '—';  // lote pedido: no se puede cambiar al finalizar
         lineaRep.mes      = div.mes  || '';
         lineaRep.anio     = div.anio || '';
-        lineaRep.fechaLote = (div.mes || '') + '/' + (div.anio || '');
+        // Mismo formato que una línea sin dividir (AAAA-MM): "Completar control"
+        // la lee así; con MM/AAAA las fechas salían vacías
+        lineaRep.fechaLote = (div.mes && div.anio) ? (div.anio + '-' + String(div.mes).padStart(2, '0')) : '';
+        lineaRep.tipoFecha = div.tipoFecha || linea.tipoFecha || '';
         // Limpiar divisiones para no arrastrar datos del palet al Completar control
         lineaRep.divisiones = [];
         lineasReposicion.push(lineaRep);
@@ -7443,6 +7465,7 @@ async function enviarReposicion() {
       lineaRep.unidadesPorCaja     = upCaja;
       lineaRep.cantCaja            = upCaja;
       lineaRep.lote                = linea.lote     || '—';
+      lineaRep.loteEnviado         = linea.lote     || '—';  // lote pedido: no se puede cambiar al finalizar
       lineaRep.mes                 = linea.mes      || '';
       lineaRep.anio                = linea.anio     || '';
       lineaRep.fechaLote           = linea.fechaLote || '';
