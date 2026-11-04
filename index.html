@@ -4081,6 +4081,13 @@ async function finalizarControl() {
       if ((x.unidadesTotal || 0) <= 0) return;
       var descF = (x.desc || x.cod) + ' (fuera de OC)';
       if (x.divisiones && x.divisiones.length > 0) {
+        // Las partes tienen que sumar exacto lo escaneado (antes no se controlaba: 36+36 con 54 escaneados)
+        var sumaF = x.divisiones.reduce(function(acc, d) { return acc + (parseInt(d.unidades, 10) || 0); }, 0);
+        if (sumaF !== (x.unidadesTotal || 0)) {
+          errores.push('• ' + descF + ': la suma de partes (' + sumaF + ' u.) ' +
+            (sumaF > (x.unidadesTotal || 0) ? 'supera' : 'no llega a') +
+            ' lo escaneado (' + (x.unidadesTotal || 0) + ' u.).');
+        }
         x.divisiones.forEach(function(d, j) {
           if (!d.mes || !d.anio) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta la fecha.');
           if (!d.lote || /^[-–—\s]+$/.test(String(d.lote))) errores.push('• ' + descF + ' — Parte ' + (j+1) + ': falta el lote.');
