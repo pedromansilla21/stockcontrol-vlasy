@@ -469,6 +469,79 @@
 
   /* ── TABLES ── */
   .table-wrap { overflow-x: auto; }
+  /* ── Stock por Ubicación ── */
+  .su-herramientas { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; margin-bottom: 16px; }
+  .su-resumen { display: flex; flex-wrap: wrap; gap: 10px; flex: 1 1 420px; }
+  .su-tile {
+    flex: 1 1 130px; min-height: 64px; padding: 10px 14px; text-align: left; cursor: pointer;
+    background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius);
+    color: var(--c-text2); font-family: inherit; font-size: 12px; transition: border-color .15s, background .15s;
+  }
+  .su-tile b { display: block; font-size: 22px; line-height: 1.2; color: var(--c-text); }
+  .su-tile:hover { border-color: var(--c-border2); }
+  .su-tile.urg b { color: var(--c-red); }
+  .su-tile.fal b { color: var(--c-amber); }
+  .su-tile.ok b { color: var(--c-green); }
+  .su-tile.activo { border-color: var(--c-accent); background: var(--c-accent-bg); }
+  .su-buscar { position: relative; flex: 1 1 260px; display: flex; align-items: center; }
+  .su-buscar i { position: absolute; left: 12px; color: var(--c-text3); font-size: 16px; pointer-events: none; }
+  .su-buscar input {
+    width: 100%; height: 100%; min-height: 44px; padding: 0 12px 0 36px; font-family: inherit; font-size: 14px;
+    background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border); border-radius: var(--radius); outline: none;
+  }
+  .su-buscar input:focus { border-color: var(--c-accent); }
+  .su-tabla th { padding: 12px 14px; }
+  .su-tabla td { padding: 13px 14px; vertical-align: middle; }
+  .su-tabla tbody tr { box-shadow: inset 3px 0 0 var(--su-color); }
+  .su-tabla tbody tr:hover td { background: var(--c-surface2); }
+  .su-cod { font-family: var(--f-mono); font-size: 13px; font-weight: 500; color: var(--c-text); }
+  .su-desc { margin-top: 3px; font-size: 13px; color: var(--c-text2); line-height: 1.35; }
+  .su-marca { color: var(--c-text2); font-size: 13px; }
+  .su-ubi { font-family: var(--f-mono); font-size: 13px; color: var(--c-text); white-space: nowrap; }
+  .su-tipo { margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+  .su-tipo.picking { color: var(--c-green); }
+  .su-tipo.reserva { color: var(--c-blue); }
+  .su-stock { min-width: 110px; }
+  .su-stock b { font-size: 16px; color: var(--c-text); }
+  .su-stock span { font-size: 12px; color: var(--c-text3); margin-left: 4px; }
+  .su-barra { height: 6px; margin-top: 6px; border-radius: 3px; background: var(--c-surface3); overflow: hidden; }
+  .su-barra i { display: block; height: 100%; border-radius: 3px; background: var(--su-color); }
+  .su-falta { font-size: 14px; font-weight: 600; color: var(--c-text); }
+  .su-sinfalta { color: var(--c-text3); }
+  .su-estado {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--su-color); background: var(--su-fondo);
+  }
+  .su-estado::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--su-color); }
+  .su-acciones { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+  .su-btn { height: 34px; padding: 0 12px; font-size: 13px; }
+  .su-btn-rep { background: var(--c-accent-bg); color: var(--c-accent); border-color: var(--c-accent); font-weight: 600; }
+  .su-btn-rep:hover { background: var(--c-accent); color: #111; border-color: var(--c-accent); }
+  .su-modal { max-width: 560px; }
+  .su-modal-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .su-modal-tit { font-size: 18px; font-weight: 700; color: var(--c-text); margin-bottom: 6px; }
+  .su-etiqueta { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--c-text2); }
+  .su-rp-tabla { width: 100%; border: 1px solid var(--c-border); border-radius: var(--radius-sm); border-collapse: separate; border-spacing: 0; overflow: hidden; }
+  .su-rp-tabla td { padding: 10px 12px; font-size: 14px; color: var(--c-text); }
+  .su-rp-tabla tbody tr:last-child td { border-bottom: none; }
+  .su-rp-tabla input {
+    width: 90px; height: 38px; padding: 0 10px; font-family: inherit; font-size: 15px; text-align: center; color-scheme: dark;
+    background: var(--c-surface2); color: var(--c-text); border: 1px solid var(--c-border2); border-radius: var(--radius-sm); outline: none;
+  }
+  .su-rp-tabla input:focus { border-color: var(--c-accent); }
+  .su-rp-total { display: flex; justify-content: space-between; margin: 10px 2px 16px; font-size: 13px; color: var(--c-text2); }
+  .su-rp-total b { font-size: 16px; color: var(--c-accent); }
+  .su-select {
+    width: 100%; height: 42px; padding: 0 10px; font-family: inherit; font-size: 14px; color-scheme: dark;
+    background: var(--c-surface2); color: var(--c-text); border: 1px solid var(--c-border2); border-radius: var(--radius-sm); outline: none;
+  }
+  .su-modal-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  @media (max-width: 760px) {
+    .su-col-marca { display: none; }
+    .su-tabla td, .su-tabla th { padding: 10px; }
+    .su-resumen, .su-buscar { flex-basis: 100%; min-width: 0; }
+    .su-tile { flex-basis: 28%; min-width: 0; padding: 10px; }
+  }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th {
     font-size: 10px; font-weight: 600; color: var(--c-text3);
@@ -1129,6 +1202,9 @@
     <button class="nav-item" id="nav-buscador-palets" onclick="switchPanel('buscador-palets')">
       <i class="ti ti-package-search"></i><span>Buscador de Palets</span>
     </button>
+      <button class="nav-item" id="nav-stock-ubicacion" onclick="switchPanel('stock-ubicacion'); suLoad();">
+      <i class="ti ti-map-pin"></i><span>Stock por Ubicación</span>
+    </button>
     <div class="sidebar-label">Sistema</div>
     <button class="nav-item" id="nav-usuarios" onclick="abrirModalUsuarios()">
       <i class="ti ti-users"></i><span>Usuarios</span>
@@ -1775,10 +1851,109 @@
         </div>
       </div>
     </div>
+   <!-- ═══ PANEL STOCK POR UBICACIÓN ═══ -->
+<div id="panel-stock-ubicacion" class="panel">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Stock por Ubicación</div>
+     <div class="page-sub">Reposición entre Palet, Reserva y Picking</div>
+</div>
+<button class="btn" onclick="suRefresh()" title="Recargar datos"><i class="ti ti-refresh"></i> Actualizar</button>
+</div>
+  <div class="su-herramientas">
+    <div class="su-resumen" id="su-resumen"></div>
+    <div class="su-buscar">
+      <i class="ti ti-search"></i>
+      <input id="su-buscar" type="text" autocomplete="off" placeholder="Buscar código o descripción" oninput="suRenderizar(_suDatos)" />
+    </div>
+  </div>
+  <div class="card" style="padding:0; overflow:hidden;">
+    <div class="table-wrap">
+      <table class="su-tabla">
+        <thead>
+          <tr>
+            <th>Artículo</th>
+            <th class="su-col-marca">Marca</th>
+            <th>Ubicación</th>
+            <th>Stock / Óptimo</th>
+            <th style="text-align:center;">Faltante</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-su">
+        </tbody>
+      </table>
+    </div>
+    <div id="su-empty" style="display:none; text-align:center; padding:32px; color:var(--c-text3); font-size:13px;">
+      Sin resultados
+    </div>
+  </div>
+</div>
 
   </main>
 </div>
-
+<!-- MODAL VER DETALLE UBICACIÓN -->
+<div class="modal-overlay" id="modal-ver-ubicacion">
+  <div class="modal" style="max-width:600px;">
+    <div style="display:flex; gap:10px; margin-bottom:14px;">
+      <div class="card" style="flex:1; padding:10px 14px;">
+        <div style="font-size:11px; color:var(--c-text3);">📍 Ubicación</div>
+        <div id="vu-ubicacion" style="font-size:20px; font-weight:700;">—</div>
+      </div>
+      <div class="card" style="flex:1; padding:10px 14px;">
+        <div style="font-size:11px; color:var(--c-text3);">📋 Tipo de Ubicación</div>
+        <div id="vu-tipo" style="font-size:20px; font-weight:700;">—</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:14px;">
+      <div class="card" style="flex:1; padding:10px 14px;">
+        <div style="font-size:11px; color:var(--c-text3);">✅ Estado</div>
+        <div id="vu-estado" style="font-size:16px; font-weight:700;">—</div>
+      </div>
+      <div class="card" style="flex:1; padding:10px 14px;">
+        <div style="font-size:11px; color:var(--c-text3);">⚠️ Faltante</div>
+        <div id="vu-faltante" style="font-size:16px; font-weight:700; color:var(--c-red);">—</div>
+      </div>
+    </div>
+    <div class="card" style="padding:10px 14px; margin-bottom:14px;">
+      <span id="vu-cod" style="font-family:var(--f-mono);"></span> &nbsp;
+      <span id="vu-desc" style="font-weight:600;"></span>
+    </div>
+    <table style="width:100%;">
+      <thead><tr><th>Cant</th><th>Fecha</th><th>Lote</th><th>Estado</th></tr></thead>
+      <tbody id="vu-lotes"></tbody>
+    </table>
+    <div style="text-align:right; margin-top:16px;">
+      <button class="btn" onclick="suCerrarVer()">Cerrar</button>
+    </div>
+  </div>
+</div>
+ <!-- MODAL REPONER UBICACION -->
+<div class="modal-overlay" id="modal-reponer-ubicacion">
+  <div class="modal su-modal">
+    <div class="su-modal-top">
+      <div>
+        <div class="su-modal-tit">Reponer picking</div>
+        <div class="su-cod" id="rp-cod"></div>
+        <div class="su-desc" id="rp-desc"></div>
+      </div>
+      <button class="btn btn-sm" onclick="suCerrarReponer()" title="Cerrar"><i class="ti ti-x"></i></button>
+    </div>
+    <span class="su-etiqueta">Disponible en reserva</span>
+    <table class="su-rp-tabla">
+      <thead><tr><th>Disponible</th><th>Vencimiento</th><th>Lote</th><th>A mover</th></tr></thead>
+      <tbody id="rp-lotes"></tbody>
+    </table>
+    <div class="su-rp-total"><span>Total a mover</span><b id="rp-total">0 u.</b></div>
+    <label class="su-etiqueta" for="rp-operario">Operario</label>
+    <select id="rp-operario" class="su-select"></select>
+    <div class="su-modal-pie">
+      <button class="btn" onclick="suCerrarReponer()">Cancelar</button>
+      <button class="btn btn-primary" onclick="suCrearTarea()">Crear tarea</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL CLASIFICAR / NUEVA O.C. -->
 <div class="modal-overlay" id="modal-clasificar">
@@ -2142,7 +2317,7 @@ var _registroSincronizadoHasta = 0;  // cuántas entradas de `registro` ya se ma
 // ══════════════════════════════════════════════════════════════
 // BASE DE DATOS — Google Sheets (via GAS, sin clave privada en el cliente)
 // ══════════════════════════════════════════════════════════════
-var GAS_URL = 'https://script.google.com/macros/s/AKfycby262xDZYaNt3mxnL78HcEo-r0TIs2aE2KVmvcosFPzJ8r_Fj-mLU5d1VIeoWIhW67V/exec';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxn13QqPItrzJppRzWuHbQE6HSdCNNEpXqZn7AkFMT1suOqmutN9zYAAuokMmk5QH5DtQ/exec';
 
 // Todas las operaciones de Sheets pasan por el GAS — ya no se necesita
 // la clave privada del service account en el HTML.
@@ -2327,7 +2502,7 @@ function switchPanel(name) {
   }
   document.getElementById('nav-' + name).classList.add('active');
   if (name === 'scanner') {
-    setTimeout(function(){ document.getElementById('scan-input').focus(); }, 80);
+    setTimeout(function(){ (document.getElementById('picking-beta-scan') || document.getElementById('scan-input')).focus(); }, 80);
   }
   if (name === 'stock-consulta') {
     scRefresh();
@@ -2350,14 +2525,14 @@ function updateClock() {
 // Limpia OCs fantasma del localStorage que causan doPost innecesarios
 // en cada ciclo de sync. Se ejecuta UNA SOLA VEZ por dispositivo.
 (function() {
-  var FLAG = 'sc_limpieza_v1';
+  var FLAG = 'BETA_sc_limpieza_v1';
   if (localStorage.getItem(FLAG)) return;
   try {
-    var raw = localStorage.getItem('stockcontrol_ordenes');
+    var raw = localStorage.getItem('BETA_stockcontrol_ordenes');
     if (raw) {
       var ordenes = JSON.parse(raw);
       if (Array.isArray(ordenes)) {
-        localStorage.removeItem('stockcontrol_ordenes');
+        localStorage.removeItem('BETA_stockcontrol_ordenes');
         console.log('[AutoLimpieza] localStorage de órdenes limpiado (' + ordenes.length + ' entradas). Se recargará desde el Sheet.');
       }
     }
@@ -2368,13 +2543,14 @@ function updateClock() {
  function revisarAlertas() {
   if (!CURRENT_USER) return;
   if (CURRENT_USER.rol === 'operario') {
-    _retryIntentos = 0; _retryEnCursoAlerta = null;
+        _retryIntentos = 0; _retryEnCursoAlerta = null;
     showToast('🔄 Buscando pedidos...');
     var _esperarYRevisar = function() {
       if (_busy_syncOrdenes) return setTimeout(_esperarYRevisar, 500);
       _checkAlertaEscaneo();
+     if (typeof _checkTareaReposicion === 'function') _checkTareaReposicion();
     };
-        if (_edicionManualPendiente) {
+       if (_edicionManualPendiente) {
       var _fEd = CURRENT_USER.filaAlerta || 1;
       sheetsRead('ALERTAS!A' + _fEd + ':C' + _fEd).then(function(rows) {
         _checkRespuestaEdicion(rows);
@@ -2721,7 +2897,7 @@ function bpFiltrar() {
     // Búsqueda limitada a código y descripción — antes también miraba
     // palet/ubicación/lote/marca, y eso traía coincidencias sin relación
     var coincideTexto = !q ||
-     d.cod.toLowerCase() === q ||
+    d.cod.toLowerCase() === q ||
       d.desc.toLowerCase().indexOf(q) !== -1;
     var coincideMarca = !_bpMarcaActiva || d.marca === _bpMarcaActiva;
     var coincideCero = !document.getElementById('bp-ocultar-cero').checked || d.cant > 0;
@@ -2730,7 +2906,7 @@ function bpFiltrar() {
           (_bpEstadoActivo === 'porVencer' && d.porVencer) ||
           (_bpEstadoActivo === 'vencido' && d.vencida);
   return coincideTexto && coincideMarca && coincideCero && coincideEstado;
-    });
+   });
   filtrados.sort(function(a, b) { return _bpFechaOrden(a.fecha) - _bpFechaOrden(b.fecha); });
   bpRenderizar(filtrados);
   bpActualizarContadores(filtrados);
@@ -2741,6 +2917,265 @@ function _bpFechaOrden(fechaMostrar) {
   var mes = parseInt(partes[0], 10) || 0;
   var anio = parseInt(partes[1], 10) || 0;
   return anio * 12 + mes;
+}
+async function suVerDetalle(cod) {
+ var d = _suDatos.find(function(x){ return x.codUbi === cod; });
+  if (!d) { showToast('No se encontró el artículo'); return; }
+
+  document.getElementById('vu-ubicacion').textContent = d.ubicacion;
+  document.getElementById('vu-tipo').textContent = d.tipoUbi;
+  document.getElementById('vu-estado').textContent = d.estado;
+  document.getElementById('vu-faltante').textContent = d.faltante;
+  document.getElementById('vu-cod').textContent = d.cod;
+  document.getElementById('vu-desc').textContent = d.desc;
+
+     var tbody = document.getElementById('vu-lotes');
+    tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+    var lotes = [];
+    try {
+      var rUrl = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'REGISTRO POR UBICACION'!A:J");
+      var rResp = await fetch(rUrl, { cache: 'no-store' });
+      var rData = await rResp.json();
+      var filas = (rData.ok && Array.isArray(rData.data)) ? rData.data : [];
+      var mapa = {};
+      filas.forEach(function(f) {
+        if (String(f[7] || '').trim() !== d.codUbi) return;
+        var accion = String(f[9] || '').trim().toUpperCase();
+        var cant = parseInt(f[4], 10) || 0;
+        var lote = String(f[6] || '').trim();
+        var fecha = String(f[5] || '').trim();
+var mIso = fecha.match(/^(\d{4})-(\d{2})-\d{2}T/);
+if (mIso) fecha = mIso[2] + '/' + mIso[1];
+        var clave = lote + '|' + fecha;
+        if (!mapa[clave]) mapa[clave] = { cant: 0, fecha: fecha, lote: lote };
+        if (accion === 'ENTRADA') mapa[clave].cant += cant;
+        if (accion === 'SALIDA') mapa[clave].cant -= cant;
+      });
+      lotes = Object.keys(mapa).map(function(k){ return mapa[k]; })
+        .filter(function(l){ return l.cant > 0; });
+    } catch (e) {
+      console.error('VER lotes error:', e);
+    }
+    tbody.innerHTML = lotes.length
+      ? lotes.map(function(l) {
+          return '<tr><td>' + l.cant + '</td><td>' + l.fecha + '</td><td>' + l.lote + '</td><td>—</td></tr>';
+        }).join('')
+      : '<tr><td colspan="4">Sin lotes registrados</td></tr>';
+
+  document.getElementById('modal-ver-ubicacion').classList.add('open');
+}
+
+function suCerrarVer() {
+  document.getElementById('modal-ver-ubicacion').classList.remove('open');
+}
+
+async function suAbrirReponer(cod) {
+  try {
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'REGISTRO POR UBICACION'!A:J");
+    var resp = await fetch(url, { cache: 'no-store' });
+    var data = await resp.json();
+    var filas = (data.ok && Array.isArray(data.data)) ? data.data : [];
+    var mapa = {};
+    filas.forEach(function(f) {
+      if (String(f[0] || '').trim() !== cod) return;
+      var ubi = String(f[7] || '').trim();
+      if (!/REPOSICION$/i.test(ubi)) return;
+      var accion = String(f[9] || '').trim().toUpperCase();
+      var cant = parseInt(f[4], 10) || 0;
+      var lote = String(f[6] || '').trim();
+      var fecha = String(f[5] || '').trim();
+      var m = fecha.match(/^(\d{4})-(\d{2})-\d{2}T/);
+      if (m) fecha = m[2] + '/' + m[1];
+      var clave = ubi + '|' + lote + '|' + fecha;
+      if (!mapa[clave]) mapa[clave] = { ubi: ubi, lote: lote, fecha: fecha, cant: 0 };
+      if (accion === 'ENTRADA') mapa[clave].cant += cant;
+      if (accion === 'SALIDA') mapa[clave].cant -= cant;
+    });
+    // Lo que ya tomó otra tarea sin retirar no está disponible
+    var _tarAb = await sheetsRead('TAREAS REPOSICION!A2:J');
+    (_tarAb || []).forEach(function(t) {
+      if (String(t[9]).trim() !== 'PENDIENTE' || String(t[2]).trim() !== cod) return;
+      Object.keys(mapa).forEach(function(k) {
+        var m = mapa[k];
+        if (m.ubi === String(t[6]).trim() && m.lote === String(t[3]).trim()) m.cant -= parseInt(t[5], 10) || 0;
+      });
+    });
+    var lotes = Object.keys(mapa).map(function(k){ return mapa[k]; })
+      .filter(function(l){ return l.cant > 0; });
+       if (!lotes.length) {
+      showToast('Sin reserva de ' + cod + ': hay que buscar en palets');
+      return;
+    }
+    var art = _suDatos.find(function(x){ return x.cod === cod; });
+    document.getElementById('rp-cod').textContent = cod;
+    document.getElementById('rp-desc').textContent = art ? art.desc : '';
+    document.getElementById('rp-total').textContent = '0 u.';
+        document.getElementById('rp-lotes').innerHTML = lotes.map(function(l) {
+      return '<tr data-ubi="' + l.ubi + '"><td>' + l.cant + '</td><td>' + l.fecha + '</td><td>' + l.lote +
+        '</td><td><input type="number" min="0" max="' + l.cant + '" value="0" oninput="suTotalMover()"></td></tr>';
+    }).join('');
+       document.getElementById('rp-operario').innerHTML = loadUsers().filter(function(u){ return u.rol === 'operario' && u.filaAlerta; }).map(function(u) {
+      return '<option value="' + u.name + '">' + u.name + '</option>';
+    }).join('');
+    document.getElementById('modal-reponer-ubicacion').classList.add('open');
+  } catch (e) {
+    console.error('REPONER error:', e);
+    showToast('Error al buscar la reserva');
+  }
+}
+ function suCerrarReponer() {
+  document.getElementById('modal-reponer-ubicacion').classList.remove('open');
+}
+function suTotalMover() {
+  var total = 0;
+  document.querySelectorAll('#rp-lotes input').forEach(function(i){ total += parseInt(i.value, 10) || 0; });
+  document.getElementById('rp-total').textContent = total + ' u.';
+}
+ async function suCrearTarea() {
+  if (window._busy_suCrear) return;
+  window._busy_suCrear = true;
+  try { await _suCrearTarea(); } finally { window._busy_suCrear = false; }
+}
+ async function _suCrearTarea() {
+  var cod = document.getElementById('rp-cod').textContent;
+  var operario = document.getElementById('rp-operario').value;
+  var filas = document.querySelectorAll('#rp-lotes tr');
+  var n = 0;
+  for (var v = 0; v < filas.length; v++) {
+    var _inp = filas[v].querySelector('input');
+    if ((parseInt(_inp.value, 10) || 0) > (parseInt(_inp.max, 10) || 0)) { showToast('⛔ Hay ' + _inp.max + ' u. disponibles en ese lote'); return; }
+  }
+  for (var i = 0; i < filas.length; i++) {
+    var tds = filas[i].querySelectorAll('td');
+    var cant = parseInt(tds[3].querySelector('input').value, 10) || 0;
+    if (cant <= 0) continue;
+    await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({
+      accion: 'crearTareaReposicion', articulo: cod, lote: tds[2].textContent,
+   fechaLote: tds[1].textContent, cant: cant, origen: filas[i].getAttribute('data-ubi') || 'RESERVA',
+      destino: 'PICKING', operario: operario }) });
+    n++;
+  }
+  if (n) {
+  var _u = loadUsers().filter(function(x){ return x.name === operario; })[0];
+  if (_u && _u.filaAlerta) {
+    fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({
+      accion: 'setAlertaTarea', valor: 'TAREA_REPOSICION|' + Date.now(), fila: _u.filaAlerta
+    }) });
+  }
+}
+  showToast(n ? 'Tarea creada (' + n + ')' : 'Poné una cantidad a mover');
+  if (n) suCerrarReponer();
+}
+ var _suDatos = [];
+var _suCargado = false;
+
+function suRefresh() {
+  _suCargado = false;
+  _suDatos = [];
+  suLoad();
+}
+
+async function suLoad() {
+  if (_suCargado) return;
+  try {
+    var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'STOCK POR UBICACION'!A:M");
+    var resp = await fetch(url, { cache: 'no-store' });
+    var data = await resp.json();
+    if (!data.ok || !Array.isArray(data.data)) throw new Error('Sin datos');
+
+    _suDatos = data.data
+      .filter(function(row) {
+        var cod = String(row[0] || '').trim();
+        // La fila 2 de la hoja son textos guía ("VALOR FIJO"), no un artículo
+        return cod && cod.toLowerCase() !== 'a' && cod.toLowerCase() !== 'código' && cod.toLowerCase() !== 'valor fijo';
+      })
+      .map(function(row) {
+        var stock  = parseInt(row[4], 10) || 0;
+        var optimo = parseInt(row[7], 10) || 0;
+        var pct = optimo > 0 ? Math.round((stock / optimo) * 100) : 0;
+        return {
+          cod:        String(row[0] || '').trim(),
+          desc:       String(row[1] || '').trim(),
+          marca:      String(row[3] || '').trim(),
+          stock:      stock,
+          pct:        pct,
+          faltante:   parseInt(row[5], 10) || 0,
+          min:        parseInt(row[6], 10) || 0,
+          optimo:     optimo,
+          max:        parseInt(row[8], 10) || 0,
+          ubicacion:  String(row[9]  || '—').trim(),
+          tipoUbi:    String(row[10] || '—').trim(),
+          estado:     String(row[11] || 'OK').trim(),
+          codUbi:     String(row[12] || '—').trim()
+        };
+      });
+
+    _suCargado = true;
+    suRenderizar(_suDatos);
+  } catch(e) {
+    console.error('Stock por Ubicación error:', e);
+  }
+}
+ var _suFiltroEstado = '';
+function suFiltrar(estado) {
+  _suFiltroEstado = _suFiltroEstado === estado ? '' : estado;
+  suRenderizar(_suDatos);
+}
+function _suRenderResumen(todos) {
+  var el = document.getElementById('su-resumen');
+  if (!el) return;
+  var n = { urg: 0, fal: 0, ok: 0 };
+  todos.forEach(function(d) {
+    if (d.estado === 'OK') n.ok++;
+    else if (d.estado === 'POSIBLE FALTANTE') n.fal++;
+    else n.urg++;
+  });
+  function tile(clase, estado, cant, texto) {
+    return '<button class="su-tile ' + clase + (_suFiltroEstado === estado ? ' activo' : '') + '" onclick="suFiltrar(\'' + estado + '\')"><b>' + cant + '</b>' + texto + '</button>';
+  }
+  el.innerHTML = tile('urg', 'REPONER URG', n.urg, 'Reponer urgente') +
+    tile('fal', 'POSIBLE FALTANTE', n.fal, 'Posible faltante') +
+    tile('ok', 'OK', n.ok, 'OK');
+}
+function suRenderizar(datos) {
+  _suRenderResumen(datos);
+  if (_suFiltroEstado) { datos = datos.filter(function(d) { return d.estado === _suFiltroEstado; }); }
+  var _qEl = document.getElementById('su-buscar');
+  var _q = _qEl ? _qEl.value.trim().toLowerCase() : '';
+  if (_q) { datos = datos.filter(function(d) { return (d.cod + ' ' + d.desc).toLowerCase().indexOf(_q) > -1; }); }
+  var tbody = document.getElementById('tbody-su');
+  var emptyEl = document.getElementById('su-empty');
+  if (!tbody) return;
+  if (!datos.length) {
+    tbody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  tbody.innerHTML = datos.map(function(d) {
+    var colorEstado = d.estado === 'OK' ? 'var(--c-green)' :
+                       d.estado === 'POSIBLE FALTANTE' ? 'var(--c-amber)' : 'var(--c-red)';
+    var bgEstado = d.estado === 'OK' ? 'var(--c-green-bg)' :
+                    d.estado === 'POSIBLE FALTANTE' ? 'var(--c-amber-bg)' : 'var(--c-red-bg)';
+    var textoEstado = d.estado === 'REPONER URG' ? 'Reponer urgente' :
+                       d.estado === 'POSIBLE FALTANTE' ? 'Posible faltante' : d.estado;
+    var mostrarReponer = d.estado !== 'OK';
+    var claseTipo = /PICKING/i.test(d.tipoUbi) ? 'picking' : /RESERVA|REPOSICION/i.test(d.tipoUbi) ? 'reserva' : '';
+    return '<tr style="--su-color:' + colorEstado + ';--su-fondo:' + bgEstado + ';">' +
+      '<td><div class="su-cod">' + escHtml(d.cod) + '</div><div class="su-desc">' + escHtml(d.desc) + '</div></td>' +
+      '<td class="su-marca su-col-marca">' + escHtml(d.marca) + '</td>' +
+      '<td><div class="su-ubi">' + escHtml(d.ubicacion) + '</div><div class="su-tipo ' + claseTipo + '">' + escHtml(d.tipoUbi) + '</div></td>' +
+      '<td><div class="su-stock"><b>' + d.stock + '</b>' + (d.optimo ? '<span>/ ' + d.optimo + '</span>' : '') +
+        '<div class="su-barra"><i style="width:' + Math.min(100, d.pct) + '%;"></i></div></div></td>' +
+      '<td style="text-align:center;">' + (d.faltante > 0 ? '<span class="su-falta">' + d.faltante + '</span>' : '<span class="su-sinfalta">—</span>') + '</td>' +
+      '<td><span class="su-estado">' + escHtml(textoEstado) + '</span></td>' +
+      '<td><div class="su-acciones">' +
+        '<button class="btn su-btn" onclick="suVerDetalle(\'' + d.codUbi + '\')"><i class="ti ti-eye"></i> Ver</button>' +
+        (mostrarReponer ? '<button class="btn su-btn su-btn-rep" onclick="suAbrirReponer(\'' + d.cod + '\')"><i class="ti ti-refresh"></i> Reponer</button>' : '') +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
 }
 // REMITO
 // ──────────────────────────────────────────────
@@ -2986,6 +3421,11 @@ function renderTablaControl() {
   var tb = document.getElementById('tbody-control');
   var btnFin = document.getElementById('btn-finalizar-control');
   if (remito.length === 0) {
+        if (window._tareasRepPend && window._tareasRepPend.length) {
+        tb.innerHTML = _htmlFilasTareas();
+               if (btnFin) btnFin.style.display = (window._tareaRepActiva && window._tareaRepActiva.hecha) ? 'inline-flex' : 'none';
+        return;
+      }
     tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-barcode"></i><p>Cargá un remito primero</p></div></td></tr>';
     if (btnFin) btnFin.style.display = 'none';
     return;
@@ -3163,6 +3603,45 @@ function _parsearCodigoRack(codigo) {
   return { cod: cod, rack: rack, tipo: tipoLimpio };
 }
 
+// ── Lo que falta ubicar queda en esta tablet hasta confirmar que se grabó ───
+var PENDING_RACK_KEY = 'BETA_sc_pending_rack';
+function _leerRack() { try { return JSON.parse(localStorage.getItem(PENDING_RACK_KEY) || '[]'); } catch(e) { return []; } }
+function _grabarRack(l) { try { localStorage.setItem(PENDING_RACK_KEY, JSON.stringify(l)); } catch(e) {} }
+function _guardarRackPendiente(oc) {
+  var l = _leerRack().filter(function(p){ return p.ocId !== oc.id; });
+  l.push({ ocId: oc.id, palet: oc.palet, lineas: oc.lineas, movId: 'UBI_' + oc.id });
+  _grabarRack(l);
+}
+async function _enviarRack(p) {
+  try {
+    await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'ubicarLineas', movId: p.movId, ocId: p.ocId, palet: p.palet, filas: p.filas, operario: (CURRENT_USER && CURRENT_USER.name) || '' }) });
+    var r = await (await fetch(GAS_URL + '?accion=movAplicado&id=' + encodeURIComponent(p.movId), { cache: 'no-store' })).json();
+    if (r.ok && r.data === true) {
+      _grabarRack(_leerRack().filter(function(x){ return x.ocId !== p.ocId; }));
+      showToast('✅ Reposición ubicada en el rack');
+      return true;
+    }
+  } catch(e) { console.error('Error al ubicar', e); }
+  showToast('⚠ No se confirmó la ubicación. Queda pendiente y se reintenta al entrar');
+  return false;
+}
+function _ubicarRack(ocId, palet, filas) {
+  var l = _leerRack();
+  var p = l.find(function(x){ return x.ocId === ocId; });
+  if (!p) { p = { ocId: ocId, palet: palet, movId: 'UBI_' + ocId }; l.push(p); }
+  p.filas = filas;
+  _grabarRack(l);
+  return _enviarRack(p);
+}
+async function _checkPendingRack() {
+  var l = _leerRack();
+  for (var i = 0; i < l.length; i++) { if (l[i].filas) await _enviarRack(l[i]); }
+  var abierto = _leerRack().find(function(p){ return !p.filas; });
+  if (abierto && !document.getElementById('picking-beta-overlay')) {
+    mostrarPanelConfirmacionRack({ id: abierto.ocId, palet: abierto.palet, lineas: abierto.lineas });
+  }
+}
+
 function mostrarPanelConfirmacionRack(ocObj) {
   // Preparar líneas a confirmar (solo las que tienen unidades)
   var lineasPendientes = (ocObj.lineas || []).filter(function(l) {
@@ -3188,6 +3667,7 @@ function mostrarPanelConfirmacionRack(ocObj) {
     return;
   }
 
+  _guardarRackPendiente(ocObj);
   var _idx = 0;   // índice de línea actual
   var _fase = 'rack'; // 'rack' o 'cajas'
 
@@ -3238,7 +3718,6 @@ function mostrarPanelConfirmacionRack(ocObj) {
           '<input id="picking-beta-scan" type="text" autocomplete="off" placeholder="Esperando escaneo..." ' +
             'style="width:100%;background:#0d1117;border:1.5px solid ' + colorUbi + ';border-radius:8px;padding:10px 12px;color:#e6edf3;font-size:14px;font-family:monospace;margin-bottom:12px;box-sizing:border-box;">' +
           '<div style="display:flex;gap:8px;">' +
-            '<button id="picking-beta-cancelar" style="flex:1;background:rgba(248,113,113,0.1);color:#f87171;border:1.5px solid #f87171;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">✗ Cancelar</button>' +
             (_fase === 'cajas' && linea.cajasConfirmadas === linea.cajasEsperadas
               ? '<button id="picking-beta-siguiente" style="flex:2;background:#4CAF7D;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">Confirmar y continuar →</button>'
               : '') +
@@ -3253,15 +3732,8 @@ function mostrarPanelConfirmacionRack(ocObj) {
       if (inp) inp.focus();
     }, 80);
 
-    // Cancelar → aborta todo
-    var btnCancel = document.getElementById('picking-beta-cancelar');
-    if (btnCancel) btnCancel.addEventListener('click', function() {
-      overlay.remove();
-      window._pickingBetaConfirmado = false;
-      window._pickingBetaLineas = null;
-      window._pickingBetaOcObj = null;
-      showToast('Confirmación cancelada — la reposición no se finalizó');
-    });
+    // Sin Cancelar: ubicar es obligatorio. El palet ya descontó; si se cierra la
+    // pestaña, el panel vuelve a salir al entrar (_checkPendingRack).
 
     // Siguiente → avanza a siguiente línea o finaliza
     var btnSig = document.getElementById('picking-beta-siguiente');
@@ -3306,7 +3778,12 @@ function mostrarPanelConfirmacionRack(ocObj) {
           showToast('⚠ Ese rack corresponde al artículo ' + codArticuloRack + ', no a ' + linea.cod + '. Buscá la posición correcta.');
           return;
         }
+        if (tipoLimpio === 'PICKING') {
+          var _hayReserva = (rows || []).some(function(r){ return String(r[0] || '').trim() === codArticuloRack && /REPOSICION$/i.test(String(r[12] || '').trim()); });
+          if (_hayReserva) { showToast('⛔ ' + linea.cod + ' tiene reserva: va a la reserva, no al picking'); return; }
+        }
         linea.tipoUbicacion = tipoLimpio;
+         linea.codUbi = codigoEsc;
         _fase = 'cajas';
         showToast('✅ Rack validado — ' + tipoLimpio);
         renderModal();
@@ -3314,7 +3791,11 @@ function mostrarPanelConfirmacionRack(ocObj) {
         showToast('⚠ Error al leer STOCK POR UBICACION. Intentá de nuevo.');
       });
     } else {
-      // Fase cajas: cualquier escaneo suma una caja
+      // Fase cajas: solo cuenta el artículo de esta línea y nunca pasa lo esperado
+      var _cCaja = codigo.trim();
+      var artCaja = (db || []).find(function(a){ return String(a.cbCaja).trim() === _cCaja || String(a.cbSuelto).trim() === _cCaja || String(a.cod).trim() === _cCaja; });
+      if (!artCaja || String(artCaja.cod).trim() !== String(linea.cod).trim()) { showToast('⛔ Ese código no es de ' + linea.cod); return; }
+      if (linea.cajasConfirmadas >= linea.cajasEsperadas) { showToast('Ya están todas las cajas. Tocá Confirmar y continuar'); return; }
       linea.cajasConfirmadas++;
       if (linea.cajasConfirmadas >= linea.cajasEsperadas) {
         showToast('✅ ' + linea.cajasEsperadas + ' cajas confirmadas');
@@ -3332,10 +3813,14 @@ function mostrarPanelConfirmacionRack(ocObj) {
     if (_idx >= lineasPendientes.length) {
       // Todas confirmadas → guardar y finalizar
       overlay.remove();
-      window._pickingBetaConfirmado = true;
-      window._pickingBetaLineas = lineasPendientes;
-      showToast('✅ Todas las posiciones confirmadas — finalizando...');
-      finalizarControl();
+      var _filasUbi = lineasPendientes.map(function(l) {
+        return [l.cod || '—', l.desc || '—', l.categoria || '—', l.marca || '—',
+                                l.cant || 0, l.fecha || '—', l.lote || '—', l.codUbi || '—', l.tipoUbicacion || 'PICKING', 'ENTRADA'];
+      });
+      _ubicarRack(ocObj.id, ocObj.palet, _filasUbi);
+      window._pickingBetaLineas = null;
+      window._pickingBetaConfirmado = false;
+      window._pickingBetaOcObj = null;
     } else {
       renderModal();
     }
@@ -3374,7 +3859,22 @@ function confirmarEdicionManual(idx) {
   if (isNaN(val) || val < 0) { showToast('⚠ Ingresá una cantidad válida'); return; }
   var r = remito[idx];
   if (!r) return;
+  var _antesEd = r.unidadesControladas || 0;
   r.unidadesControladas = val;
+  // Dejar la diferencia en el registro para que ESCANEOS dé lo real
+  // (antes quedaba solo lo escaneado: P52 755 = 1 en vez de 540)
+  if (val !== _antesEd) {
+    registro.push({
+      cb: 'EDICION', cod: r.cod, desc: r.desc, unidadesXCaja: r.cantCaja,
+      fecha: remitoDatos.fecha || new Date().toISOString().split('T')[0],
+      lote: remitoDatos.lote || '—', palet: remitoDatos.palet || '—',
+      contenedor: remitoDatos.contenedor || '—',
+      operario: (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—',
+      hora: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      idxLinea: idx, correccion: true, cantidad: val - _antesEd
+    });
+    renderRegistro();
+  }
   _edicionManualPendiente = null;
   _edicionManualAprobada  = false;
   _actualizarEstadoEdicion(idx, 'hidden');
@@ -3526,6 +4026,7 @@ function _paletDefCompletar() {
 }
 
 function abrirPanelCompletarControl() {
+        if (remito.length === 0 && window._tareaRepActiva && window._tareaRepActiva.hecha) { if (window._tareaRepActiva.estado === 'RETIRADA' && typeof ponerTarea === 'function') { ponerTarea(); return; } if (typeof _abrirVerifTarea === 'function') { _abrirVerifTarea(); return; } }
   if (remito.length === 0) { showToast('No hay escaneo activo'); return; }
   _autocompletarLineaCompletar();
   var _paletDef = _paletDefCompletar();
@@ -4026,10 +4527,10 @@ async function finalizarControl() {
    clearTimeout(window._finTimer); window._finTimer = setTimeout(function(){
     if (window._busy_finalizarControl) {
       window._busy_finalizarControl = false;
-            showToast('⚠️ No se confirmó la finalización. Avisá al administrativo para revisar el descuento.');
+      showToast('⚠️ No se confirmó la finalización. Avisá al administrativo para revisar el descuento.');
       try { fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'avisoFinalizarFallido', oc: (remitoDatos && remitoDatos.nro) || '', palet: (remitoDatos && remitoDatos.palet) || '', operario: (CURRENT_USER && CURRENT_USER.name) || '' }) }); } catch(e) {}
     }
-      }, 60000);
+  }, 60000);
   if (remito.length === 0) { showToast('No hay remito activo para finalizar'); window._busy_finalizarControl = false; return; }
 
   // Leer fecha, lote, palet de la tabla de completar control (si se usó)
@@ -4064,11 +4565,11 @@ async function finalizarControl() {
       if (r.divisiones && r.divisiones.length > 0) {
         r.divisiones.forEach(function(d, j) {
           if (!d.mes || !d.anio) errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta la fecha.');
-                      if (!d.lote || /^[-\u2013\u2014\s]+$/.test(String(d.lote))) errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el lote.');
+                   if (!d.lote || /^[-\u2013\u2014\s]+$/.test(String(d.lote))) errores.push('• ' + desc + ' – Parte ' + (j+1) + ': falta el lote.');
           if (!d.tipoFecha)      errores.push('• ' + desc + ' — Parte ' + (j+1) + ': falta el tipo de fecha (Troquelado/Impreso).');
         });
       } else {
-                if (!r.fechaLote || /^[-\u2013\u2014\s]+$/.test(String(r.fechaLote))) errores.push('• ' + desc + ': falta la fecha.');
+                 if (!r.fechaLote || /^[-\u2013\u2014\s]+$/.test(String(r.fechaLote))) errores.push('• ' + desc + ': falta la fecha.');
                 if (!r.lote || /^[-\u2013\u2014\s]+$/.test(String(r.lote))) errores.push('• ' + desc + ': falta el lote.');
         if (!r.tipoFecha)  errores.push('• ' + desc + ': falta el tipo de fecha (Troquelado/Impreso).');
       }
@@ -4103,7 +4604,7 @@ async function finalizarControl() {
 
   if (errores.length > 0) {
     alert('No se puede finalizar. Revisá los siguientes campos:\n\n' + errores.join('\n'));
-       clearTimeout(window._finTimer); window._busy_finalizarControl = false; return;
+      clearTimeout(window._finTimer); window._busy_finalizarControl = false; return;
   }
   // ── Fin validaciones ─────────────────────────────────────────────────────
 
@@ -4189,12 +4690,9 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   ocObj._esRepEfectiva = !!(ocObj.esReposicion || (ocObj.nro && String(ocObj.nro).indexOf('REP-') === 0));
   if (ocObj._esRepEfectiva) {
     // ── PICKING BETA: mostrar panel de confirmación de destino ──────────────
-    if (CURRENT_USER && CURRENT_USER.pickingBeta && !window._pickingBetaConfirmado) {
+    if (CURRENT_USER && CURRENT_USER.pickingBeta) {
       window._pickingBetaOcObj = ocObj;
-      window._busy_finalizarControl = false;
-           clearTimeout(window._finTimer);
-      mostrarPanelConfirmacionRack(ocObj);
-      return;
+      window._abrirPanelRackAlFinal = ocObj;
     }
     // ── FIN PICKING BETA ────────────────────────────────────────────────────
 
@@ -4209,8 +4707,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
       var ocOrig = ordenes.find(function(o){ return o.id === ocObj.paletOriginalId; });
       if (ocOrig && ocOrig.lineas) {
         ocObj.lineas.forEach(function(lineaRep) {
-          var cantRestada = (typeof lineaRep.unidadesControladas !== 'undefined' && lineaRep.unidadesControladas > 0)
-            ? lineaRep.unidadesControladas : (lineaRep.cantUnidades || 0);
+          var cantRestada = lineaRep.unidadesControladas || 0;
           if (cantRestada <= 0) return;
           // Buscar la línea por cod+lote, luego solo cod como fallback
           var lineaOrig = ocOrig.lineas.find(function(l){ return l.cod === lineaRep.cod && l.lote === lineaRep.lote; });
@@ -4250,6 +4747,11 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
     _guardarDetalleHistorial(ocObj, escaneadoPorVal, 'REPOSICIÓN');
   }
 
+   if (window._abrirPanelRackAlFinal) {
+    var _ocPanel = window._abrirPanelRackAlFinal;
+    window._abrirPanelRackAlFinal = null;
+    mostrarPanelConfirmacionRack(_ocPanel);
+  }
   // Limpiar panel de escaneo (para todos los roles)
   remito = [];
   registro = [];
@@ -4268,7 +4770,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // Siempre escribir FINALIZADO en la celda del operario actual para liberar su slot
   localStorage.removeItem('oc_en_escaneo');
   var filaParaFinalizar = (CURRENT_USER && CURRENT_USER.filaAlerta) || 1;
-     clearTimeout(window._finTimer);
+   clearTimeout(window._finTimer);
   fetch(GAS_URL, {
     method: 'POST', mode: 'no-cors',
     body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : 'con diferencias') + '|' + Date.now() + '|' + (ocObj.enviadoPor||''), fila: filaParaFinalizar })
@@ -4277,7 +4779,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // bloqueando el slot para siempre. Después de 2 minutos, el operario la
   // limpia él mismo como fallback — el admin la habrá visto en ese tiempo
   // si estaba conectado (su polling es cada 15s).
-    if (false) setTimeout(function() {
+ if (false) setTimeout(function() {
     sheetsRead('ALERTAS!A' + filaParaFinalizar).then(function(rows) {
       var val = rows && rows[0] && rows[0][0] ? String(rows[0][0]).trim() : 'VACIO';
       if (val.startsWith('FINALIZADO|')) {
@@ -4289,7 +4791,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
   // Si es operario: quedarse en escaneo
   // Esperar 30 segundos antes de liberar el slot para que el admin vea FINALIZADO
   if (CURRENT_USER && CURRENT_USER.rol === 'operario') {
- if (false) {
+    if (false) {
       setTimeout(function() {
         fetch(GAS_URL, {
           method: 'POST',
@@ -4332,7 +4834,7 @@ function updateMetrics() {
 var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) !== _uEspBase(r); }).length;
   var totalCajas = registro.length;
   document.getElementById('m-lineas').textContent    = lineas;
-  document.getElementById('m-escaneos').textContent  = totalCajas;
+  document.getElementById('m-escaneos').textContent  = remito.reduce(function(a, r){ return a + (r.unidadesControladas || 0); }, 0);
   document.getElementById('m-ok').textContent        = ok;
   document.getElementById('m-diff').textContent      = diff;
   document.getElementById('badge-scanner').textContent  = totalCajas;
@@ -4346,7 +4848,7 @@ var diff = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 &&
   // siempre, tal cual está en este momento. Con un pequeño debounce para no
   // mandar un guardado a la nube en cada escaneo individual si se escanea
   // muy rápido.
-  if (lineas > 0 && remitoDatos.ocId && !_cloudSyncTimer) {
+    if (lineas > 0 && remitoDatos.ocId && !_cloudSyncTimer) {
     _cloudSyncTimer = setTimeout(function() {
       _cloudSyncTimer = null;
       var id = remitoDatos.ocId;
@@ -4484,6 +4986,7 @@ function processScan() {
   var raw = document.getElementById('scan-input').value.trim();
   document.getElementById('scan-input').value = '';
   if (!raw) return;
+ if (remito.length === 0 && (window._tareasRepPend && window._tareasRepPend.length || window._tareaRepActiva)) { if (_procesarScanTarea(raw)) return; }
   if (window._lectorEscaneoReciente) window._lectorEscaneoReciente();
 
   var al = document.getElementById('alert-scan');
@@ -4507,6 +5010,18 @@ function processScan() {
   var linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm && (r.unidadesControladas||0) < (r.cantUnidades||0); });
   if (!linea) linea = remito.find(function(r){ return String(r.cod).trim() === artCodNorm; });
   // debug: loguear si no encuentra
+   if (remitoDatos.esReposicion) {
+    if (!linea) {
+      showAlert(al, 'err', '⛔ ' + art.desc + ' — No se pide en esta reposición');
+      flashBar('err');
+      return;
+    }
+    if ((linea.unidadesControladas || 0) >= (linea.cantUnidades || 0)) {
+      showAlert(al, 'err', '⛔ ' + art.desc + ' — Ya completaste lo pedido (' + linea.cantUnidades + ' u.), no se suma de más');
+      flashBar('err');
+      return;
+    }
+  }
 
   var hora = new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
   registro.push({
@@ -4567,6 +5082,11 @@ function processScan() {
     return;
   }
 
+ if (remitoDatos.esReposicion && (linea.unidadesControladas || 0) >= (linea.cantUnidades || 0)) {
+  showAlert(al, 'err', '⛔ ' + art.desc + ' — Ya completaste lo pedido (' + linea.cantUnidades + ' u.), no se suma de más');
+  flashBar('err');
+  return;
+}
   var esEAN = art.cbSuelto && raw === art.cbSuelto;
 
   if (esEAN) {
@@ -4579,7 +5099,7 @@ function processScan() {
       linea.unidadesSueltas -= cantCaja;
     }
     linea.unidadesControladas = linea.cajasEscaneadas * cantCaja + linea.unidadesSueltas;
-   } else {
+    } else {
     // DUN: 1 escaneo = 1 caja completa (preserva unidades sueltas pendientes de EAN)
     linea.cajasEscaneadas += 1;
     linea.unidadesControladas = linea.cajasEscaneadas * (linea.cantCaja || 1) + (linea.unidadesSueltas || 0);
@@ -5188,7 +5708,7 @@ function borrarArticulo(i) {
 // ══════════════════════════════════════════════
 // REPORTE DE ÓRDENES DE COMPRA
 // ══════════════════════════════════════════════
-var ORDENES_KEY = 'stockcontrol_ordenes';
+var ORDENES_KEY = 'BETA_stockcontrol_ordenes';
 var ocFiltroActual = 'todas';
 
 
@@ -5214,23 +5734,23 @@ function saveOrdenes(ordenes) {
   _ordenesCache = ordenes;
   try { localStorage.setItem(ORDENES_KEY, JSON.stringify(ordenes)); } catch(e) {}
   clearTimeout(_saveToSheetsTimer);
-  _saveToSheetsTimer = setTimeout(function() { _saveOrdenesToSheets(loadOrdenes()); }, 2500);
+  _saveToSheetsTimer = setTimeout(function() { _saveOrdenesToSheets(loadOrdenes()); }, 800);
 }
 
 
 // ── SISTEMA OFFLINE / COLA DE SINCRONIZACIÓN ──────────────
 var _offlineQueue = [];
-try { _offlineQueue = JSON.parse(localStorage.getItem('sc_offline_queue') || '[]'); } catch(e) {}
+try { _offlineQueue = JSON.parse(localStorage.getItem('BETA_sc_offline_queue') || '[]'); } catch(e) {}
 // Lo pendiente de más de 24 h se descarta: son copias viejas que, reenviadas
 // hoy, pisarían o revivirían O.C. (en una PC había 17, 4 MB, desde agosto).
 _offlineQueue = _offlineQueue.filter(function(x){ return x && (Date.now() - (x.ts || 0)) < 86400000; });
 var _isOnline = true;
 
 function _saveOfflineQueue() {
-  try { localStorage.setItem('sc_offline_queue', JSON.stringify(_offlineQueue)); }
+  try { localStorage.setItem('BETA_sc_offline_queue', JSON.stringify(_offlineQueue)); }
   catch(e) {
     // Memoria llena: liberar la caché de órdenes (se vuelve a bajar de la hoja) y reintentar
-    try { localStorage.removeItem(ORDENES_KEY); localStorage.setItem('sc_offline_queue', JSON.stringify(_offlineQueue)); } catch(e2) {}
+    try { localStorage.removeItem(ORDENES_KEY); localStorage.setItem('BETA_sc_offline_queue', JSON.stringify(_offlineQueue)); } catch(e2) {}
   }
 }
 _saveOfflineQueue();
@@ -5267,7 +5787,7 @@ async function _procesarCola() {
         // El guardado de O.C. (una fila por O.C.) no pasa por el Apps
         // Script — va directo a Sheets — así que se reintenta distinto.
         // Sin las O.C. eliminadas mientras tanto, para no revivirlas.
-        var _elim = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
+        var _elim = JSON.parse(localStorage.getItem('BETA_oc_eliminadas') || '[]');
         await _escribirOrdenesEnFilas(item.payload.filter(function(oc){ return _elim.indexOf(oc.id) < 0; }));
       } else if (item.accion === 'marcarOCEliminada') {
         // Aviso de borrado (columna D de ORDENES) — también va directo a
@@ -5430,18 +5950,10 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
         });
         var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
         _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas, (CURRENT_USER && CURRENT_USER.name) || '');
-        fetch(GAS_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-             body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet, operario: (CURRENT_USER && CURRENT_USER.name) || '',
-            lineas: (oc.lineas || []).map(function(l) {
-              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || 0 };
-            })
-          })
-        }).then(function() {
-          _markFinRepSent(_finRepId);
-          setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
-        }).catch(function() { /* queda pending, se reintenta al próximo login */ });
+        _postFinRep(_finRepId, oc.id, oc.palet, _finRepLineas, (CURRENT_USER && CURRENT_USER.name) || '').catch(function() {
+          // GAS ocupado o sin red: queda pending. Un reintento acá y, si no, al próximo login
+          setTimeout(_checkAndRetryPendingFinRep, 45000);
+        });
 
         // ── PICKING BETA: escribir en ESCANEO UBICACIONES ──────────────────
         if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
@@ -5464,21 +5976,21 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
       }
     } else {
       // Guardar en HISTORIAL COMPLETO (normal)
-    try { localStorage.setItem('sc_pending_hist_' + oc.id, JSON.stringify({ fila: fila })); } catch(e) {}
+    try { localStorage.setItem('BETA_sc_pending_hist_' + oc.id, JSON.stringify({ fila: fila })); } catch(e) {}
 fetch(GAS_URL, {
   method: 'POST',
   mode: 'no-cors',
   body: JSON.stringify({ accion: 'guardarHistorial', fila: fila })
 }).then(function() {
- try { localStorage.removeItem('sc_pending_hist_' + oc.id); } catch(e) {}
+ try { localStorage.removeItem('BETA_sc_pending_hist_' + oc.id); } catch(e) {}
 }).catch(function() {});
 }
   } catch(e) { console.error('Error en _guardarEnHistorial:', e); }
 }
 
 // ── Pendientes de restar (resiliencia ante fallos del GAS) ──────────────────
-var PENDING_RESTARS_KEY = 'stockcontrol_pending_restars';
-var PENDING_FINREP_KEY  = 'stockcontrol_pending_finrep';
+var PENDING_RESTARS_KEY = 'BETA_stockcontrol_pending_restars';
+var PENDING_FINREP_KEY  = 'BETA_stockcontrol_pending_finrep';
 
 function _savePendingFinRep(id, ocId, palet, lineas, operario) {
   try {
@@ -5501,8 +6013,33 @@ function _clearFinRep(id) {
     localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
   } catch(e) {}
 }
+// Mismo POST de siempre, pero sin no-cors para leer la respuesta: rechaza si el
+// GAS contesta error (ej. "lock ocupado"). Repetirlo no descuenta dos veces.
+async function _postFinRep(id, ocId, palet, lineas, operario) {
+  var resp = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ accion: 'finalizarReposicion', ocId: ocId, palet: palet, operario: operario, lineas: lineas || [] })
+  });
+  var data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'GAS rechazó el descuento');
+  _markFinRepSent(id);
+  setTimeout(function() { _clearFinRep(id); }, 60000);
+}
+// Tras 3 intentos fallidos deja de reintentar, avisa y deja fila en LOG DESCUENTOS
+async function _finRepFallida(p) {
+  var lista = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+  var item = lista.find(function(x) { return x.id === p.id; });
+  if (!item) return;
+  item.intentos = (item.intentos || 0) + 1;
+  localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(lista));
+  if (item.intentos < 3) return;
+  try { await sheetsAppend('LOG DESCUENTOS!A:K', [[new Date().toLocaleString('es-AR'), String(p.ocId), '', String(p.palet), '', '', '', '', 'NO CONFIRMADO', 'Descuento de reposición sin confirmar tras 3 intentos: revisar a mano', p.operario || '']]); } catch(e) { return; }
+  _clearFinRep(p.id);
+  alert('No se pudo confirmar el descuento del palet ' + p.palet + '.\n\nAvisá a un supervisor para revisarlo en LOG DESCUENTOS.');
+}
 async function _checkAndRetryPendingFinRep() {
   try {
+    if (!navigator.onLine) return;
     var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
     var now = Date.now();
     pending = pending.filter(function(p) {
@@ -5513,16 +6050,13 @@ async function _checkAndRetryPendingFinRep() {
     var toRetry = pending.filter(function(p) { return p.status === 'pending'; });
     if (toRetry.length === 0) return;
     showToast('⚠ Hay ' + toRetry.length + ' descuento(s) de reposición pendiente(s) — reintentando...');
+    var _reenviados = 0;
     for (var i = 0; i < toRetry.length; i++) {
       var p = toRetry[i];
       try {
-        await fetch(GAS_URL, {
-          method: 'POST', mode: 'no-cors',
-          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: p.ocId, palet: p.palet, operario: p.operario || (CURRENT_USER && CURRENT_USER.name) || '', lineas: p.lineas || [] })
-        });
-        _markFinRepSent(p.id);
-        (function(pid) { setTimeout(function() { _clearFinRep(pid); }, 60000); })(p.id);
-      } catch(e) { /* queda como pending */ }
+        await _postFinRep(p.id, p.ocId, p.palet, p.lineas, p.operario || (CURRENT_USER && CURRENT_USER.name) || '');
+        _reenviados++;
+      } catch(e) { await _finRepFallida(p); /* si no llegó a 3 intentos queda como pending */ }
     }
    async function _checkAndRetryPendingHistorial() {
   try {
@@ -5546,7 +6080,7 @@ async function _checkAndRetryPendingFinRep() {
     });
   } catch(e) {}
 }
-    if (toRetry.length > 0) showToast('✅ Descuentos de reposición reenviados al servidor');
+    if (_reenviados > 0) showToast('✅ Descuentos de reposición reenviados al servidor');
   } catch(e) {}
 }
 
@@ -5608,9 +6142,7 @@ async function _restarEnHistorialPalets(oc, escaneadoPor) {
       // Prioridad: unidadesControladas (lo que el operario efectivamente escaneó)
       // Fallback: cantUnidades (lo que se pedía reponer) — por si unidadesControladas
       // quedó en 0 por algún problema de sincronización
-      var escaneadas = (typeof linea.unidadesControladas !== 'undefined' && linea.unidadesControladas > 0)
-        ? linea.unidadesControladas
-        : (linea.cantUnidades || 0);
+     var escaneadas = linea.unidadesControladas || 0;
       return {
         cod:             linea.cod   || '—',
         palet:           oc.palet    || '—',
@@ -5775,7 +6307,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
 }
 
 // ── Palets sin confirmar en HISTORIAL DE PALETS (quedan en esta PC/tablet) ───
-var PENDING_PALET_KEY = 'sc_pending_palet';
+var PENDING_PALET_KEY = 'BETA_sc_pending_palet';
 function _leerPendingPalet() {
   try { return JSON.parse(localStorage.getItem(PENDING_PALET_KEY) || '[]'); } catch(e) { return []; }
 }
@@ -5995,11 +6527,11 @@ async function syncOrdenes() {
     // CUALQUIER dispositivo borra una O.C., todos los demás se enteran en su
     // propio sync (cada 15s) y dejan de incluirla en sus reescrituras — no
     // hace falta borrarla a mano en cada tablet/PC para que no se resucite.
-    var eliminados = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
+    var eliminados = JSON.parse(localStorage.getItem('BETA_oc_eliminadas') || '[]');
     rows.forEach(function(f){
       if (f && f[3] && eliminados.indexOf(f[3]) < 0) eliminados.push(f[3]);
     });
-    try { localStorage.setItem('oc_eliminadas', JSON.stringify(eliminados)); } catch(e) {}
+    try { localStorage.setItem('BETA_oc_eliminadas', JSON.stringify(eliminados)); } catch(e) {}
 
     // Merge: combinar Sheets + local, sin perder OC de ninguno
     // Excluir OC eliminadas intencionalmente
@@ -6074,7 +6606,7 @@ function getEstadoOC(oc) {
     var uCtrl = l.unidadesControladas||0;
     if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
    if (oc.estadoManual === 'finalizado' && uCtrl > 0 && uCtrl >= (l.cantUnidades||0)) return true;
-if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
+   if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
     return uCtrl > 0 && uCtrl === _uEspBase(l);
   }).length;
   if (completadas === lineasActivas.length) return 'completo';
@@ -6457,7 +6989,7 @@ function renderOrdenes() {
       var uCtrl = l.unidadesControladas||0;
       if (uCtrl > 0 && uCtrl === (l.cantUnidades||0)) return true;
      if (oc.estadoManual === 'finalizado' && uCtrl > 0 && uCtrl >= (l.cantUnidades||0)) return true;
-if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
+     if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(function(a,d){ return a + (d.cantReal||0); }, 0) === uCtrl) return true;
       return uCtrl > 0 && uCtrl === _uEspBase(l);
     }).length;
     var totalLineas = _lineasActivasRender.length;
@@ -6511,7 +7043,7 @@ if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(f
         '<div id="oc-lineas-wrap-' + oc.id + '">' + renderLineasOCTable((_paletStockData[oc.id] || oc.lineas), oc.id) + '</div>' +
         '<div class="oc-actions">' +
           '<button class="btn btn-primary btn-sm" onclick="enviarOCAlEscaneo(' + "'" + oc.id + "'" + ')"><i class="ti ti-barcode"></i> Enviar al escaneo</button>' +
-              (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
+                   (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" style="background:var(--c-teal,#0D9488);color:#fff;border-color:var(--c-teal,#0D9488);" onclick="abrirModalReposicion(' + "'" + oc.id + "'" + ')"><i class="ti ti-arrow-back-up"></i> Reposición</button>' : '') +
           (oc.esPalet && oc.estadoManual === 'finalizado' ? '<button class="btn btn-sm" onclick="event.stopPropagation();_cargarStockFrescoPalet(' + "'" + oc.id + "'" + ')"><i class="ti ti-refresh"></i> Actualizar stock</button>' : '') +
           '<button class="btn btn-sm" onclick="_editarConStockFresco(' + "'" + oc.id + "'" + ')"><i class="ti ti-edit"></i> Editar</button>' +
           '<button class="btn btn-sm" onclick="exportarOCExcel(' + "'" + oc.id + "'" + ')"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>' +
@@ -6534,7 +7066,7 @@ if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(f
     var allBodies = document.querySelectorAll('.oc-card-body.open');
     allBodies.forEach(function(bodyEl) {
       var _wrapEl = document.getElementById('oc-lineas-wrap-' + oc.id);
-           if (false) {
+            if (false) {
         _cargarStockFrescoPalet(oc.id);
       }
     });
@@ -6796,7 +7328,7 @@ function toggleOCBodyPalet(ocId, bodyId) {
   var estabaAbierto = body.classList.contains('open');
   body.classList.toggle('open');
   // Solo cargar cuando se abre (no cuando se cierra) y si no cargó ya
-    if (false) {
+ if (false) {
     _cargarStockFrescoPalet(ocId);
   }
 }
@@ -6861,7 +7393,7 @@ async function _verificarHistorialPalet(filasEnviadas, intento) {
   }
   if (data) {
     // Reenviar TODAS las filas de cada código con problema (el GAS borra y reescribe por palet + código)
-    console.log('[verif historial] reenviando códigos', Object.keys(faltantes), 'intento', intento);
+   console.log('[verif historial] reenviando códigos', Object.keys(faltantes), 'intento', intento);
     var reenviar = filasEnviadas.filter(function(f){ return faltantes[String(f.cod).trim()]; });
     fetch(GAS_URL, {
       method: 'POST',
@@ -6871,12 +7403,13 @@ async function _verificarHistorialPalet(filasEnviadas, intento) {
   }
   return _verificarHistorialPalet(filasEnviadas, intento + 1);
 }
+ 
 async function _cargarStockFrescoPalet(ocId) {
   try {
     var ordenes = loadOrdenes();
     var oc = ordenes.find(function(o){ return o.id === ocId; });
     // Solo aplica a palets finalizados — los pendientes/en proceso no tienen stock en HISTORIAL DE PALETS
-     if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
+    if (!oc || !oc.esPalet || !oc.palet || oc.estadoManual !== 'finalizado') return;
     showToast('🔄 Actualizando stock del palet...');
 
     var url = GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O");
@@ -6886,7 +7419,7 @@ async function _cargarStockFrescoPalet(ocId) {
 
     var paletNum = String(oc.palet || '').trim();
     var filas = data.data.filter(function(row){ return String(row[8]||'').trim() === paletNum; });
-      if (filas.length === 0) { showToast('⚠ Este palet no aparece en HISTORIAL DE PALETS'); return; }
+        if (filas.length === 0) { showToast('⚠ Este palet no aparece en HISTORIAL DE PALETS'); return; }
 
     // Agrupar por Cod (misma lógica que abrirModalReposicion)
     var grupos = {}, ordenCods = [];
@@ -6904,7 +7437,7 @@ async function _cargarStockFrescoPalet(ocId) {
       if (isNaN(upCaja)||upCaja<1) upCaja = 1;
       var cantTotal = grupo.rows.reduce(function(s,r){ return s+(parseInt(r[4],10)||0); }, 0);
       var divisiones = [];
-         if (grupo.rows.length > 1) {
+      if (grupo.rows.length > 1) {
         divisiones = grupo.rows.map(function(row) {
           var cant = parseInt(row[4],10)||0;
           var fechaRaw = String(row[6]||'').trim();
@@ -6912,14 +7445,14 @@ async function _cargarStockFrescoPalet(ocId) {
           return { cajas: Math.ceil(cant/upCaja), unidades: cant, lote: String(row[7]||'').trim(), mes: pf[1]||'', anio: pf[0]||'', cantReal: cant };
         }).filter(function(d){ return d.cantReal > 0; });
       }
-         var primerRow = grupo.rows[0];
-    var loteP = String(primerRow[7]||'').trim();
-    var pfP = _normFechaHist(primerRow[6]).split('-');
-    return Object.assign({}, ocLinea, {
-      cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
-      divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
-       lote: loteP || ocLinea.lote || '', fechaLote: _normFechaHist(primerRow[6]) || ocLinea.fechaLote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
-    });
+           var primerRow = grupo.rows[0];
+      var loteP = String(primerRow[7]||'').trim();
+      var pfP = _normFechaHist(primerRow[6]).split('-');
+      return Object.assign({}, ocLinea, {
+        cod: cod, desc: grupo.desc, cantUnidades: cantTotal,
+        divisiones: divisiones, unidadesPorCaja: upCaja, cantCaja: upCaja,
+        lote: loteP || ocLinea.lote || '', fechaLote: _normFechaHist(primerRow[6]) || ocLinea.fechaLote || '', mes: pfP[1] || ocLinea.mes || '', anio: pfP[0] || ocLinea.anio || ''
+      });
     });
 
     // NO guardar en localStorage — syncOrdenes() pisaría los valores
@@ -6936,7 +7469,7 @@ async function _cargarStockFrescoPalet(ocId) {
     }).map(function(linea) {
       var fresca = lineasFrescas.find(function(lf){ return String(lf.cod) === String(linea.cod); });
       if (!fresca) return linea;
-        var lineaDisplay = Object.assign({}, linea, {
+             var lineaDisplay = Object.assign({}, linea, {
           cantUnidades: fresca.cantUnidades,
           divisiones: fresca.divisiones,
           unidadesControladas: fresca.cantUnidades,
@@ -6965,10 +7498,10 @@ async function _cargarStockFrescoPalet(ocId) {
     var wrapRC = document.getElementById('rc-lineas-wrap-' + ocId);
     if (wrapRC) wrapRC.innerHTML = tablaHtml;
 
-      _paletStockCargado[ocId] = true;
+        _paletStockCargado[ocId] = true;
     showToast('✅ Stock actualizado');
   } catch(e) {
-    showToast('⚠ No se pudo actualizar, probá de nuevo');
+       showToast('⚠ No se pudo actualizar, probá de nuevo');
   }
 }
 
@@ -7296,7 +7829,6 @@ async function enviarReposicion() {
   if (_repOperarioOcupado) {
     if (!confirm(operarioNombre + ' ya tiene una tarea asignada.\n¿Querés enviarle esta reposición igual y pisar la tarea actual?')) return;
   }
-
    // Validar contra HISTORIAL DE PALETS que los lotes existan y alcancen (lectura única)
   try {
     var _vResp = await fetch(GAS_URL + '?accion=leerRango&rango=' + encodeURIComponent("'HISTORIAL DE PALETS'!A:O"), { cache: 'no-store' });
@@ -7328,6 +7860,7 @@ async function enviarReposicion() {
       }
     }
   } catch (eV) { /* sin conexión: seguir igual */ }
+
   // Armar líneas con cantidades a retirar
   var lineasReposicion = [];
   (_reposicionOC.lineas || []).forEach(function(linea, i) {
@@ -7622,9 +8155,9 @@ function eliminarOC(ocId) {
     }
   }
   // Guardar ID como eliminado para que el sync no lo restaure en ESTE dispositivo
-  var eliminados = JSON.parse(localStorage.getItem('oc_eliminadas') || '[]');
+  var eliminados = JSON.parse(localStorage.getItem('BETA_oc_eliminadas') || '[]');
   if (eliminados.indexOf(ocId) < 0) eliminados.push(ocId);
-  localStorage.setItem('oc_eliminadas', JSON.stringify(eliminados));
+  localStorage.setItem('BETA_oc_eliminadas', JSON.stringify(eliminados));
   var ordenes = loadOrdenes().filter(function(o){ return o.id !== ocId; });
   saveOrdenes(ordenes);
   updateBadgeOrdenes();
@@ -7830,7 +8363,7 @@ function abrirModalClasificar(ocId) {
       selEstado(oc.estadoManual || 'pendiente');
       // Mostrar sección de líneas en modo edición
       document.getElementById('clas-lineas-zona').style.display = 'block';
-           _clasLineas = ((oc.estadoManual === 'finalizado' && _paletStockData[oc.id]) ? _paletStockData[oc.id] : (oc.lineas || [])).map(function(l){
+              _clasLineas = ((oc.estadoManual === 'finalizado' && _paletStockData[oc.id]) ? _paletStockData[oc.id] : (oc.lineas || [])).map(function(l){
         var c = Object.assign({}, l);
         if (c.divisiones && c.divisiones.length > 0) {
           var _up = parseInt(c.unidadesPorCaja || c.cantCaja || 1, 10) || 1;
@@ -8229,7 +8762,7 @@ function guardarClasificacion() {
     // escaneó mientras el modal estaba abierto, ocBase.lineas tiene el estado
     // real (más reciente). Mergeamos campo a campo: el admin puede cambiar
     // cantidades esperadas, descripción, etc.; el operario conserva lo escaneado.
-        if (_clasLineas.length > 0 && ocBase.lineas && ocBase.lineas.length > 0 && ocBase.estadoManual !== 'finalizado') {
+       if (_clasLineas.length > 0 && ocBase.lineas && ocBase.lineas.length > 0 && ocBase.estadoManual !== 'finalizado') {
       _clasLineas = _clasLineas.map(function(linea) {
         var actual = ocBase.lineas.find(function(l){ return String(l.cod) === String(linea.cod); });
         if (!actual) return linea;
@@ -8817,7 +9350,7 @@ async function syncUsuarios() {
           var pickingBeta = String(r[5] || '').trim().toUpperCase() === 'SI';
           return { name: nombre, rol: rol, pin: pin, filaAlerta: filaAlerta, sesionActiva: sesionActiva, pickingBeta: pickingBeta };
         });
-      try { localStorage.setItem('stockcontrol_users', JSON.stringify(users)); } catch(e) {}
+      try { localStorage.setItem('BETA_stockcontrol_users', JSON.stringify(users)); } catch(e) {}
       return users;
     }
   } catch(e) {}
@@ -8864,7 +9397,7 @@ async function _verificarUsuarioDisponible(nombreUsuario) {
   if (deviceId === _getDeviceId()) return true;
   // Si el heartbeat tiene más de 30s, considerar sesión caída
   // 6 min: el latido va cada 5 min y solo con la pantalla visible
-   if (Date.now() - ts > 360000) return true;
+    if (Date.now() - ts > 360000) return true;
   return false; // ocupado
 }
 
@@ -8902,7 +9435,7 @@ function _getFilaUsuario(nombreUsuario) {
   return idx >= 0 ? idx + 2 : null;
 }
 
-var USERS_KEY    = 'stockcontrol_users';
+var USERS_KEY    = 'BETA_stockcontrol_users';
 var CURRENT_USER = null; // { name, color, initials }
 
 var USER_COLORS = ['#2563EB','#16A34A','#DC2626','#9333EA','#EA580C','#0891B2','#65A30D','#DB2777'];
@@ -9187,6 +9720,7 @@ function _completarLogin(selected) {
   }
   iniciarSincAlertasOperario();  
   setTimeout(_checkAndRetryPendingPalets, 6000); // palets sin confirmar de esta PC/tablet (todos los roles)
+  setTimeout(_checkPendingRack, 6500); // lo que falta ubicar en esta tablet
   aplicarRol(CURRENT_USER.rol);
 }
 
@@ -9340,6 +9874,142 @@ function mostrarNotificacionAlerta(alertaTexto, filaAlerta) {
     _ejecutarEnvioEscaneo(ocId, filaAlerta);
   });
 }
+ var _tareaRepVista = '';
+var _busy_checkTareaRep = false;
+function _checkTareaReposicion() {
+  if (!CURRENT_USER || CURRENT_USER.rol !== 'operario' || !CURRENT_USER.filaAlerta) return;
+  if (_busy_checkTareaRep) return;
+  _busy_checkTareaRep = true;
+  sheetsRead('ALERTAS!D' + CURRENT_USER.filaAlerta).then(function(rows) {
+    var val = (rows && rows[0] && rows[0][0]) ? String(rows[0][0]).trim() : '';
+    if (val.indexOf('TAREA_REPOSICION|') !== 0 || val === _tareaRepVista) return;
+    return sheetsRead('TAREAS REPOSICION!A2:J').then(function(t) {
+      _tareaRepVista = val;
+      var mias = (t || []).filter(function(r) {
+      return String(r[8]).trim() === CURRENT_USER.name && (String(r[9]).trim() === 'PENDIENTE' || String(r[9]).trim() === 'RETIRADA');
+      });
+      if (!mias.length || document.getElementById('modal-tarea-rep')) return;
+        window._tareasRepMias = mias;
+      var lista = mias.map(function(r) {
+        return '<div style="font-size:13px;margin:6px 0;">' + escHtml(String(r[2])) + ' · lote ' + escHtml(String(r[3])) + ' · <b>' + escHtml(String(r[5])) + ' u</b></div>';
+      }).join('');
+      var ov = document.createElement('div');
+      ov.id = 'modal-tarea-rep';
+      ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      ov.innerHTML = '<div style="background:var(--c-surface2);border-radius:16px;padding:28px;max-width:400px;width:90%;text-align:center;">' +
+        '<div style="font-size:18px;font-weight:700;margin-bottom:12px;">Tarea de reposición</div>' +
+        '<div style="font-size:12px;color:var(--c-text3);margin-bottom:8px;">RESERVA → PICKING</div>' + lista +
+              '<button class="btn btn-success" style="width:100%;height:44px;margin-top:16px;" onclick="_verTareas()">Ver tareas</button></div>';
+      document.body.appendChild(ov);
+    });
+  }).catch(function(){}).finally(function(){ _busy_checkTareaRep = false; });
+}
+ async function _comenzarTarea() {
+  var t = (window._tareasRepPend || [])[0];
+  if (!t) return;
+  var cod = String(t[2]).trim();
+  var rows = await sheetsRead('STOCK POR UBICACION!A2:M');
+  var fila = (rows || []).find(function(r){
+    return String(r[0]).trim() === cod && /PICKING$/.test(String(r[12] || '').trim());
+  });
+  if (!fila) { showToast('No encontré la ubicación de picking de ' + cod); return; }
+  var m = document.getElementById('modal-tarea-rep'); if (m) m.remove();
+  window._tareaRepActiva = {
+    id: t[0], cod: cod, lote: String(t[3]), fechaLote: String(t[4]),
+    cant: parseInt(t[5], 10) || 0, ubiDestino: String(fila[12]).trim(),
+    ubiOk: false, escaneadas: 0
+  };
+  _renderBannerTarea();
+}
+
+function _renderBannerTarea() {
+  var b = document.getElementById('banner-tarea-rep');
+  if (b) b.remove();
+}
+
+async function _verTareas() {
+  var m = document.getElementById('modal-tarea-rep'); if (m) m.remove();
+  window._tareasRepPend = (window._tareasRepMias || []).slice();
+  try {
+    var rows = await sheetsRead('STOCK POR UBICACION!A2:M');
+    window._ubiTareas = {};
+    (rows || []).forEach(function(r){
+      var u = String(r[12] || '').trim();
+      if (/PICKING$/.test(u)) window._ubiTareas[String(r[0]).trim()] = u;
+    });
+  } catch(e) {}
+  if (typeof renderTablaControl === 'function') renderTablaControl();
+}
+
+function _tareasAgrupadas() {
+  var g = {}, orden = [];
+  (window._tareasRepPend || []).forEach(function(t){
+       var k = String(t[2]).trim() + '|' + String(t[3]).trim() + '|' + String(t[6]).trim() + '|' + String(t[9] || 'PENDIENTE').trim();
+        if (!g[k]) { g[k] = { cod: String(t[2]).trim(), lote: String(t[3]).trim(), fechaLote: String(t[4]), origen: String(t[6]).trim(), destino: ((window._ubiTareas && window._ubiTareas[String(t[2]).trim()]) || String(t[7]).trim()), estado: String(t[9] || 'PENDIENTE').trim(), cant: 0, ids: [] }; orden.push(k); }
+       g[k].cant += parseInt(t[5], 10) || 0;
+    g[k].ids.push(t[0]);
+  });
+  return orden.map(function(k){ return g[k]; });
+}
+
+function _htmlFilasTareas() {
+  var T = window._tareaRepActiva;
+  return _tareasAgrupadas().map(function(g){
+    var art = db.find(function(a){ return a.cod === g.cod; }) || {};
+    var activa = T && T.cod === g.cod && T.lote === g.lote;
+    var hecha = activa && T.hecha;
+    var color = hecha ? '#2e8b57' : (activa ? '#e08a1e' : '#6b7280');
+    var bg = hecha ? 'rgba(46,139,87,0.12)' : (activa ? 'rgba(224,138,30,0.12)' : 'rgba(107,114,128,0.08)');
+    var esc = activa ? T.escaneadas : 0;
+    var pct = g.cant ? Math.min(100, Math.round(esc * 100 / g.cant)) : 0;
+       var estado = hecha ? '✓ Completa' : (activa ? 'Habilitada' : (g.estado === 'RETIRADA' ? 'Falta poner' : '🔒 Bloqueada'));
+             var ubi = (g.estado === 'RETIRADA' ? g.destino : g.origen) || 'la reserva';
+    var prog = activa
+      ? '<div style="height:8px;background:rgba(255,255,255,0.1);border-radius:4px;"><div style="height:8px;width:' + pct + '%;background:' + color + ';border-radius:4px;"></div></div><div style="font-size:11px;margin-top:2px;">' + pct + '%</div>'
+      : '<span style="font-size:12px;">Escaneá <b>' + escHtml(ubi) + '</b></span>';
+    return '<tr style="background:' + bg + ';border-left:3px solid ' + color + ';">' +
+      '<td style="font-family:monospace;">' + escHtml(g.cod) + '</td>' +
+      '<td style="color:' + color + ';">' + escHtml(art.desc || 'Reposición RESERVA → PICKING') + '<div style="font-size:11px;opacity:.7;">lote ' + escHtml(g.lote) + '</div></td>' +
+      '<td style="text-align:center;">' + g.cant + ' u.</td>' +
+      '<td style="text-align:center;"><b style="font-size:18px;color:' + color + ';">' + esc + '</b><span style="opacity:.6;">/' + g.cant + ' u.</span></td>' +
+      '<td>' + prog + '</td>' +
+      '<td style="color:' + color + ';font-weight:600;">' + estado + '</td>' +
+      '<td></td></tr>';
+  }).join('');
+}
+function _procesarScanTarea(raw) {
+  var T = window._tareaRepActiva;
+  if (!T) {
+    var grupos = _tareasAgrupadas();
+      var g = grupos.find(function(x){ return (x.estado === 'RETIRADA' ? x.destino : x.origen) === raw; });
+    if (!g) return false;
+    // Mercadería retirada sin ubicar: primero hay que ponerla, antes de otra tarea
+    var gRet = grupos.find(function(x){ return x.estado === 'RETIRADA'; });
+    if (gRet && g.estado !== 'RETIRADA') { showToast('⚠ Primero dejá lo que retiraste en ' + gRet.destino); return true; }
+    window._tareaRepActiva = {
+      ids: g.ids, cod: g.cod, lote: g.lote, fechaLote: g.fechaLote,
+                    cant: g.cant, estado: g.estado, ubiOrigen: (g.estado === 'RETIRADA' ? g.destino : g.origen), destino: g.destino, ubiOk: true, escaneadas: 0, hecha: false
+    };
+    _renderBannerTarea();
+    renderTablaControl();
+       showToast(g.estado === 'RETIRADA' ? 'Destino OK. Dejá los artículos y escaneá' : 'Origen OK. Escaneá los artículos');
+    return true;
+  }
+  if (T.hecha) { showToast('Reposición completa'); return true; }
+  if (raw === T.ubiOrigen) { showToast('Origen ya escaneado. Escaneá los artículos'); return true; }
+  var artT = db.find(function(a){ return String(a.cbCaja).trim() === raw || String(a.cbSuelto).trim() === raw || String(a.cod).trim() === raw; });
+  if (!artT) { showToast('Código no encontrado: ' + raw); return true; }
+  if (String(artT.cod).trim() !== String(T.cod).trim()) { showToast('⛔ ' + (artT.desc || artT.cod) + ' no es de esta tarea'); return true; }
+  var esCajaT = !!artT.cbCaja && String(artT.cbCaja).trim() === raw;
+  var uT = esCajaT ? (parseInt(artT.cantCaja, 10) || 0) : (parseInt(artT.unidSuelto, 10) || 1);
+  if (!uT) { showToast('La caja no tiene unidades cargadas en Artículos'); return true; }
+  var faltaT = T.cant - T.escaneadas;
+  if (uT > faltaT) { showToast('⛔ Te pasás: faltan ' + faltaT + ' u. y esto suma ' + uT); return true; }
+  T.escaneadas += uT;
+          if (T.escaneadas >= T.cant) { T.hecha = true; showToast('✓ Reposición completa'); }
+  renderTablaControl();
+  return true;
+}
 
 // ── SOLICITUDES DE EDICIÓN MANUAL — lado supervisor ─────────────────────
 var _solicitudesEdicionVistas = {};
@@ -9425,7 +10095,7 @@ var _sincAlertasInterval = null;
 function iniciarSincAlertasRemito() {
   // Sincronizar cada 3 segundos
   if (_sincAlertasInterval) clearInterval(_sincAlertasInterval);
-  // automático desactivado — se usa el botón "Revisar alertas"
+   // automático desactivado — se usa el botón "Revisar alertas"
   syncAlertasRemito(); // Primera vez inmediatamente
 }
 
@@ -9894,7 +10564,7 @@ function _generarNroOC() {
   // Toma el máximo número de OC existente y suma 1
   var ocs = [];
   try {
-    var raw = localStorage.getItem('stockcontrol_ordenes');
+    var raw = localStorage.getItem('BETA_stockcontrol_ordenes');
     ocs = raw ? JSON.parse(raw) : [];
   } catch(e) { ocs = []; }
 
@@ -10760,7 +11430,95 @@ async function aceptarAlertaEscaneo() {
 </div>
 
 <script>
+ async function _tareaEnHoja(ids, esperado) {
+  var rows = await sheetsRead('TAREAS REPOSICION!A2:J');
+  return ids.every(function(id){
+    return (rows || []).some(function(r){ return String(r[0]) === String(id) && String(r[9]).trim() === esperado; });
+  });
+}
+ async function ponerTarea() {
+  var T = window._tareaRepActiva;
+  if (!T || !T.hecha || T.estado !== 'RETIRADA') return;
+  if (window._busy_ponerTarea) return;
+  window._busy_ponerTarea = true;
+  try {
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'ponerTareas', ids: T.ids, destino: T.destino }) });
+    if (!(await _tareaEnHoja(T.ids, 'HECHA'))) { alert('No se pudo guardar en el picking. La tarea sigue abierta: probá de nuevo o avisá al supervisor.'); return; }
+    window._tareasRepPend = (window._tareasRepPend || []).filter(function(t){ return T.ids.indexOf(t[0]) === -1; });
+    window._tareaRepActiva = null;
+    renderTablaControl();
+    showToast('✓ Dejado en el picking. Tarea completa');
+  } catch (e) {
+    showToast('Error al guardar en el picking. Probá de nuevo');
+  } finally {
+    window._busy_ponerTarea = false;
+  }
+}
+ function _normFechaVerif(s) {
+  s = String(s || '').trim();
+  var m = s.match(/(\d{4})-(\d{1,2})/);
+  if (m) return ('0' + m[2]).slice(-2) + '/' + m[1];
+  m = s.match(/(\d{1,2})\/(\d{4})/);
+  if (m) return ('0' + m[1]).slice(-2) + '/' + m[2];
+  return s;
+}
+function _abrirVerifTarea() {
+  var T = window._tareaRepActiva;
+  if (!T || !T.hecha) return;
+  var old = document.getElementById('modal-verif-tarea'); if (old) old.remove();
+  var art = (db || []).find(function(a){ return String(a.cod).trim() === String(T.cod).trim(); }) || {};
+  var d = document.createElement('div');
+  d.className = 'modal-overlay open';
+  d.id = 'modal-verif-tarea';
+  d.style.zIndex = '9998';
+  d.innerHTML = '<div class="modal" style="max-width:420px; padding:28px;">' +
+    '<div class="modal-title" style="margin-bottom:8px;">Verificá lote y fecha</div>' +
+    '<div style="margin-bottom:16px;"><b>' + escHtml(T.cod) + '</b> · ' + escHtml(art.desc || '') + '<br><span style="opacity:.7;">' + T.cant + ' u. a retirar</span></div>' +
+    '<div style="display:flex; gap:8px; margin-bottom:10px;">' +
+    '<input type="number" id="vt-mm" placeholder="MM" style="width:70px;" /><span style="align-self:center;">/</span>' +
+    '<input type="number" id="vt-aa" placeholder="AAAA" style="width:90px;" /></div>' +
+    '<input type="text" id="vt-lote" placeholder="Lote" style="width:100%; margin-bottom:16px;" onkeydown="if(event.key===\'Enter\') _confirmarVerifTarea()" />' +
+    '<div style="display:flex; gap:8px;">' +
+    '<button class="btn" style="flex:1;" onclick="document.getElementById(\'modal-verif-tarea\').remove()">Volver al escaneo</button>' +
+    '<button class="btn btn-primary" style="flex:1;" onclick="_confirmarVerifTarea()">Finalizar y guardar</button></div></div>';
+  document.body.appendChild(d);
+  setTimeout(function(){ var i = document.getElementById('vt-mm'); if (i) i.focus(); }, 100);
+}
+function _confirmarVerifTarea() {
+  var T = window._tareaRepActiva;
+  if (!T) return;
+  var mm = document.getElementById('vt-mm').value.trim();
+  var aa = document.getElementById('vt-aa').value.trim();
+  var lote = document.getElementById('vt-lote').value.trim();
+  if (!mm || !aa || !lote) { showToast('Completá fecha y lote'); return; }
+  var _fEsp = String(T.fechaLote || '').trim();
+  var fechaOk = !_fEsp || /^[\/\-–—\s]+$/.test(_fEsp) || _normFechaVerif(('0' + mm).slice(-2) + '/' + aa) === _normFechaVerif(T.fechaLote);
+  function _nl(v) { v = String(v || '').trim().toUpperCase(); return /^\d+$/.test(v) ? String(parseInt(v, 10)) : v; }
+  var loteOk = _nl(lote) === _nl(T.lote);
+  if (!fechaOk || !loteOk) { showToast('⛔ Lote o fecha no coinciden con la tarea. Revisá la mercadería'); return; }
+  document.getElementById('modal-verif-tarea').remove();
+  finalizarTarea();
+}
+ async function finalizarTarea() {
+  var T = window._tareaRepActiva;
+  if (!T || !T.hecha) return;
+  if (window._busy_finTarea) return;
+  window._busy_finTarea = true;
+  try {
+    await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'retirarTareas', ids: T.ids }) });
+    if (!(await _tareaEnHoja(T.ids, 'RETIRADA'))) { alert('No se pudo retirar de la reserva. No muevas la mercadería: probá de nuevo o avisá al supervisor.'); return; }
+       (window._tareasRepPend || []).forEach(function(t){ if (T.ids.indexOf(t[0]) !== -1) t[9] = 'RETIRADA'; });
+    window._tareaRepActiva = null;
+    renderTablaControl();
+    showToast('✓ Retirado de la reserva. Falta ubicar en el picking');
+  } catch (e) {
+    showToast('Error al retirar. Probá de nuevo');
+  } finally {
+    window._busy_finTarea = false;
+  }
+}
 function pedirEscaneadoPor() {
+    if (remito.length === 0 && window._tareaRepActiva && window._tareaRepActiva.hecha) { if (window._tareaRepActiva.estado === 'RETIRADA' && typeof ponerTarea === 'function') { ponerTarea(); return; } if (typeof _abrirVerifTarea === 'function') { _abrirVerifTarea(); return; } }
   var inp = document.getElementById('input-escaneado-por');
   if (inp) {
     inp.value = CURRENT_USER ? CURRENT_USER.name : '';
