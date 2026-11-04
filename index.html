@@ -2201,7 +2201,10 @@ async function _sincronizarEscaneosANube() {
   var nuevos = registro.slice(_registroSincronizadoHasta, _hasta);
   var operarioReal = (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—';
   var _cursorDivisiones = {};
-  var filas = nuevos.map(function(r) {
+  var _asigDiv = {};  // unidades ya puestas en cada división, por código
+  var _sinDiv = {};   // escaneos de más que no entraron en ninguna división
+  var filas = [];
+  nuevos.forEach(function(r) {
     // Buscar la línea de este producto para tomar su lote/fecha YA
     // completos (lo que se tipeó en "Completar control"), no lo que había
     // en el momento puntual del escaneo (que todavía no estaba lleno).
@@ -2213,36 +2216,87 @@ async function _sincronizarEscaneosANube() {
       || (itemsFueraOC || []).find(function(x){ return String(x.cod).trim() === String(r.cod).trim(); });
     var upCajaDiv = parseInt(linea && (linea.unidadesPorCaja || linea.cantCaja) || 1, 10) || 1;
     var tieneDiv = linea && linea.divisiones && linea.divisiones.length > 0;
+    var codKey = String(r.cod).trim();
+    var _fila = function(fecha, lote, palet, cant) {
+      return [
+        remitoDatos.nro || '',
+        remitoDatos.ocId || '',
+        r.cod || '',
+        r.cb || '',
+        r.desc || '',
+        cant,
+        fecha,
+        lote,
+        palet,
+        r.contenedor || '',
+        operarioReal,
+        r.hora || ''
+      ];
+    };
+    var _fechaDiv = function(d) { return (d.mes && d.anio) ? (d.anio + '-' + String(d.mes).padStart(2,'0')) : (r.fecha || ''); };
+    // Corrección (EDICION/AJUSTE) en línea con varios lotes: repartir la
+    // diferencia según lo que le falta a cada lote (antes iba toda al
+    // primero: D1 04/11, 240 en un lote en vez de 120 + 120)
+    if (r.correccion && tieneDiv) {
+      var asig = _asigDiv[codKey] || (_asigDiv[codKey] = []);
+      var nDiv = linea.divisiones.length;
+      var resto = parseInt(r.cantidad, 10) || 0;
+      var _uDiv = function(j) { return parseInt(linea.divisiones[j].unidades, 10) || 0; };
+      var _pushDiv = function(j, cant) {
+        var dv = linea.divisiones[j];
+        asig[j] = (asig[j] || 0) + cant;
+        filas.push(_fila(_fechaDiv(dv), dv.lote || (r.lote || ''), dv.palet || (r.palet || ''), cant));
+      };
+      if (resto > 0) {
+        for (var _j = 0; _j < nDiv && resto > 0; _j++) {
+          var poner = (_j === nDiv - 1) ? resto : Math.min(resto, Math.max(_uDiv(_j) - (asig[_j] || 0), 0));
+          if (poner <= 0) continue;
+          _pushDiv(_j, poner);
+          resto -= poner;
+        }
+      } else if (resto < 0) {
+        // Primero se descuentan los escaneos de más que no entraron en ningún lote
+        var sd = _sinDiv[codKey];
+        if (sd && sd.cant > 0) {
+          var sacarSd = Math.min(-resto, sd.cant);
+          sd.cant -= sacarSd;
+          resto += sacarSd;
+          filas.push(_fila(sd.fecha, sd.lote, sd.palet, -sacarSd));
+        }
+        for (var _k = nDiv - 1; _k >= 0 && resto < 0; _k--) {
+          var sacar = (_k === 0) ? -resto : Math.min(-resto, Math.max((asig[_k] || 0) - _uDiv(_k), 0));
+          if (sacar <= 0) continue;
+          _pushDiv(_k, -sacar);
+          resto += sacar;
+        }
+      }
+      return;
+    }
     var divAsignada = null;
+    var divIdx = -1;
     if (tieneDiv) {
-      var codKey = String(r.cod).trim();
       var idx = _cursorDivisiones[codKey] || 0;
       var acumulado = 0;
       for (var _i = 0; _i < linea.divisiones.length; _i++) {
         var slotsDiv = Math.round((parseInt(linea.divisiones[_i].unidades, 10) || 0) / upCajaDiv) || 0;
-        if (idx < acumulado + slotsDiv) { divAsignada = linea.divisiones[_i]; break; }
+        if (idx < acumulado + slotsDiv) { divAsignada = linea.divisiones[_i]; divIdx = _i; break; }
         acumulado += slotsDiv;
       }
       _cursorDivisiones[codKey] = idx + 1;
     }
-    var fechaFinal = divAsignada ? ((divAsignada.mes && divAsignada.anio) ? (divAsignada.anio + '-' + String(divAsignada.mes).padStart(2,'0')) : (r.fecha || '')) : ((linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || ''));
+    var fechaFinal = divAsignada ? _fechaDiv(divAsignada) : ((linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || ''));
     var loteFinal  = divAsignada ? (divAsignada.lote  || (r.lote  || '')) : ((linea && linea.lote)  ? linea.lote  : (r.lote  || ''));
     var paletFinal = divAsignada ? (divAsignada.palet || (r.palet || '')) : ((linea && linea.palet) ? linea.palet : (r.palet || ''));
-    return [
-      remitoDatos.nro || '',
-      remitoDatos.ocId || '',
-      r.cod || '',
-      r.cb || '',
-      r.desc || '',
-      // Unidades: corrección = negativo; EAN suelto = 1 (antes siempre una caja)
-      r.correccion ? (r.cantidad || 0) : (typeof r.unidades === 'number' ? r.unidades : (r.unidadesXCaja || '')),
-      fechaFinal,
-      loteFinal,
-      paletFinal,
-      r.contenedor || '',
-      operarioReal,
-      r.hora || ''
-    ];
+    // Unidades: corrección = negativo; EAN suelto = 1 (antes siempre una caja)
+    var cantFinal = r.correccion ? (r.cantidad || 0) : (typeof r.unidades === 'number' ? r.unidades : (r.unidadesXCaja || ''));
+    if (divIdx >= 0) {
+      var asigN = _asigDiv[codKey] || (_asigDiv[codKey] = []);
+      asigN[divIdx] = (asigN[divIdx] || 0) + (parseInt(cantFinal, 10) || 0);
+    } else if (tieneDiv && !r.correccion) {
+      var sdN = _sinDiv[codKey] || (_sinDiv[codKey] = { fecha: fechaFinal, lote: loteFinal, palet: paletFinal, cant: 0 });
+      sdN.cant += (parseInt(cantFinal, 10) || 0);
+    }
+    filas.push(_fila(fechaFinal, loteFinal, paletFinal, cantFinal));
   });
      var _gr = {}, _grOrden = [];
     filas.forEach(function(f) {
@@ -2251,7 +2305,10 @@ async function _sincronizarEscaneosANube() {
       _gr[k][5] += (parseInt(f[5], 10) || 0);
       _gr[k][11] = f[11];
     });
-    filas = _grOrden.map(function(k) { return _gr[k]; });
+    filas = _grOrden.map(function(k) { return _gr[k]; })
+      // Un grupo que suma 0 (escaneos de más anulados por la edición) no se graba
+      .filter(function(f) { return f[5] !== 0; });
+  if (!filas.length) { _registroSincronizadoHasta = _hasta; return true; }
   try {
     await sheetsAppend('ESCANEOS!A:L', filas);
     _registroSincronizadoHasta = _hasta;
@@ -3374,7 +3431,22 @@ function confirmarEdicionManual(idx) {
   if (isNaN(val) || val < 0) { showToast('⚠ Ingresá una cantidad válida'); return; }
   var r = remito[idx];
   if (!r) return;
+  var _antesEd = r.unidadesControladas || 0;
   r.unidadesControladas = val;
+  // Dejar la diferencia en el registro para que ESCANEOS dé lo real
+  // (antes quedaba solo lo escaneado: P52 755 = 1 en vez de 540)
+  if (val !== _antesEd) {
+    registro.push({
+      cb: 'EDICION', cod: r.cod, desc: r.desc, unidadesXCaja: r.cantCaja,
+      fecha: remitoDatos.fecha || new Date().toISOString().split('T')[0],
+      lote: remitoDatos.lote || '—', palet: remitoDatos.palet || '—',
+      contenedor: remitoDatos.contenedor || '—',
+      operario: (CURRENT_USER ? CURRENT_USER.name : null) || remitoDatos.operario || '—',
+      hora: new Date().toLocaleString('es-AR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      idxLinea: idx, correccion: true, cantidad: val - _antesEd
+    });
+    renderRegistro();
+  }
   _edicionManualPendiente = null;
   _edicionManualAprobada  = false;
   _actualizarEstadoEdicion(idx, 'hidden');
