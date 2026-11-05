@@ -2449,7 +2449,7 @@ function updateClock() {
 if (!window._clockInterval) { window._clockInterval = setInterval(updateClock, 1000); }
 updateClock();
 if (!window._syncOrdenesInterval) { window._syncOrdenesInterval =
-setInterval(function(){ if (!document.hidden) syncOrdenes(); }, 300000); } // cada 5 min (antes 2): ejecuciones del GAS
+setInterval(function(){ if (!document.hidden && !(CURRENT_USER && CURRENT_USER.rol === 'operario')) syncOrdenes(); }, 300000); } // cada 5 min, NO para operarios (leen ORDENES al tocar Revisar alertas)
 if (!window._conexionInterval) { window._conexionInterval = setInterval(function()
 { _actualizarIndicadorConexion(navigator.onLine); }, 5000); }
 // Polling de alertas INDEPENDIENTE del syncOrdenes — antes dependía de que
