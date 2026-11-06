@@ -6809,7 +6809,12 @@ function renderLineasOCTable(lineas, ocId) {
     // Si el artículo fue totalmente retirado por reposición:
     // - Línea con divisiones: cantUnidades llegó a 0
     // - Línea simple: cantUnidades=0 pero cantUnidadesAlEscaneo>0 (fue escaneada y todo retirado)
-    var fueRetiradoTotal = (l.cantUnidades || 0) === 0 &&
+    // En 0 sin lote ni fecha = no se escaneó: queda a la vista para ver si
+    // el operario se salteó algo (regla de Pedro 06/11)
+    var _sinGuion = function(v){ v = String(v || '').trim(); return v && !/^[-–—\s]+$/.test(v); };
+    var _teniaLoteFecha = _sinGuion(l.lote) || _sinGuion(l.fechaLote) ||
+      (l.divisiones || []).some(function(d){ return _sinGuion(d.lote) || (d.mes && d.anio); });
+    var fueRetiradoTotal = (l.cantUnidades || 0) === 0 && _teniaLoteFecha &&
       (typeof l.divisiones !== 'undefined' || (l.cantUnidadesAlEscaneo || 0) > 0);
     if (fueRetiradoTotal) return;
 
@@ -7719,7 +7724,11 @@ async function _ejecutarEnvioEscaneo(ocId, filaAlerta, enviadoPor) {
 }
 
 function eliminarOC(ocId) {
-  if (!confirm('¿Eliminar esta O.C. del historial? Esta acción no se puede deshacer.')) return;
+  var _ocConf = loadOrdenes().find(function(o){ return o.id === ocId; });
+  var _esPaletFin = _ocConf && _ocConf.esPalet && !_ocConf.esReposicion && _ocConf.estadoManual === 'finalizado' && _ocConf.palet && _ocConf.palet !== '—';
+  if (!confirm(_esPaletFin
+      ? '¿Eliminar esta O.C.? También se BORRAN sus líneas del palet ' + _ocConf.palet + ' en HISTORIAL DE PALETS. No se puede deshacer.'
+      : '¿Eliminar esta O.C. del historial? Esta acción no se puede deshacer.')) return;
   // Si es un palet finalizado, ofrecer poner en 0 sus filas de HISTORIAL DE
   // PALETS (antes quedaban con stock y aparecían productos fantasma, ej. P134).
   // Solo los códigos+lotes de ESTA O.C.: los nombres de palet se reutilizan.
@@ -7734,7 +7743,7 @@ function eliminarOC(ocId) {
         lineasVaciar.push({ cod: l.cod, lote: l.lote || '—' });
       }
     });
-    if (lineasVaciar.length > 0 && confirm('¿También poner en 0 el palet ' + ocElim.palet + ' en HISTORIAL DE PALETS?\n\nSolo los artículos y lotes de esta O.C. (' + lineasVaciar.length + ' línea' + (lineasVaciar.length !== 1 ? 's' : '') + '). Queda anotado en LOG DESCUENTOS.')) {
+    if (lineasVaciar.length > 0) {
       vaciar = { accion: 'vaciarPaletOC', ocId: ocId, palet: ocElim.palet, lineas: lineasVaciar, operario: (CURRENT_USER && CURRENT_USER.name) || '' };
     }
   }
@@ -7766,7 +7775,7 @@ function eliminarOC(ocId) {
   });
   if (vaciar) {
     fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(vaciar) });
-    showToast('O.C. eliminada — palet ' + vaciar.palet + ' puesto en 0 (ver LOG DESCUENTOS)');
+    showToast('O.C. eliminada — líneas del palet ' + vaciar.palet + ' borradas (ver LOG DESCUENTOS)');
     return;
   }
   showToast('O.C. eliminada');
