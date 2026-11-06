@@ -2272,29 +2272,33 @@ async function _sincronizarEscaneosANube() {
       }
       return;
     }
-    var divAsignada = null;
-    var divIdx = -1;
-    if (tieneDiv) {
-      var idx = _cursorDivisiones[codKey] || 0;
-      var acumulado = 0;
-      for (var _i = 0; _i < linea.divisiones.length; _i++) {
-        var slotsDiv = Math.round((parseInt(linea.divisiones[_i].unidades, 10) || 0) / upCajaDiv) || 0;
-        if (idx < acumulado + slotsDiv) { divAsignada = linea.divisiones[_i]; divIdx = _i; break; }
-        acumulado += slotsDiv;
-      }
-      _cursorDivisiones[codKey] = idx + 1;
-    }
-    var fechaFinal = divAsignada ? _fechaDiv(divAsignada) : ((linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || ''));
-    var loteFinal  = divAsignada ? (divAsignada.lote  || (r.lote  || '')) : ((linea && linea.lote)  ? linea.lote  : (r.lote  || ''));
-    var paletFinal = divAsignada ? (divAsignada.palet || (r.palet || '')) : ((linea && linea.palet) ? linea.palet : (r.palet || ''));
+    var fechaFinal = (linea && linea.fechaLote) ? linea.fechaLote : (r.fecha || '');
+    var loteFinal  = (linea && linea.lote)  ? linea.lote  : (r.lote  || '');
+    var paletFinal = (linea && linea.palet) ? linea.palet : (r.palet || '');
     // Unidades: corrección = negativo; EAN suelto = 1 (antes siempre una caja)
     var cantFinal = r.correccion ? (r.cantidad || 0) : (typeof r.unidades === 'number' ? r.unidades : (r.unidadesXCaja || ''));
-    if (divIdx >= 0) {
+    // Varios lotes: repartir por UNIDADES lo que le falta a cada lote. Antes
+    // contaba lecturas como si fueran cajas y con cajas + sueltas se corría
+    // (P200 06/11: 7055-09 quedó 18/2/6 sin lote en vez de 16/10)
+    if (tieneDiv && !r.correccion) {
       var asigN = _asigDiv[codKey] || (_asigDiv[codKey] = []);
-      asigN[divIdx] = (asigN[divIdx] || 0) + (parseInt(cantFinal, 10) || 0);
-    } else if (tieneDiv && !r.correccion) {
-      var sdN = _sinDiv[codKey] || (_sinDiv[codKey] = { fecha: fechaFinal, lote: loteFinal, palet: paletFinal, cant: 0 });
-      sdN.cant += (parseInt(cantFinal, 10) || 0);
+      var restoN = parseInt(cantFinal, 10) || 0;
+      for (var _i = 0; _i < linea.divisiones.length && restoN > 0; _i++) {
+        var dvN = linea.divisiones[_i];
+        var faltaN = (parseInt(dvN.unidades, 10) || 0) - (asigN[_i] || 0);
+        if (faltaN <= 0) continue;
+        var ponerN = Math.min(restoN, faltaN);
+        asigN[_i] = (asigN[_i] || 0) + ponerN;
+        filas.push(_fila(_fechaDiv(dvN), dvN.lote || (r.lote || ''), dvN.palet || (r.palet || ''), ponerN));
+        restoN -= ponerN;
+      }
+      if (restoN > 0) {
+        // Escaneado de más que no entra en ningún lote
+        var sdN = _sinDiv[codKey] || (_sinDiv[codKey] = { fecha: fechaFinal, lote: loteFinal, palet: paletFinal, cant: 0 });
+        sdN.cant += restoN;
+        filas.push(_fila(sdN.fecha, sdN.lote, sdN.palet, restoN));
+      }
+      return;
     }
     filas.push(_fila(fechaFinal, loteFinal, paletFinal, cantFinal));
   });
@@ -6105,7 +6109,9 @@ async function syncOrdenes() {
       var prioNuevo     = PRIORIDAD_ESTADO[oc.estadoManual] || 0;
       if (prioNuevo > prioExistente) {
         if ((existente.savedAt || '') > (oc.savedAt || '')) {
-          merged[oc.id] = Object.assign({}, oc, { estadoManual: existente.estadoManual, savedAt: existente.savedAt });
+          // La hoja es más nueva: va entera (antes quedaban las líneas viejas
+          // de la tablet con el estado de la hoja: D1 06/11 sin 01004-1)
+          merged[oc.id] = existente;
         } else {
           merged[oc.id] = Object.assign({}, existente, oc, { estadoManual: oc.estadoManual });
         }
@@ -8103,8 +8109,11 @@ function clasAgregarLinea() {
   cod = cod.trim();
   var art = db.find(function(a){ return String(a.cod).trim() === cod || a.cbCaja === cod || a.cbSuelto === cod; });
   if (!art) { showToast('Código no encontrado en la base de datos'); return; }
-  var cant = parseInt(prompt('Cantidad de unidades para ' + art.desc + ':') || '0', 10);
-  if (!cant || cant <= 0) return;
+  // Se acepta 0: el artículo queda cargado para escanearlo después
+  var _respCant = prompt('Cantidad de unidades para ' + art.desc + ' (0 si se va a escanear después):', '0');
+  if (_respCant === null) return;
+  var cant = parseInt(_respCant || '0', 10);
+  if (isNaN(cant) || cant < 0) { showToast('Cantidad no válida'); return; }
   _clasLineas.push({
     cod: art.cod, desc: art.desc,
     cantUnidades: cant, cantCaja: art.cantCaja || 1,
@@ -8382,6 +8391,10 @@ function guardarClasificacion() {
     (ocObj.lineas || []).forEach(function(l) {
       // Todas las líneas del mismo cod van juntas: el GAS borra palet|cod entero
       if (_codsCambiados && !_codsCambiados[String(l.cod)]) return;
+      // Línea en 0 sin lote (agregada para escanear después): no va al historial,
+      // así no crea filas en 0 ni pisa el stock que ese artículo ya tenga en el palet
+      if (!(l.divisiones && l.divisiones.length > 0) && !((parseInt(l.unidadesControladas, 10) || 0) > 0) &&
+          (!l.lote || /^[-–—\s]+$/.test(String(l.lote)))) return;
       var artDb = (db || []).find(function(a){ return String(a.cod).trim() === String(l.cod).trim(); }) || {};
       if (l.divisiones && l.divisiones.length > 0) {
         l.divisiones.forEach(function(div) {
@@ -10792,21 +10805,14 @@ async function aceptarAlertaEscaneo() {
 
   fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ accion: 'setAlerta', valor: 'EN_ESCANEO|' + ocId, fila: fila }) });
 
-  // Buscar OC localmente primero — si está, cargar inmediatamente sin sync
-  var ordenesLocal = loadOrdenes();
-  var ocLocal = ordenesLocal.find(function(o){ return o.id === ocId; });
-
-  if (ocLocal) {
-    // Encontrada localmente — cargar YA sin esperar sync
-    _ejecutarEnvioEscaneo(ocId, fila, enviadoPor);
-    switchPanel('scanner');
-  } else {
-    // No está localmente — sincronizar y después cargar
-    showToast('Cargando O.C...');
-    try { await syncOrdenes(); } catch(e) {}
-    _ejecutarEnvioEscaneo(ocId, fila, enviadoPor);
-    switchPanel('scanner');
-  }
+  // Siempre leer la O.C. de la hoja antes de cargarla: la copia local de la
+  // tablet puede ser vieja (D1 06/11: se agregó 01004-1 en Editar y al
+  // operario le llegó sin esa línea). Una lectura por clic.
+  showToast('Cargando O.C...');
+  try { await syncOrdenes(); } catch(e) {}
+  while (_busy_syncOrdenes) { await new Promise(function(r){ setTimeout(r, 300); }); }
+  _ejecutarEnvioEscaneo(ocId, fila, enviadoPor);
+  switchPanel('scanner');
 }
 </script>
 
