@@ -6977,6 +6977,8 @@ async function _verificarHistorialPalet(filasEnviadas, intento) {
     filasEnviadas.forEach(function(f) {
       // COMPLETAR PALET es un artículo inventado: no se verifica (su fecha mal cargada, ej. "1-01", nunca coincide y daba NO CONFIRMADO falso)
       if (String(f.cod || '').trim().toUpperCase() === 'COMPLETAR') return;
+      // Línea en 0: no mueve stock (16/11, caso IDI-C14 4251-02: daba NO CONFIRMADO falso)
+      if ((parseInt(f.cant, 10) || 0) === 0) return;
       var idx = -1, idxBaja = -1;
       for (var i = 0; i < filasSheet.length; i++) {
         if (usadas[i]) continue;
