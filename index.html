@@ -8338,14 +8338,38 @@ function guardarClasificacion() {
     return;
   }
 
-  // Palet finalizado: no cambiar su número. El GAS escribe las filas en el palet
-  // nuevo y no borra las del viejo: el stock quedaría duplicado en los dos.
+  // Palet finalizado con nombre nuevo: antes se bloqueaba (el stock quedaba duplicado).
+  // 17/11: primero el GAS renombra el palet en HISTORIAL y ORDENES (renombrarPalet) y después se guarda la edición.
   if (clasOcIdEditar) {
     var _ocPrevPalet = loadOrdenes().find(function(o){ return o.id === clasOcIdEditar; });
-    if (_ocPrevPalet && _ocPrevPalet.esPalet && _ocPrevPalet.estadoManual === 'finalizado' &&
-        String(_ocPrevPalet.palet || '—').trim() !== (palet || '—')) {
-      showAlert(al, 'err', 'No se puede cambiar el N° de un palet finalizado (' + _ocPrevPalet.palet + '): el stock quedaría duplicado. Dejá el número original.');
-      return;
+    var _viejoP = _ocPrevPalet ? String(_ocPrevPalet.palet || '—').trim() : '';
+    if (_ocPrevPalet && _ocPrevPalet.esPalet && _ocPrevPalet.estadoManual === 'finalizado' && _viejoP !== (palet || '—')) {
+      var _claveRen = clasOcIdEditar + '|' + palet;
+      if (window._renombreHecho !== _claveRen) {
+        if (!palet || _viejoP === '—') { showAlert(al, 'err', 'Poné el nombre nuevo del palet.'); return; }
+        if (!confirm('¿Renombrar el palet ' + _viejoP + ' → ' + palet + '?\n\nEl stock del palet pasa al nombre nuevo. Solo hacelo si el palet NO tiene una reposición en curso.')) return;
+        if (window._renombrando) return;
+        window._renombrando = true;
+        showAlert(al, 'info', 'Renombrando ' + _viejoP + ' → ' + palet + '…');
+        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ accion: 'renombrarPalet', ocId: clasOcIdEditar, viejo: _viejoP, nuevo: palet, usuario: (CURRENT_USER && CURRENT_USER.name) || '' }) })
+          .then(function(res) { return res.json(); })
+          .then(function(j) {
+            if (!j || !j.ok) throw new Error((j && j.error) || 'el GAS no respondió bien');
+            var r = j.data;
+            window._renombrando = false;
+            window._renombreHecho = _claveRen;
+            // La O.C. local también pasa al nombre nuevo (así la comparación de arriba ya no frena)
+            var _ords = loadOrdenes(), _o = _ords.find(function(o){ return o.id === clasOcIdEditar; });
+            if (_o) { _o.palet = palet; if (String(_o.nro || '').trim() === _viejoP) _o.nro = palet; saveOrdenes(_ords); }
+            showToast('✅ Palet renombrado: ' + _viejoP + ' → ' + palet + ' (' + (r && r.filas || 0) + ' filas)');
+            guardarClasificacion();
+          })
+          .catch(function(e) {
+            window._renombrando = false;
+            showAlert(al, 'err', 'No se pudo renombrar: ' + e.message);
+          });
+        return;
+      }
     }
   }
 
