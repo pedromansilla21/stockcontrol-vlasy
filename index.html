@@ -4197,7 +4197,10 @@ async function finalizarControl() {
   var completas   = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) === _uEspBase(r); });
 var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0) > 0 && (r.unidadesControladas || 0) !== _uEspBase(r); });
   var sinEscanear = remito.filter(function(r){ return (r.unidadesControladas || 0) === 0; });
-  var todoCompleto = completas.length === remito.length;
+  // 19/11 (regla de Pedro): con productos fuera de O.C. sin confirmar no es "completo";
+  // la tarjeta la muestra en "Controlada" hasta que el supervisor haga Agregar o Quitar.
+  var _fueraPendFin = _esRepFin ? [] : (itemsFueraOC || []).filter(function(x){ return (x.unidadesTotal || 0) > 0; });
+  var todoCompleto = completas.length === remito.length && _fueraPendFin.length === 0;
 
   // Guardar en O.C.
   var nro = remitoDatos.nro || '(sin número)';
@@ -4358,7 +4361,7 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
      clearTimeout(window._finTimer);
   fetch(GAS_URL, {
     method: 'POST', mode: 'no-cors',
-    body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : 'con diferencias') + '|' + Date.now() + '|' + (ocObj.enviadoPor||''), fila: filaParaFinalizar })
+    body: JSON.stringify({ accion: 'setAlerta', valor: 'FINALIZADO|' + nro + '|' + (ocObj.proveedor||'') + '|' + (todoCompleto ? 'completo' : (_fueraPendFin.length > 0 ? 'fuera de OC' : 'con diferencias')) + '|' + Date.now() + '|' + (ocObj.enviadoPor||''), fila: filaParaFinalizar })
   });
   // Si el admin no tiene el sistema abierto, la celda quedaría en FINALIZADO
   // bloqueando el slot para siempre. Después de 2 minutos, el operario la
@@ -6525,7 +6528,7 @@ function renderOrdenes() {
   // Filtrar
   var filtradas = ordenes.filter(function(oc) {
     var estadoAuto = getEstadoOC(oc);
-    var estadoM    = oc.estadoManual || 'pendiente';
+    var estadoM    = _estadoVisibleOC(oc);
     var matchFiltro =
       ocFiltroActual === 'todas'              ? true :
       ocFiltroActual === 'pendiente_m'         ? estadoM === 'pendiente'  :
@@ -6559,6 +6562,7 @@ function renderOrdenes() {
   function _prioridadOC(oc) {
     var estadoM    = oc.estadoManual || 'pendiente';
     var estadoAuto = getEstadoOC(oc);
+    if (estadoM === 'finalizado' && _fueraPendientes(oc).length > 0) return 1; // fuera de O.C. sin confirmar: arriba de todo
     if (estadoM === 'finalizado' && estadoAuto !== 'completo') return 1;
     if (estadoM === 'pendiente')     return 2;
     if (estadoM === 'controlando')   return 3;
@@ -6575,7 +6579,8 @@ function renderOrdenes() {
   container.innerHTML = '';
   filtradas.forEach(function(oc, i) {
     var estadoAuto  = getEstadoOC(oc);
-    var estadoM     = oc.estadoManual || 'pendiente';
+    var estadoM     = _estadoVisibleOC(oc);
+    var _fpU = _fueraPendientes(oc).reduce(function(s, x){ return s + (x.unidadesTotal || 0); }, 0);
     // Badge estado manual
     var estadoMLabel = { pendiente: '🕐 Pendiente', controlando: '🔵 En proceso', finalizado_escaneo: '🟠 Controlada', finalizado: '✅ Finalizado' }[estadoM] || estadoM;
     var estadoMCls   = 'badge-' + estadoM;
@@ -6616,6 +6621,7 @@ if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(f
         (oc.nroDuplicado ? '<span class="badge badge-duplicado" title="Hay otra O.C. con el mismo número">⚠ N° repetido</span>' : '') +
         '<span class="badge ' + estadoMCls + '" style="flex-shrink:0;">' + estadoMLabel + '</span>' +
         '<span class="badge ' + autoCls + '" style="flex-shrink:0;">' + autoLabel + ' ' + completadas + '/' + totalLineas + '</span>' +
+        (_fpU > 0 ? '<span class="badge badge-warn" style="flex-shrink:0;" title="Abrí la tarjeta y apretá Agregar o Quitar en cada producto">⚠ ' + _fpU + ' u. fuera de O.C. sin confirmar</span>' : '') +
         '<select class="oc-change-estado" onchange="cambiarEstadoOC(' + "'" + oc.id + "'" + ', this.value)" onclick="event.stopPropagation()" style="flex-shrink:0;">' + estadoOpts + '</select>' +
         '<i class="ti ti-chevron-down" style="font-size:14px; color:var(--c-text3); margin-left:4px; flex-shrink:0;"></i>' +
       '</div>' +
@@ -6672,6 +6678,19 @@ if (oc.estadoManual === 'finalizado' && uCtrl > 0 && (l.divisiones||[]).reduce(f
       }
     });
   });
+}
+
+// 19/11 (regla de Pedro): "Finalizado" es solo para lo que está 100% bien. Si quedan
+// productos fuera de O.C. sin confirmar (Agregar/Quitar), la O.C. se ve y se filtra
+// como "Controlada" aunque en ORDENES siga diciendo finalizado. Al confirmar el último
+// pendiente pasa sola a "Finalizado". No lee nada del GAS.
+function _fueraPendientes(oc) {
+  if (!oc || oc.esReposicion) return [];
+  return (oc.itemsFueraOC || []).filter(function(x){ return (x.unidadesTotal || 0) > 0; });
+}
+function _estadoVisibleOC(oc) {
+  var e = (oc && oc.estadoManual) || 'pendiente';
+  return (e === 'finalizado' && _fueraPendientes(oc).length > 0) ? 'finalizado_escaneo' : e;
 }
 
 function renderItemsFueraOCReporte(oc) {
@@ -8559,6 +8578,7 @@ function cambiarEstadoOC(ocId, nuevoEstado) {
   oc.savedAt = new Date().toISOString();
   saveOrdenes(ordenes);
   renderOrdenes();
+  if (nuevoEstado === 'finalizado' && _fueraPendientes(oc).length > 0) { showToast('⚠ Sigue en Controlada: quedan productos fuera de O.C. sin confirmar (Agregar o Quitar en la tarjeta)'); return; }
   showToast('Estado actualizado: ' + nuevoEstado);
 }
 
@@ -10758,7 +10778,7 @@ function _mostrarAlertaFinalizado() {
   if (!a) return;
   document.getElementById('alerta-finalizado-nro').textContent    = a.nro ? 'O.C. #' + a.nro : 'O.C.';
   document.getElementById('alerta-finalizado-prov').textContent   = a.prov || '';
-  document.getElementById('alerta-finalizado-estado').textContent = a.estado === 'completo' ? '✅ Completada sin diferencias' : '⚠ Guardada con diferencias';
+  document.getElementById('alerta-finalizado-estado').textContent = a.estado === 'completo' ? '✅ Completada sin diferencias' : (a.estado === 'fuera de OC' ? '⚠ Controlada: tiene productos fuera de O.C. para Agregar o Quitar' : '⚠ Guardada con diferencias');
   document.getElementById('alerta-finalizado-estado').style.color = a.estado === 'completo' ? 'var(--c-green)' : 'var(--c-amber)';
   document.getElementById('btn-alerta-finalizado').textContent = _colaFinalizados.length > 0 ? 'Siguiente (faltan ' + _colaFinalizados.length + ')' : 'Ver en Reporte';
   document.getElementById('modal-alerta-finalizado').classList.add('open');
