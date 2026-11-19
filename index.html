@@ -6690,7 +6690,11 @@ function _fueraPendientes(oc) {
 }
 function _estadoVisibleOC(oc) {
   var e = (oc && oc.estadoManual) || 'pendiente';
-  return (e === 'finalizado' && _fueraPendientes(oc).length > 0) ? 'finalizado_escaneo' : e;
+  if (e !== 'finalizado') return e;
+  if (_fueraPendientes(oc).length > 0) return 'finalizado_escaneo';
+  // 19/11 (Pedro): finalizada con líneas que no dan lo pedido (En progreso N/M) también es Controlada
+  if (oc.lineas && oc.lineas.length > 0 && getEstadoOC(oc) !== 'completo') return 'finalizado_escaneo';
+  return e;
 }
 
 function renderItemsFueraOCReporte(oc) {
@@ -8579,6 +8583,7 @@ function cambiarEstadoOC(ocId, nuevoEstado) {
   saveOrdenes(ordenes);
   renderOrdenes();
   if (nuevoEstado === 'finalizado' && _fueraPendientes(oc).length > 0) { showToast('⚠ Sigue en Controlada: quedan productos fuera de O.C. sin confirmar (Agregar o Quitar en la tarjeta)'); return; }
+  if (nuevoEstado === 'finalizado' && _estadoVisibleOC(oc) !== 'finalizado') { showToast('⚠ Sigue en Controlada: hay líneas que no dan lo pedido'); return; }
   showToast('Estado actualizado: ' + nuevoEstado);
 }
 
