@@ -4318,8 +4318,19 @@ var incompletas = remito.filter(function(r){ return (r.unidadesControladas || 0)
           // Actualizar división específica si hay lote
           if (lineaRep.lote && lineaRep.lote !== '—' && lineaOrig.divisiones && lineaOrig.divisiones.length > 0) {
             var _upCjOr = parseInt(lineaOrig.unidadesPorCaja || lineaOrig.cantCaja || 1, 10) || 1;
-            var divOr = lineaOrig.divisiones.find(function(d){ return String(d.lote) === String(lineaRep.lote); });
-            if (divOr) { divOr.cajas = Math.max(0, (parseInt(divOr.cajas, 10) || 0) - Math.ceil(cantRestada / _upCjOr)); }
+            // 24/11: además de cajas, bajar unidades/cantReal del lote (si no, al re-guardar el palet el stock revive, caso P83).
+            // Lote comparado sin ceros a la izquierda; si hay varias divisiones del mismo lote, se reparte.
+            var _nlOr = function(x){ return String(x == null ? '' : x).trim().toUpperCase().replace(/^0+/, ''); };
+            var _restaDiv = cantRestada;
+            lineaOrig.divisiones.forEach(function(divOr) {
+              if (_restaDiv <= 0 || _nlOr(divOr.lote) !== _nlOr(lineaRep.lote)) return;
+              var _uD = (divOr.cantReal != null ? parseInt(divOr.cantReal, 10) : parseInt(divOr.unidades, 10)) || 0;
+              var _sacar = _uD > 0 ? Math.min(_restaDiv, _uD) : _restaDiv;
+              divOr.cajas = Math.max(0, (parseInt(divOr.cajas, 10) || 0) - Math.ceil(_sacar / _upCjOr));
+              if (divOr.unidades != null) divOr.unidades = Math.max(0, (parseInt(divOr.unidades, 10) || 0) - _sacar);
+              if (divOr.cantReal != null) divOr.cantReal = Math.max(0, (parseInt(divOr.cantReal, 10) || 0) - _sacar);
+              _restaDiv -= _sacar;
+            });
           }
         });
         ocOrig.savedAt = new Date().toISOString();
@@ -6238,7 +6249,23 @@ function guardarOCActual() {
     guardarOCActual._guardando = false;
     return;
   }
-  
+
+  // 24/11: no reutilizar un nombre de palet que todavía tiene otra O.C. (si no, sus filas viejas
+  // quedan en HISTORIAL DE PALETS como stock falso, casos P24/P435). Primero eliminar o renombrar la vieja.
+  if (document.getElementById('rem-es-palet') && document.getElementById('rem-es-palet').checked) {
+    var _palNuevo = (document.getElementById('rem-palet').value || '').trim();
+    var _npal = function(x){ return String(x || '').trim().toUpperCase(); };
+    if (_palNuevo && _palNuevo !== '—') {
+      var _ocPal = loadOrdenes().find(function(o){ return o.esPalet && !o.esReposicion && _npal(o.palet) === _npal(_palNuevo); });
+      if (_ocPal) {
+        alert('⚠ Ya existe el palet ' + _palNuevo + ' (O.C. ' + (_ocPal.nro || '') + ' del ' + (_ocPal.fecha || '?') + ').\n\n' +
+              'Eliminá o renombrá esa O.C. antes de reutilizar el nombre.\nNo se guardó nada.');
+        guardarOCActual._guardando = false;
+        return;
+      }
+    }
+  }
+
   var nro = document.getElementById('rem-nro').value.trim() || '(sin número)';
   var fecha = document.getElementById('rem-fecha').value || '';
   var ordenes = loadOrdenes();
