@@ -5053,7 +5053,8 @@ function confirmarAgregarItemFueraOC() {
         controlPalet:     fechaHoy,
         controlUbicacion: fechaHoy,
         operario:     oc.escaneadoPor || oc.responsable || '—',
-        tipoFecha:    nl.tipoFecha || ''
+        tipoFecha:    nl.tipoFecha || '',
+        ocId:         oc.id || ''   // 24/11: col T ID PALET
       };
     });
     fetch(GAS_URL, {
@@ -5902,6 +5903,7 @@ async function _guardarEnHistorialPalets(oc, escaneadoPor) {
     
     // Enviar filas al GAS
     var filas = Object.values(filasAgrupadas);
+    filas.forEach(function(f){ f.ocId = oc.id || ''; }); // 24/11: col T ID PALET
     // Pendiente persistido ANTES de enviar: solo se borra cuando la lectura
     // confirma que el palet quedó en el historial (el no-cors no avisa errores)
     if (filas.length > 0) _savePendingPalet(oc.id, palet, filas);
@@ -8285,6 +8287,7 @@ async function _actualizarHistorialPaletsDesdeEdicion(oc) {
   });
 
   if (filas.length === 0) return;
+  filas.forEach(function(f){ f.ocId = oc.id || ''; }); // 24/11: col T ID PALET
   try {
     await fetch(GAS_URL, {
       method: 'POST',
@@ -8579,6 +8582,7 @@ function guardarClasificacion() {
       });
     }
     if (_filasPaletEdit.length > 0) {
+      _filasPaletEdit.forEach(function(f){ f.ocId = ocObj.id || ''; }); // 24/11: col T ID PALET
       fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
