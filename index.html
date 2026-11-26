@@ -7141,13 +7141,23 @@ async function _cargarStockFrescoPalet(ocId) {
        // Dedupear por código antes de mapear — evita pintar dos veces el mismo
     // artículo cuando oc.lineas tiene más de una entrada para el mismo código
     // (por ejemplo, ítems agregados fuera de la O.C. con varios lotes).
+    // 26/11 (caso P114): línea agregada para escanear y todavía SIN escanear (0 controladas) de un código que YA tiene
+    // otra línea escaneada → se muestra tal cual. Antes el dedupe por código la escondía y, como Editar usa esta misma
+    // lista, al guardar podía desaparecer de la O.C. NO se toca el caso "HISTORIAL en 0" (líneas que se terminaron).
+    var _pendSinEscanear = function(linea) {
+      if ((linea.unidadesControladas || 0) > 0 || !((linea.cantUnidades || 0) > 0)) return false;
+      var cod = String(linea.cod);
+      return (oc.lineas || []).some(function(o){ return o !== linea && String(o.cod) === cod && (o.unidadesControladas || 0) > 0; });
+    };
     var _codsVistos = {};
     var lineasParaMostrar = (oc.lineas || []).filter(function(linea) {
+      if (_pendSinEscanear(linea)) return true;
       var cod = String(linea.cod);
       if (_codsVistos[cod]) return false;
       _codsVistos[cod] = true;
       return true;
     }).map(function(linea) {
+      if (_pendSinEscanear(linea)) return linea;
       var fresca = lineasFrescas.find(function(lf){ return String(lf.cod) === String(linea.cod); });
       if (!fresca) return linea;
         var lineaDisplay = Object.assign({}, linea, {
