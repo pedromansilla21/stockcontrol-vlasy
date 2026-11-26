@@ -8226,6 +8226,9 @@ function clasAgregarLinea() {
   cod = cod.trim();
   var art = db.find(function(a){ return String(a.cod).trim() === cod || a.cbCaja === cod || a.cbSuelto === cod; });
   if (!art) { showToast('Código no encontrado en la base de datos'); return; }
+  // 26/11 (P114-C.V): dos líneas del mismo código rompen el control (los escaneos van a las dos y al finalizar se duplica el stock en HISTORIAL)
+  var _yaEsta = _clasLineas.find(function(l){ return String(l.cod).trim() === String(art.cod).trim(); });
+  if (_yaEsta) { alert('El artículo ' + art.cod + ' ya está en este palet.\n\nNo se puede agregar otra línea del mismo artículo.\nSi llegaron más unidades: que el operario las escanee como FUERA DE O.C. y se agregan desde ahí.'); return; }
   // Se acepta 0: el artículo queda cargado para escanearlo después
   var _respCant = prompt('Cantidad de unidades para ' + art.desc + ' (0 si se va a escanear después):', '0');
   if (_respCant === null) return;
