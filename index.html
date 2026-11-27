@@ -5576,18 +5576,12 @@ async function _guardarEnHistorial(oc, escaneadoPor) {
         });
         var _finRepId = 'FRP_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
         _savePendingFinRep(_finRepId, oc.id, oc.palet, _finRepLineas, (CURRENT_USER && CURRENT_USER.name) || '');
-        fetch(GAS_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-             body: JSON.stringify({ accion: 'finalizarReposicion', ocId: oc.id, palet: oc.palet, operario: (CURRENT_USER && CURRENT_USER.name) || '',
-            lineas: (oc.lineas || []).map(function(l) {
-              return { cod: l.cod, lote: l.lote || '—', cantRestar: l.unidadesControladas || 0 };
-            })
-          })
-        }).then(function() {
-          _markFinRepSent(_finRepId);
-          setTimeout(function() { _clearFinRep(_finRepId); }, 60000);
-        }).catch(function() { /* queda pending, se reintenta al próximo login */ });
+        // 27/11 (auditoría C1, igual que BETA): se lee la respuesta. Antes con no-cors, si el GAS contestaba
+        // "lock ocupado" la tablet lo daba por mandado y el descuento se perdía.
+        _postFinRep(_finRepId, oc.id, oc.palet, _finRepLineas, (CURRENT_USER && CURRENT_USER.name) || '').catch(function() {
+          // GAS ocupado o sin red: queda pending. Un reintento acá y, si no, al próximo login
+          setTimeout(_checkAndRetryPendingFinRep, 45000);
+        });
 
         // ── PICKING BETA: escribir en ESCANEO UBICACIONES ──────────────────
         if (CURRENT_USER && CURRENT_USER.pickingBeta && window._pickingBetaLineas && window._pickingBetaLineas.length > 0) {
@@ -5647,8 +5641,33 @@ function _clearFinRep(id) {
     localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(pending));
   } catch(e) {}
 }
+// 27/11 (C1, copiado de BETA): mismo POST de siempre, pero sin no-cors para leer la respuesta: rechaza si el
+// GAS contesta error (ej. "lock ocupado"). Repetirlo no descuenta dos veces (el GAS responde "ya descontada").
+async function _postFinRep(id, ocId, palet, lineas, operario) {
+  var resp = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ accion: 'finalizarReposicion', ocId: ocId, palet: palet, operario: operario, lineas: lineas || [] })
+  });
+  var data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'GAS rechazó el descuento');
+  _markFinRepSent(id);
+  setTimeout(function() { _clearFinRep(id); }, 60000);
+}
+// Tras 3 intentos fallidos deja de reintentar, avisa y deja fila en LOG DESCUENTOS
+async function _finRepFallida(p) {
+  var lista = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
+  var item = lista.find(function(x) { return x.id === p.id; });
+  if (!item) return;
+  item.intentos = (item.intentos || 0) + 1;
+  localStorage.setItem(PENDING_FINREP_KEY, JSON.stringify(lista));
+  if (item.intentos < 3) return;
+  try { await sheetsAppend('LOG DESCUENTOS!A:K', [[new Date().toLocaleString('es-AR'), String(p.ocId), '', String(p.palet), '', '', '', '', 'NO CONFIRMADO', 'Descuento de reposición sin confirmar tras 3 intentos: revisar a mano', p.operario || '']]); } catch(e) { return; }
+  _clearFinRep(p.id);
+  alert('No se pudo confirmar el descuento del palet ' + p.palet + '.\n\nAvisá a un supervisor para revisarlo en LOG DESCUENTOS.');
+}
 async function _checkAndRetryPendingFinRep() {
   try {
+    if (!navigator.onLine) return;
     var pending = JSON.parse(localStorage.getItem(PENDING_FINREP_KEY) || '[]');
     var now = Date.now();
     pending = pending.filter(function(p) {
@@ -5662,13 +5681,8 @@ async function _checkAndRetryPendingFinRep() {
     for (var i = 0; i < toRetry.length; i++) {
       var p = toRetry[i];
       try {
-        await fetch(GAS_URL, {
-          method: 'POST', mode: 'no-cors',
-          body: JSON.stringify({ accion: 'finalizarReposicion', ocId: p.ocId, palet: p.palet, operario: p.operario || (CURRENT_USER && CURRENT_USER.name) || '', lineas: p.lineas || [] })
-        });
-        _markFinRepSent(p.id);
-        (function(pid) { setTimeout(function() { _clearFinRep(pid); }, 60000); })(p.id);
-      } catch(e) { /* queda como pending */ }
+        await _postFinRep(p.id, p.ocId, p.palet, p.lineas, p.operario || (CURRENT_USER && CURRENT_USER.name) || '');
+      } catch(e) { await _finRepFallida(p); /* si no llegó a 3 intentos queda como pending */ }
     }
    async function _checkAndRetryPendingHistorial() {
   try {
